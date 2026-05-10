@@ -1,7 +1,7 @@
 {
   "name": "pm-ext-ts-starter",
   "version": "0.1.0",
-  "description": "TypeScript reference extension covering all 9 SDK capability types. Demonstrates commands, schema, hooks, importers, renderers, and services.",
+  "description": "TypeScript reference extension covering all 8 SDK capability types. Demonstrates defineExtension, registerCommand, registerSchema, registerHook, registerImporter, registerRenderer, registerSearch, registerPreflight, and registerService - all fully typed.",
   "author": "@unbrained",
   "entry": "./dist/index.js",
   "priority": 90,
@@ -11,6 +11,7 @@
     "hooks",
     "importers",
     "renderers",
+    "preflight",
     "search",
     "services"
   ]

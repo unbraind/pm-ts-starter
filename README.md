@@ -1,6 +1,6 @@
 # pm-ext-ts-starter
 
-TypeScript reference extension for [pm-cli](https://github.com/unbraind/pm-cli) covering all 9 SDK capability types.
+TypeScript reference extension for [pm-cli](https://github.com/unbraind/pm-cli) covering all 8 SDK capability types.
 
 ---
 
@@ -20,6 +20,7 @@ pm extension install github.com/unbraind/pm-ext-ts-starter --global
 | **Importers** | Demo `ts-starter-demo` importer (no-op) |
 | **Renderers** | `ts-starter-compact` renderer: tab-separated output |
 | **Search** | `ts-starter-prefix` search: search by ID prefix |
+| **Preflight** | `ts-starter-preflight`: workspace health checks |
 | **Services** | `ts-starter-health` service: reports extension health |
 
 ## Commands

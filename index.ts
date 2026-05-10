@@ -1,12 +1,7 @@
 // pm-ext-ts-starter — TypeScript reference extension for pm-cli
-// Demonstrates all 9 SDK capability types in one file.
-// Inline defineExtension to avoid SDK import at runtime.
+// Demonstrates all 8 SDK capability types in one file.
 
-function defineExtension(ext: any) {
-  return Object.assign({ activate() {} }, ext, {
-    activate(api: any) { ext.activate?.(api); },
-  });
-}
+import { defineExtension } from "@unbrained/pm-cli/sdk";
 
 // ---------------------------------------------------------------------------
 // 1. COMMANDS — register custom CLI commands
@@ -43,7 +38,7 @@ function registerDemoCommands(api: any): void {
         version: "0.1.0",
         capabilities: [
           "commands", "schema", "hooks", "importers",
-          "renderers", "search", "services",
+          "renderers", "preflight", "search", "services",
         ],
       };
       console.error(JSON.stringify(info, null, 2));
@@ -108,7 +103,7 @@ function registerImporters(api: any): void {
 
 function registerRenderers(api: any): void {
   if (typeof api.registerRenderer === "function") {
-    api.registerRenderer("ts-starter-compact", (items: any[]) => {
+    api.registerRenderer("json", (items: any[]) => {
       return items.map((item: any) => `${item.id}\t${item.status}\t${item.title}`).join("\n");
     });
   }
@@ -120,12 +115,12 @@ function registerRenderers(api: any): void {
 
 function registerSearch(api: any): void {
   if (typeof api.registerSearchProvider === "function") {
-    api.registerSearchProvider("ts-starter-prefix", {
-      description: "Search items by ID prefix",
-      async search(query: string, ctx: any) {
-        // Simple prefix search — delegates to pm list
+    api.registerSearchProvider({
+      name: "ts-starter-prefix",
+      async query(ctx: any) {
+        const query = ctx.query ?? "";
         const { spawnSync } = await import("node:child_process");
-        const result = spawnSync("pm", ["--path", ctx.pm_root, "list-all", "--json"], {
+        const result = spawnSync("pm", ["--path", ctx.pm_root ?? ".", "list-all", "--json"], {
           encoding: "utf-8",
         });
         if (result.status !== 0) return { results: [] };
@@ -140,21 +135,35 @@ function registerSearch(api: any): void {
 }
 
 // ---------------------------------------------------------------------------
-// 7. SERVICES — background services / config providers
+// 7. PREFLIGHT — Pre-flight checks before commands run
+// ---------------------------------------------------------------------------
+
+function registerPreflight(api: any): void {
+  if (typeof api.registerPreflight === "function") {
+    // Preflight override — can modify preflight decisions before a command runs
+    api.registerPreflight(async (ctx: any) => {
+      console.error(`[ts-starter] Preflight check for workspace: ${ctx.pm_root ?? "unknown"}`);
+      // Return the current decision unchanged (pass-through)
+      return {
+        enforce_item_format_gate: ctx.decision?.enforce_item_format_gate ?? true,
+        run_preflight_item_format_sync: ctx.decision?.run_preflight_item_format_sync ?? false,
+        run_extension_migrations: ctx.decision?.run_extension_migrations ?? true,
+        enforce_mandatory_migration_gate: ctx.decision?.enforce_mandatory_migration_gate ?? false,
+      };
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 8. SERVICES — background services / config providers
 // ---------------------------------------------------------------------------
 
 function registerServices(api: any): void {
   if (typeof api.registerService === "function") {
-    api.registerService("ts-starter-health", {
-      description: "Reports ts-starter extension health",
-      async getStatus() {
-        return {
-          healthy: true,
-          extension: "pm-ext-ts-starter",
-          version: "0.1.0",
-          uptime: process.uptime(),
-        };
-      },
+    // Override the output_format service to add custom formatting
+    api.registerService("output_format", async (ctx: any) => {
+      console.error("[ts-starter] output_format service override active");
+      return { format: "toon" };
     });
   }
 }
@@ -170,13 +179,13 @@ export default defineExtension({
   activate(api: any) {
     console.error("[pm-ext-ts-starter] Activating…");
 
-    // Register all capability types
     registerDemoCommands(api);
     registerSchema(api);
     registerHooks(api);
     registerImporters(api);
     registerRenderers(api);
     registerSearch(api);
+    registerPreflight(api);
     registerServices(api);
 
     console.error("[pm-ext-ts-starter] All capabilities registered.");
