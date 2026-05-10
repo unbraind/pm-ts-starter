@@ -1,0 +1,17 @@
+{
+  "name": "pm-ext-ts-starter",
+  "version": "0.1.0",
+  "description": "TypeScript reference extension covering all 9 SDK capability types. Demonstrates commands, schema, hooks, importers, renderers, and services.",
+  "author": "@unbrained",
+  "entry": "./dist/index.js",
+  "priority": 90,
+  "capabilities": [
+    "commands",
+    "schema",
+    "hooks",
+    "importers",
+    "renderers",
+    "search",
+    "services"
+  ]
+}
