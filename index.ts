@@ -1,7 +1,9 @@
 // pm-ext-ts-starter — TypeScript reference extension for pm-cli
 // Demonstrates all 8 SDK capability types in one file.
 
-import { defineExtension } from "@unbrained/pm-cli/sdk";
+import type { defineExtension as defineExtensionType } from "@unbrained/pm-cli/sdk";
+
+const defineExtension: typeof defineExtensionType = ((extension: any) => extension) as any;
 
 // ---------------------------------------------------------------------------
 // 1. COMMANDS — register custom CLI commands
