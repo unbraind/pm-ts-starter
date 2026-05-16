@@ -2,6 +2,14 @@
   "name": "pm-ext-ts-starter",
   "version": "0.1.0",
   "description": "TypeScript reference extension for pm-cli covering all capability types",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/unbraind/pm-ext-ts-starter.git"
+  },
+  "bugs": {
+    "url": "https://github.com/unbraind/pm-ext-ts-starter/issues"
+  },
+  "homepage": "https://github.com/unbraind/pm-ext-ts-starter#readme",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
