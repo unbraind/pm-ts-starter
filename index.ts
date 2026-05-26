@@ -1,4 +1,4 @@
-// pm-ext-ts-starter — TypeScript reference extension for pm-cli
+// pm-ts-starter — TypeScript reference extension for pm-cli
 // Demonstrates all 8 SDK capability types in one file.
 
 import type { defineExtension as defineExtensionType } from "@unbrained/pm-cli/sdk";
@@ -36,7 +36,7 @@ function registerDemoCommands(api: any): void {
     flags: [],
     async run() {
       const info = {
-        name: "pm-ext-ts-starter",
+        name: "pm-ts-starter",
         version: "0.1.0",
         capabilities: [
           "commands", "schema", "hooks", "importers",
@@ -175,11 +175,11 @@ function registerServices(api: any): void {
 // ---------------------------------------------------------------------------
 
 export default defineExtension({
-  name: "pm-ext-ts-starter",
+  name: "pm-ts-starter",
   version: "0.1.0",
 
   activate(api: any) {
-    console.error("[pm-ext-ts-starter] Activating…");
+    console.error("[pm-ts-starter] Activating…");
 
     registerDemoCommands(api);
     registerSchema(api);
@@ -190,6 +190,6 @@ export default defineExtension({
     registerPreflight(api);
     registerServices(api);
 
-    console.error("[pm-ext-ts-starter] All capabilities registered.");
+    console.error("[pm-ts-starter] All capabilities registered.");
   },
 });
