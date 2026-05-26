@@ -37,7 +37,7 @@ function registerDemoCommands(api: any): void {
     async run() {
       const info = {
         name: "pm-ts-starter",
-        version: "0.1.0",
+        version: "2026.5.26",
         capabilities: [
           "commands", "schema", "hooks", "importers",
           "renderers", "preflight", "search", "services",
