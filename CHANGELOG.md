@@ -12,6 +12,8 @@
 
 - Add bun-install verification to release workflow ([pm-ts-starter-rweg](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/tasks/pm-ts-starter-rweg.toon))
 
+## 2026.05.26 - 2026-05-26
+
 ### Fixed
 
 - ci: fix release workflow step ordering ([pm-ts-starter-6qw5](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/tasks/pm-ts-starter-6qw5.toon))
