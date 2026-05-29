@@ -1,0 +1,11 @@
+id: pm-ts-starter-h8br
+title: Hands-on functional test pass 2026-05-29 (real data)
+description: ""
+type: Feature
+status: open
+priority: 2
+tags: []
+created_at: "2026-05-29T21:21:48.969Z"
+updated_at: "2026-05-29T21:21:48.969Z"
+author: codex
+body: Installed into a throwaway pm workspace with real items. All capabilities register cleanly; 'pm hello' and the ts-starter command group run and exit 0. TypeScript-first scaffold builds and loads correctly. No code bugs found.
