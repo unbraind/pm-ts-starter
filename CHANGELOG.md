@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.6.2 - 2026-06-02
+
+### Fixed
+
+- Fix output-corruption + demonstrate all 9 SDK capabilities correctly \(typed reference\) ([pm-ts-starter-l3ga](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/features/pm-ts-starter-l3ga.toon))
+
 ## 2026.05.28 - 2026-05-28
 
 ### Added

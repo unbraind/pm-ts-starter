@@ -1,6 +1,6 @@
 {
   "name": "pm-ts-starter",
-  "version": "2026.5.31",
+  "version": "2026.6.2",
   "description": "TypeScript reference extension covering all 8 SDK capability types. Demonstrates defineExtension, registerCommand, registerSchema, registerHook, registerImporter, registerRenderer, registerSearch, registerPreflight, and registerService - all fully typed.",
   "author": "@unbraind",
   "entry": "./dist/index.js",
