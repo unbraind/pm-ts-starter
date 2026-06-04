@@ -11,19 +11,44 @@ test("extension has required shape", () => {
   assert.strictEqual(typeof extension.activate, "function", "activate should be a function");
 });
 
-test("extension registers at least one capability", () => {
+test("extension registers every demonstrated capability", () => {
   const registered: string[] = [];
-  const noop = () => {};
+  // Mirror the FULL ExtensionApi surface so activation can exercise every
+  // capability this reference extension demonstrates. The method names match
+  // the real SDK (there is no registerHook/registerSchema — schema is
+  // registerItemFields/registerItemTypes/registerMigration and hooks live under
+  // api.hooks.*). A dropped capability or a renamed SDK method fails here.
   const api = {
     registerCommand: () => { registered.push("command"); },
-    registerHook: () => { registered.push("hook"); },
-    registerImporter: () => { registered.push("importer"); },
-    registerSchema: () => { registered.push("schema"); },
-    registerRenderer: () => { registered.push("renderer"); },
-    registerSearchProvider: () => { registered.push("search"); },
+    registerFlags: () => { registered.push("flags"); },
+    registerParser: () => { registered.push("parser"); },
     registerPreflight: () => { registered.push("preflight"); },
     registerService: () => { registered.push("service"); },
+    registerItemFields: () => { registered.push("itemFields"); },
+    registerItemTypes: () => { registered.push("itemTypes"); },
+    registerMigration: () => { registered.push("migration"); },
+    registerRenderer: () => { registered.push("renderer"); },
+    registerImporter: () => { registered.push("importer"); },
+    registerExporter: () => { registered.push("exporter"); },
+    registerSearchProvider: () => { registered.push("search"); },
+    registerVectorStoreAdapter: () => { registered.push("vectorStore"); },
+    hooks: {
+      beforeCommand: () => { registered.push("hook:before"); },
+      afterCommand: () => { registered.push("hook:after"); },
+      onWrite: () => { registered.push("hook:onWrite"); },
+      onRead: () => { registered.push("hook:onRead"); },
+      onIndex: () => { registered.push("hook:onIndex"); },
+    },
   };
   extension.activate(api as any);
-  assert.ok(registered.length > 0, `extension should register at least one capability, got: ${JSON.stringify(registered)}`);
+
+  const expected = [
+    "command", "flags", "parser", "preflight", "service", "itemFields",
+    "itemTypes", "migration", "renderer", "importer", "exporter", "search",
+    "vectorStore", "hook:before", "hook:after", "hook:onWrite", "hook:onRead",
+    "hook:onIndex",
+  ];
+  for (const cap of expected) {
+    assert.ok(registered.includes(cap), `extension should register "${cap}" (got: ${JSON.stringify(registered)})`);
+  }
 });

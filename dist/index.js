@@ -77,21 +77,38 @@ function registerSchema(api) {
 // 3. HOOKS — react to lifecycle events
 // ---------------------------------------------------------------------------
 function registerHooks(api) {
-    // The real ExtensionApi exposes lifecycle hooks under `api.hooks.*`
+    // The real ExtensionApi exposes ALL FIVE lifecycle hooks under `api.hooks.*`
     // (beforeCommand/afterCommand/onWrite/onRead/onIndex) — there is no
-    // `registerHook`. afterCommand fires after every command with { command,
-    // ok, error, ... }; logging is opt-in (PM_TS_STARTER_VERBOSE).
-    if (api.hooks && typeof api.hooks.afterCommand === "function") {
-        api.hooks.afterCommand((ctx) => {
-            if (VERBOSE) {
-                console.error(`[ts-starter] afterCommand: ${ctx.command} (ok=${ctx.ok})`);
-            }
-        });
-        api.hooks.beforeCommand((ctx) => {
-            if (VERBOSE)
-                console.error(`[ts-starter] beforeCommand: ${ctx.command}`);
-        });
-    }
+    // `registerHook`. All hooks here are observe-only and log only when
+    // PM_TS_STARTER_VERBOSE is set, so installing this reference extension never
+    // adds noise to an unrelated workspace.
+    if (!api.hooks)
+        return;
+    // beforeCommand — runs before any command handler.
+    api.hooks.beforeCommand((ctx) => {
+        if (VERBOSE)
+            console.error(`[ts-starter] beforeCommand: ${ctx.command}`);
+    });
+    // afterCommand — runs after a command, with { command, ok, error, ... }.
+    api.hooks.afterCommand((ctx) => {
+        if (VERBOSE)
+            console.error(`[ts-starter] afterCommand: ${ctx.command} (ok=${ctx.ok})`);
+    });
+    // onWrite — fires when pm writes an item file to disk.
+    api.hooks.onWrite((ctx) => {
+        if (VERBOSE)
+            console.error(`[ts-starter] onWrite: ${ctx?.op ?? ""} ${ctx?.path ?? ""}`.trimEnd());
+    });
+    // onRead — fires when pm reads an item file.
+    api.hooks.onRead((ctx) => {
+        if (VERBOSE)
+            console.error(`[ts-starter] onRead: ${ctx?.path ?? "(item)"}`);
+    });
+    // onIndex — fires when pm (re)indexes items for search.
+    api.hooks.onIndex((ctx) => {
+        if (VERBOSE)
+            console.error(`[ts-starter] onIndex: ${(ctx && (ctx.count ?? ctx.path)) ?? "(index event)"}`);
+    });
 }
 // ---------------------------------------------------------------------------
 // 4. IMPORTERS — programmatic data import
@@ -157,9 +174,42 @@ function registerSearch(api) {
             },
         });
     }
+    // registerVectorStoreAdapter — the second half of the "search" capability.
+    // This is an in-memory, deterministic adapter so authors can see the
+    // vector-store contract (upsert + query) without an external service. It
+    // produces a tiny hashed pseudo-embedding (NOT a real model) and keeps vectors
+    // in a Map for the lifetime of the process.
+    if (typeof api.registerVectorStoreAdapter === "function") {
+        const store = new Map();
+        const pseudoEmbed = (text, dims = 8) => {
+            const vec = new Array(dims).fill(0);
+            for (let i = 0; i < text.length; i++)
+                vec[i % dims] += text.charCodeAt(i) % 17;
+            return vec;
+        };
+        api.registerVectorStoreAdapter({
+            name: "ts-starter-memory",
+            async upsert(ctx) {
+                const id = String(ctx?.id ?? "");
+                const text = String(ctx?.text ?? ctx?.title ?? "");
+                if (id)
+                    store.set(id, pseudoEmbed(text));
+                return { upserted: id ? 1 : 0 };
+            },
+            async query(ctx) {
+                const qVec = pseudoEmbed(String(ctx?.query ?? ""));
+                const scored = [...store.entries()].map(([id, v]) => ({
+                    id,
+                    score: v.reduce((s, x, i) => s + x * (qVec[i] ?? 0), 0),
+                }));
+                scored.sort((a, b) => b.score - a.score);
+                return { results: scored.slice(0, ctx?.limit ?? 5) };
+            },
+        });
+    }
 }
 // ---------------------------------------------------------------------------
-// 7. PREFLIGHT — Pre-flight checks before commands run
+// 7. PARSER — pre-normalize a command's args/options before its handler runs
 // ---------------------------------------------------------------------------
 function registerParser(api) {
     // A parser override can adjust how a specific command's args/options are
@@ -171,6 +221,9 @@ function registerParser(api) {
         });
     }
 }
+// ---------------------------------------------------------------------------
+// 8. PREFLIGHT — adjust gate decisions the CLI makes before a command runs
+// ---------------------------------------------------------------------------
 function registerPreflight(api) {
     if (typeof api.registerPreflight === "function") {
         // Preflight override — can modify preflight decisions before a command runs
@@ -188,7 +241,7 @@ function registerPreflight(api) {
     }
 }
 // ---------------------------------------------------------------------------
-// 8. SERVICES — background services / config providers
+// 9. SERVICES — override a named core service for the whole CLI
 // ---------------------------------------------------------------------------
 function registerServices(api) {
     if (typeof api.registerService === "function") {
@@ -205,23 +258,43 @@ function registerServices(api) {
 // ---------------------------------------------------------------------------
 // Extension entry point
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// FLAGS — augment an EXISTING native command (part of the "commands" capability)
+// ---------------------------------------------------------------------------
+function registerExtraFlags(api) {
+    // registerFlags adds extra flags to an existing native command (here, `list`).
+    // The flag is observe-only: native `list` ignores unknown options, so this
+    // exists purely to show the wiring. registerFlags is covered by the
+    // "commands" capability and needs no separate manifest entry.
+    if (typeof api.registerFlags === "function") {
+        api.registerFlags("list", [
+            {
+                long: "--ts-starter-tag",
+                value_name: "tag",
+                description: "DEMO flag added by pm-ts-starter (inert; illustrates registerFlags).",
+                type: "string",
+            },
+        ]);
+    }
+}
 export default defineExtension({
     name: "pm-ts-starter",
-    version: "0.1.0",
+    version: "2026.6.3",
     activate(api) {
         // Incidental logging is opt-in (PM_TS_STARTER_VERBOSE) so installing this
         // reference extension never pollutes other commands' stderr.
         if (VERBOSE)
             console.error("[pm-ts-starter] Activating…");
-        registerDemoCommands(api);
-        registerSchema(api);
-        registerHooks(api);
-        registerImporters(api);
-        registerRenderers(api);
-        registerSearch(api);
-        registerParser(api);
-        registerPreflight(api);
-        registerServices(api);
+        registerDemoCommands(api); // registerCommand (with typed flags)
+        registerExtraFlags(api); // registerFlags (augments native `list`)
+        registerSchema(api); // registerItemFields/registerItemTypes/registerMigration
+        registerHooks(api); // hooks.before/after/onWrite/onRead/onIndex
+        registerImporters(api); // registerImporter/registerExporter
+        registerRenderers(api); // registerRenderer
+        registerSearch(api); // registerSearchProvider/registerVectorStoreAdapter
+        registerParser(api); // registerParser
+        registerPreflight(api); // registerPreflight
+        registerServices(api); // registerService
         if (VERBOSE)
             console.error("[pm-ts-starter] All capabilities registered.");
     },

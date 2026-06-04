@@ -1,0 +1,14 @@
+id: pm-ts-starter-ol9y
+title: "Fix version mismatch + complete 9-capability demo, test mock, README"
+description: "index.ts hardcoded version 0.1.0 while package.json/manifest are 2026.6.3; set to 2026.6.3. Add the two missing capability demos: registerVectorStoreAdapter (ts-starter-memory in-memory adapter) and registerFlags (--ts-starter-tag on native list). Expand hooks from 2 to all 5 (beforeCommand/afterCommand/onWrite/onRead/onIndex). Replace the incorrect test mock (registerHook/registerSchema do not exist in the SDK) with the real full ExtensionApi surface and assert every register*/hook fires. Add a comment explaining the defineExtension typed identity helper + type-only import / zero-runtime-coupling pattern. Reconcile README+manifest 8->9 capabilities with accurate names. Fix misnumbered section headers."
+type: Chore
+status: closed
+priority: 2
+tags: []
+created_at: "2026-06-04T05:41:24.470Z"
+updated_at: "2026-06-04T05:41:40.943Z"
+author: codex
+comments[1]{created_at,author,text}:
+  "2026-06-04T05:41:36.782Z",codex,"Set index.ts version 0.1.0 -> 2026.6.3 (matches package.json/manifest). Added registerVectorStoreAdapter (ts-starter-memory) + registerFlags (--ts-starter-tag on list). Expanded hooks to all 5 (beforeCommand/afterCommand/onWrite/onRead/onIndex). Replaced bogus test mock (registerHook/registerSchema dont exist) with real full ExtensionApi surface; test now asserts all 18 register*/hook calls fire. Added defineExtension typed-helper + type-only/zero-runtime-coupling explainer comment + README section. README+manifest reconciled 8->9 with accurate names; fixed misnumbered section headers (parser=7, preflight=8, services=9). build+typecheck+test green; installed into scratch workspace: activated:true version 2026.6.3, 0 collisions, pm hello + ts-starter info + renderer override (rendered_by pm-ts-starter) verified live."
+close_reason: version + capability + test mock + docs fixes complete; build+typecheck+test green; functional activation proven in scratch workspace
+body: ""

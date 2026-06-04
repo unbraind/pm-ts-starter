@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Fix version mismatch + complete 9-capability demo, test mock, README ([pm-ts-starter-ol9y](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-ol9y.toon))
+
 ## 2026.06.02 - 2026-06-02
 
 ### Fixed
