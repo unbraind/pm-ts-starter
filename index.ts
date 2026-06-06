@@ -21,6 +21,7 @@
 import type { defineExtension as defineExtensionType } from "@unbrained/pm-cli/sdk";
 
 const defineExtension: typeof defineExtensionType = ((extension: any) => extension) as any;
+const VERSION = "2026.6.4";
 
 // Opt-in verbose logging so the reference extension is silent by default.
 const VERBOSE = !!process.env.PM_TS_STARTER_VERBOSE;
@@ -57,7 +58,7 @@ function registerDemoCommands(api: any): void {
     async run() {
       const info = {
         name: "pm-ts-starter",
-        version: "2026.6.4",
+        version: VERSION,
         capabilities: [
           "commands", "schema", "hooks", "importers",
           "renderers", "search", "parser", "preflight", "services",
@@ -314,7 +315,7 @@ function registerExtraFlags(api: any): void {
 
 export default defineExtension({
   name: "pm-ts-starter",
-  version: "2026.6.3",
+  version: VERSION,
 
   activate(api: any) {
     // Incidental logging is opt-in (PM_TS_STARTER_VERBOSE) so installing this
