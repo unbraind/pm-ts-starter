@@ -8,6 +8,7 @@
 
 ### Other
 
+- Harden release readiness checks ([pm-ts-starter-5op0](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-5op0.toon))
 - Align package dependencies to pm CLI/SDK 2026.6.6 ([pm-ts-starter-6abl](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-6abl.toon))
 
 ## 2026.06.04 - 2026-06-04
