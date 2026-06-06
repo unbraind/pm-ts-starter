@@ -13,13 +13,17 @@ test("extension has required shape", () => {
 
 test("extension registers every demonstrated capability", () => {
   const registered: string[] = [];
+  const commands: Record<string, any> = {};
+  const renderers: Record<string, (ctx: any) => unknown> = {};
+  let importer: ((ctx: any) => unknown) | undefined;
+  let exporter: ((ctx: any) => unknown) | undefined;
   // Mirror the FULL ExtensionApi surface so activation can exercise every
   // capability this reference extension demonstrates. The method names match
   // the real SDK (there is no registerHook/registerSchema — schema is
   // registerItemFields/registerItemTypes/registerMigration and hooks live under
   // api.hooks.*). A dropped capability or a renamed SDK method fails here.
   const api = {
-    registerCommand: () => { registered.push("command"); },
+    registerCommand: (command: any) => { registered.push("command"); commands[command.name] = command; },
     registerFlags: () => { registered.push("flags"); },
     registerParser: () => { registered.push("parser"); },
     registerPreflight: () => { registered.push("preflight"); },
@@ -27,9 +31,9 @@ test("extension registers every demonstrated capability", () => {
     registerItemFields: () => { registered.push("itemFields"); },
     registerItemTypes: () => { registered.push("itemTypes"); },
     registerMigration: () => { registered.push("migration"); },
-    registerRenderer: () => { registered.push("renderer"); },
-    registerImporter: () => { registered.push("importer"); },
-    registerExporter: () => { registered.push("exporter"); },
+    registerRenderer: (format: string, renderer: (ctx: any) => unknown) => { registered.push("renderer"); renderers[format] = renderer; },
+    registerImporter: (_name: string, handler: (ctx: any) => unknown) => { registered.push("importer"); importer = handler; },
+    registerExporter: (_name: string, handler: (ctx: any) => unknown) => { registered.push("exporter"); exporter = handler; },
     registerSearchProvider: () => { registered.push("search"); },
     registerVectorStoreAdapter: () => { registered.push("vectorStore"); },
     hooks: {
@@ -51,4 +55,12 @@ test("extension registers every demonstrated capability", () => {
   for (const cap of expected) {
     assert.ok(registered.includes(cap), `extension should register "${cap}" (got: ${JSON.stringify(registered)})`);
   }
+
+  assert.strictEqual(extension.version, "2026.6.4");
+  assert.deepStrictEqual(Object.keys(commands).sort(), ["hello", "ts-starter info"]);
+  assert.strictEqual(commands.hello.flags.length, 2);
+  assert.strictEqual(renderers.json({ result: { other: true } }), null);
+  assert.match(String(renderers.json({ result: { ts_starter: true, exported: 0 } })), /pm-ts-starter/);
+  assert.ok(importer, "ts-starter importer should be captured");
+  assert.ok(exporter, "ts-starter exporter should be captured");
 });

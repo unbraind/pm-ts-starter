@@ -2,6 +2,7 @@
 // Demonstrates all 9 SDK capability types in one file (commands, schema,
 // hooks, importers/exporters, renderers, search, parser, preflight, services).
 const defineExtension = ((extension) => extension);
+const VERSION = "2026.6.4";
 // Opt-in verbose logging so the reference extension is silent by default.
 const VERBOSE = !!process.env.PM_TS_STARTER_VERBOSE;
 // ---------------------------------------------------------------------------
@@ -34,7 +35,7 @@ function registerDemoCommands(api) {
         async run() {
             const info = {
                 name: "pm-ts-starter",
-                version: "2026.6.4",
+                version: VERSION,
                 capabilities: [
                     "commands", "schema", "hooks", "importers",
                     "renderers", "search", "parser", "preflight", "services",
@@ -279,7 +280,7 @@ function registerExtraFlags(api) {
 }
 export default defineExtension({
     name: "pm-ts-starter",
-    version: "2026.6.3",
+    version: VERSION,
     activate(api) {
         // Incidental logging is opt-in (PM_TS_STARTER_VERBOSE) so installing this
         // reference extension never pollutes other commands' stderr.

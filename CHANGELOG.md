@@ -1,6 +1,16 @@
 # Changelog
 
-## 2026.6.4 - 2026-06-04
+## Unreleased
+
+### Added
+
+- Align TypeScript starter version and SDK smoke coverage ([pm-ts-starter-m5qd](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/features/pm-ts-starter-m5qd.toon))
+
+### Other
+
+- Align package dependencies to pm CLI/SDK 2026.6.6 ([pm-ts-starter-6abl](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-6abl.toon))
+
+## 2026.06.04 - 2026-06-04
 
 ### Fixed
 
