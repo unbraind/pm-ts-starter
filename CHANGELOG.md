@@ -1,6 +1,12 @@
 # Changelog
 
-## 2026.6.13 - 2026-06-12
+## Unreleased
+
+### Other
+
+- Daily Release publish step runs prepublishOnly post-tag: align npm publish with --ignore-scripts ([pm-ts-starter-i076](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/tasks/pm-ts-starter-i076.toon))
+
+## 2026.06.13 - 2026-06-12
 
 ### Fixed
 
