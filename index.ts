@@ -18,10 +18,26 @@
 // `activate(api)`.
 // ---------------------------------------------------------------------------
 
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { defineExtension as defineExtensionType } from "@unbrained/pm-cli/sdk";
 
 const defineExtension: typeof defineExtensionType = ((extension: any) => extension) as any;
-const VERSION = "2026.6.4";
+
+// Resolve the extension version from manifest.json (one directory above the
+// compiled dist/) instead of a hardcoded literal: the Daily Release workflow
+// auto-bumps manifest.json but cannot rewrite a bare constant, so a literal
+// here silently drifts — the published 2026.6.10 build still reported 2026.6.4.
+const VERSION = (() => {
+  try {
+    const manifestPath = join(dirname(fileURLToPath(import.meta.url)), "..", "manifest.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf-8"));
+    return typeof manifest.version === "string" ? manifest.version : "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+})();
 
 // Opt-in verbose logging so the reference extension is silent by default.
 const VERBOSE = !!process.env.PM_TS_STARTER_VERBOSE;

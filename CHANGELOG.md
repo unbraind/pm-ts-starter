@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Reported extension version drifts from released version \(hardcoded VERSION constant\) ([pm-ts-starter-41z0](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/tasks/pm-ts-starter-41z0.toon))
+
 ## 2026.06.07 - 2026-06-07
 
 ### Added

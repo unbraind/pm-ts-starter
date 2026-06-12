@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import extension from "../dist/index.js";
@@ -56,7 +57,11 @@ test("extension registers every demonstrated capability", () => {
     assert.ok(registered.includes(cap), `extension should register "${cap}" (got: ${JSON.stringify(registered)})`);
   }
 
-  assert.strictEqual(extension.version, "2026.6.4");
+  // The version is resolved from manifest.json at module load (the Daily
+  // Release workflow bumps manifest.json, never a source literal), so the
+  // test asserts against the same source of truth instead of a snapshot.
+  const manifestVersion = JSON.parse(readFileSync(new URL("../manifest.json", import.meta.url), "utf-8")).version;
+  assert.strictEqual(extension.version, manifestVersion);
   assert.deepStrictEqual(Object.keys(commands).sort(), ["hello", "ts-starter info"]);
   assert.strictEqual(commands.hello.flags.length, 2);
   assert.strictEqual(renderers.json({ result: { other: true } }), null);
