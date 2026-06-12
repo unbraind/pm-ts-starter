@@ -1,8 +1,39 @@
 // pm-ts-starter — TypeScript reference extension for pm-cli
 // Demonstrates all 9 SDK capability types in one file (commands, schema,
 // hooks, importers/exporters, renderers, search, parser, preflight, services).
+// ---------------------------------------------------------------------------
+// `defineExtension` — typed identity helper + zero-runtime-coupling pattern
+//
+// `defineExtension` is the SDK's typed identity helper: it returns its argument
+// unchanged but constrains it to the `ExtensionModule` shape so TypeScript can
+// type-check `activate(api)` and the metadata fields against the real SDK.
+//
+// We import it as a TYPE ONLY (`import type`). A standalone-installed extension
+// loads only its own `dist/` at runtime, so `@unbrained/pm-cli` is NOT
+// resolvable as a runtime value — importing the real function would crash at
+// activation. Instead we provide a trivial identity implementation and let the
+// type import give us full compile-time checking with ZERO runtime coupling to
+// the CLI package. The real CLI supplies the live `api` object when it calls
+// `activate(api)`.
+// ---------------------------------------------------------------------------
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 const defineExtension = ((extension) => extension);
-const VERSION = "2026.6.4";
+// Resolve the extension version from manifest.json (one directory above the
+// compiled dist/) instead of a hardcoded literal: the Daily Release workflow
+// auto-bumps manifest.json but cannot rewrite a bare constant, so a literal
+// here silently drifts — the published 2026.6.10 build still reported 2026.6.4.
+const VERSION = (() => {
+    try {
+        const manifestPath = join(dirname(fileURLToPath(import.meta.url)), "..", "manifest.json");
+        const manifest = JSON.parse(readFileSync(manifestPath, "utf-8"));
+        return typeof manifest.version === "string" ? manifest.version : "0.0.0";
+    }
+    catch {
+        return "0.0.0";
+    }
+})();
 // Opt-in verbose logging so the reference extension is silent by default.
 const VERBOSE = !!process.env.PM_TS_STARTER_VERBOSE;
 // ---------------------------------------------------------------------------
