@@ -1,9 +1,11 @@
 # pm-ts-starter
 
-TypeScript reference extension for [pm-cli](https://github.com/unbraind/pm-cli) covering **all 9 SDK capability types** in one fully-typed `index.ts`.
+TypeScript reference extension for [pm-cli](https://github.com/unbraind/pm-cli) covering **all 9 SDK capability types** in one fully-typed `index.ts`, aligned to the **pm-cli 2026.7.6 SDK**.
 
 Each capability is a small, SAFE, inert demo with teaching comments. Copy the
-ones you need into your own extension and delete the rest.
+ones you need into your own extension and delete the rest. The reference also
+ships demo commands that integrate with the newer pm surfaces (plan, context,
+search, history-compact) and a guided `ts-starter setup --interactive` onboarding.
 
 ---
 
@@ -52,6 +54,54 @@ auto-create:
 pm ts-starter-demo import
 pm ts-starter-demo export
 ```
+
+The 2026.7.6 SDK accepts an optional third `options` argument
+(`ImportExportRegistrationOptions`) that adds a full command definition
+(description, flags, intent, examples, `failure_hints`, positional arguments)
+to the auto-created command path — surfaced in help exactly like
+`registerCommand`. This reference supplies it for both.
+
+### New pm-feature integration demos
+
+These demo commands shell out to the live `pm` binary (zero-runtime-coupling —
+the extension never imports `@unbrained/pm-cli` at runtime) and return parsed
+JSON, so an author can copy the wiring into a real extension that augments
+these surfaces:
+
+```bash
+pm ts-starter plan-demo [--id <plan-id>] [--depth brief|standard|deep]
+pm ts-starter context-demo [--format markdown|toon|json] [--depth brief|standard|deep]
+pm ts-starter search-demo [--query <text>] [--limit <n>]
+pm ts-starter history-compact-demo --id <item-id>   # always --dry-run
+```
+
+### Guided setup
+
+```bash
+pm ts-starter setup              # prints a non-interactive summary
+pm ts-starter setup --interactive  # prompted onboarding wizard (TTY only)
+```
+
+`--interactive` is skipped automatically when stdin is not a TTY, so the
+command is safe to run in CI and tests.
+
+### Typed arguments, `failure_hints`, and expected errors
+
+Every `registerCommand` definition now carries:
+
+- **`failure_hints`** — short, actionable strings surfaced to the CLI's
+  error-guidance layer when a command fails.
+- **`arguments`** — typed positional argument definitions
+  (`ExtensionCommandArgumentDefinition`), so help output and runtime contracts
+  describe positional args, not just flags.
+- **`value_type`** on every flag (`string` | `number` | `boolean`), the field
+  the 2026.7.6 SDK reads first (over the legacy `type`).
+
+Command handlers throw **`PmCliExpectedError`-shaped errors** built locally
+(`pmExpectedError`) rather than importing the CLI's error class at runtime.
+The CLI recognises expected errors by `name === "PmCliError"`, so a locally
+constructed error with `exitCode` + structured `context` exits cleanly with a
+guided message instead of a stack trace.
 
 ## The `defineExtension` helper + zero-runtime-coupling pattern
 
