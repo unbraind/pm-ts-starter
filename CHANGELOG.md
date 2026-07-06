@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Fix release CI ordering (publish-before-tag) ([pm-ts-starter-o1i7](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/tasks/pm-ts-starter-o1i7.toon))
+
+### Other
+
+- Regenerate CHANGELOG after pm close item ([pm-ts-starter-xgpp](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/tasks/pm-ts-starter-xgpp.toon))
+
 ## 2026.6.13-1 - 2026-06-13
 
 ### Other
@@ -10,7 +20,7 @@
 
 ### Fixed
 
-- Reported extension version drifts from released version \(hardcoded VERSION constant\) ([pm-ts-starter-41z0](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/tasks/pm-ts-starter-41z0.toon))
+- Reported extension version drifts from released version (hardcoded VERSION constant) ([pm-ts-starter-41z0](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/tasks/pm-ts-starter-41z0.toon))
 
 ## 2026.6.7 - 2026-06-07
 
@@ -33,7 +43,7 @@
 
 ### Fixed
 
-- Fix output-corruption + demonstrate all 9 SDK capabilities correctly \(typed reference\) ([pm-ts-starter-l3ga](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/features/pm-ts-starter-l3ga.toon))
+- Fix output-corruption + demonstrate all 9 SDK capabilities correctly (typed reference) ([pm-ts-starter-l3ga](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/features/pm-ts-starter-l3ga.toon))
 
 ## 2026.5.28 - 2026-05-28
 
