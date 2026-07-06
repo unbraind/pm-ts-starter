@@ -8,6 +8,7 @@
 
 ### Other
 
+- Align Node engine with pm CLI runtime ([pm-ts-starter-zzhl](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/tasks/pm-ts-starter-zzhl.toon))
 - Regenerate CHANGELOG after pm close item ([pm-ts-starter-xgpp](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/tasks/pm-ts-starter-xgpp.toon))
 
 ## 2026.6.13-1 - 2026-06-13
