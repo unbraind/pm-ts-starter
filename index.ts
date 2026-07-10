@@ -1,6 +1,16 @@
 // pm-ts-starter — TypeScript reference extension for pm-cli
 // Demonstrates all 9 SDK capability types in one file (commands, schema,
 // hooks, importers/exporters, renderers, search, parser, preflight, services).
+//
+// This reference is aligned to the pm-cli 2026.7.6 SDK:
+//   - `defineExtension` typed identity helper (zero-runtime-coupling pattern)
+//   - `createPmCliExpectedError`-shaped errors for better failure messaging
+//   - `failure_hints` + typed positional `arguments` on every command definition
+//   - demo commands that integrate with the newer pm surfaces: plan workflow,
+//     context, search, and history-compact (each shells out to the live `pm`
+//     binary, exactly like the existing search provider does, so the demo
+//     never depends on a runtime import of `@unbrained/pm-cli`)
+//   - a guided `ts-starter setup --interactive` command for first-run onboarding
 
 // ---------------------------------------------------------------------------
 // `defineExtension` — typed identity helper + zero-runtime-coupling pattern
@@ -16,12 +26,20 @@
 // type import give us full compile-time checking with ZERO runtime coupling to
 // the CLI package. The real CLI supplies the live `api` object when it calls
 // `activate(api)`.
+//
+// The same zero-runtime-coupling rule applies to the expected-error helper: we
+// type against the SDK's `PmCliExpectedError` shape but build the error locally
+// so a standalone install never needs to resolve `@unbrained/pm-cli` at runtime.
 // ---------------------------------------------------------------------------
 
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { defineExtension as defineExtensionType } from "@unbrained/pm-cli/sdk";
+import { spawnSync } from "node:child_process";
+import type {
+  defineExtension as defineExtensionType,
+  PmCliExpectedError,
+} from "@unbrained/pm-cli/sdk";
 
 const defineExtension: typeof defineExtensionType = ((extension: any) => extension) as any;
 
@@ -43,6 +61,147 @@ const VERSION = (() => {
 const VERBOSE = !!process.env.PM_TS_STARTER_VERBOSE;
 
 // ---------------------------------------------------------------------------
+// Expected-error helper — build a `PmCliExpectedError`-shaped error without a
+// runtime import of `@unbrained/pm-cli`. The CLI's top-level handler recognises
+// expected errors by `name === "PmCliError"` (not `instanceof`), so a locally
+// constructed error with that name, an `exitCode`, and a secret-free `context`
+// is treated exactly like one thrown by the CLI itself: it exits with the
+// given code and is excluded from crash reporting. This is the package-safe way
+// for an extension to fail loudly with an actionable message instead of a
+// generic stack trace.
+// ---------------------------------------------------------------------------
+
+const PM_CLI_EXPECTED_ERROR_NAME = "PmCliError" as const;
+const DEFAULT_USAGE_EXIT_CODE = 2;
+
+// A relaxed author-facing context shape: callers pass terse keys (feature,
+// command, why, hint, attempted_command, suggested_retry) and we normalize to
+// the SDK's strict `PmCliErrorContext`. Keeping this loose at the call site is
+// what lets the reference extension stay ergonomic while the underlying
+// contract stays exact.
+interface TsStarterErrorContextInput {
+  feature?: string;
+  command?: string;
+  attempted_command?: string;
+  why?: string;
+  hint?: string;
+  suggested_retry?: string;
+  examples?: string[];
+  nextSteps?: string[];
+  code?: string;
+  [key: string]: unknown;
+}
+
+interface TsStarterErrorOptions {
+  exitCode?: number;
+  context?: TsStarterErrorContextInput;
+  cause?: unknown;
+}
+
+function pmExpectedError(
+  message: string,
+  options?: TsStarterErrorOptions,
+): PmCliExpectedError {
+  const exitCode =
+    options?.exitCode && Number.isFinite(options.exitCode) && options.exitCode > 0
+      ? options.exitCode
+      : DEFAULT_USAGE_EXIT_CODE;
+  // The SDK's PmCliErrorContext carries structured recovery guidance (code,
+  // why, examples, nextSteps, recovery.*). We normalize a plain author map
+  // into that shape so callers can pass terse keys (feature/command/why/hint)
+  // without coupling to the full contract.
+  const raw = (options?.context ?? {}) as TsStarterErrorContextInput;
+  const recovery =
+    raw.attempted_command || raw.feature || raw.command
+      ? {
+          attempted_command: raw.attempted_command ?? raw.feature ?? raw.command,
+          suggested_retry: raw.suggested_retry,
+        }
+      : undefined;
+  // Normalize to the SDK's PmCliErrorContext shape (code/why/examples/
+  // nextSteps/recovery.*). Keys not in the contract are dropped.
+  const context = {
+    code: raw.code ?? raw.feature ?? raw.command,
+    why: raw.why,
+    examples: raw.examples,
+    nextSteps: raw.nextSteps ?? (raw.hint ? [String(raw.hint)] : undefined),
+    recovery,
+  };
+  const cause = options?.cause;
+  const err = new Error(message) as PmCliExpectedError;
+  err.name = PM_CLI_EXPECTED_ERROR_NAME;
+  err.exitCode = exitCode;
+  err.context = context;
+  if (cause !== undefined) {
+    Object.defineProperty(err, "cause", { value: cause, enumerable: false });
+  }
+  return err;
+}
+
+function isPmCliExpectedError(error: unknown): error is PmCliExpectedError {
+  return (
+    error instanceof Error &&
+    (error as PmCliExpectedError).name === PM_CLI_EXPECTED_ERROR_NAME
+  );
+}
+
+// ---------------------------------------------------------------------------
+// pm shell-out helper — the reference extension never imports the CLI at
+// runtime (zero-runtime-coupling). Demo commands that illustrate integration
+// with newer pm surfaces (plan, context, search, history-compact) shell out to
+// the live `pm` binary, mirroring the pattern the search provider already uses.
+// This keeps the demo honest: it exercises the real CLI, returns real JSON,
+// and surfaces a typed expected error when the CLI is missing or fails.
+// ---------------------------------------------------------------------------
+
+interface PmRunResult {
+  ok: boolean;
+  stdout: string;
+  stderr: string;
+  status: number | null;
+}
+
+function runPm(pmRoot: string, args: string[]): PmRunResult {
+  const result = spawnSync("pm", ["--path", pmRoot, ...args], {
+    encoding: "utf-8",
+  });
+  const stderr = (result.stderr ?? "").trim() || result.error?.message || "";
+  return {
+    ok: result.status === 0 && !result.error,
+    stdout: result.stdout ?? "",
+    stderr,
+    status: result.status,
+  };
+}
+
+// Parse the JSON stdout of a pm shell-out, throwing a typed expected error with
+// a `failure_hints`-friendly message when the call fails or the body is not
+// valid JSON. The `feature` label flows into the error context so callers (and
+// the CLI's error-guidance layer) can disambiguate which demo surface failed.
+function pmJson<T = unknown>(pmRoot: string, args: string[], feature: string): T {
+  const run = runPm(pmRoot, args);
+  if (!run.ok) {
+    const detail = run.stderr.trim();
+    throw pmExpectedError(
+      `pm-ts-starter: \`${feature}\` demo failed (pm exited ${run.status})${detail ? `: ${detail}` : "."}`,
+      {
+        exitCode: 1,
+        context: { feature, attempted_command: "pm", why: detail || undefined },
+        cause: run.stderr ? new Error(run.stderr) : undefined,
+      },
+    );
+  }
+  try {
+    return JSON.parse(run.stdout) as T;
+  } catch (cause) {
+    throw pmExpectedError(
+      `pm-ts-starter: \`${feature}\` demo returned non-JSON output from pm.`,
+      { exitCode: 1, context: { feature, why: `stdout head: ${run.stdout.slice(0, 200)}` }, cause },
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // 1. COMMANDS — register custom CLI commands
 // ---------------------------------------------------------------------------
 
@@ -51,13 +210,31 @@ function registerDemoCommands(api: any): void {
     name: "hello",
     description: "Say hello from the TypeScript starter extension.",
     intent: "demonstrate a simple command",
-    examples: ["pm hello", "pm hello --name World"],
+    examples: ["pm hello", "pm hello --name World", "pm hello World --loud"],
+    failure_hints: [
+      "Use --name <value> to set the greeting name.",
+      "--loud uppercases the greeting; it takes no value.",
+    ],
+    arguments: [
+      { name: "name", description: "Positional name to greet (overridden by --name)." },
+    ],
     flags: [
-      { long: "--name", value_name: "name", description: "Name to greet (default: pm-cli)" },
-      { long: "--loud", description: "Uppercase the greeting" },
+      { long: "--name", value_name: "name", value_type: "string", description: "Name to greet (default: pm-cli)" },
+      { long: "--loud", value_type: "boolean", description: "Uppercase the greeting" },
     ],
     async run(ctx: any) {
-      const name = (ctx.options["name"] as string) || "pm-cli";
+      // Typed argument resolution: prefer the explicit --name flag, then a
+      // positional argument, then the default. A clearly-named expected error
+      // is thrown when the name is empty after trimming.
+      const rawName =
+        (ctx.options["name"] as string | undefined) ??
+        (Array.isArray(ctx.args) && ctx.args.length > 0 ? String(ctx.args[0]) : undefined);
+      const name = (rawName ?? "pm-cli").trim();
+      if (!name) {
+        throw pmExpectedError("pm-ts-starter: --name must not be empty.", {
+          context: { command: "hello", why: "A non-empty name is required to greet." },
+        });
+      }
       const loud = Boolean(ctx.options["loud"]);
       const greeting = loud ? `HELLO, ${name.toUpperCase()}!` : `Hello, ${name}!`;
       console.error(greeting);
@@ -70,11 +247,17 @@ function registerDemoCommands(api: any): void {
     description: "Show TypeScript starter extension info and registered capabilities.",
     intent: "show extension metadata",
     examples: ["pm ts-starter info"],
+    failure_hints: [
+      "This command only reads extension metadata; it has no side effects.",
+      "If it errors, the extension failed to activate — check `pm extension doctor`.",
+    ],
+    arguments: [],
     flags: [],
     async run() {
       const info = {
         name: "pm-ts-starter",
         version: VERSION,
+        sdk_target: "2026.7.6",
         capabilities: [
           "commands", "schema", "hooks", "importers",
           "renderers", "search", "parser", "preflight", "services",
@@ -82,6 +265,211 @@ function registerDemoCommands(api: any): void {
       };
       console.error(JSON.stringify(info, null, 2));
       return info;
+    },
+  });
+
+  // ---------------------------------------------------------------------
+  // New pm-feature integration demos (all covered by the "commands"
+  // capability — they registerCommand, exactly like `hello`). Each shells
+  // out to the live `pm` binary and returns parsed JSON so an author can
+  // copy the wiring into a real extension that augments these surfaces.
+  // ---------------------------------------------------------------------
+
+  api.registerCommand({
+    name: "ts-starter plan-demo",
+    description: "Demonstrate integration with the pm plan workflow (shells out to `pm plan show`).",
+    intent: "show how an extension can read plan workflow state",
+    examples: ["pm ts-starter plan-demo", "pm ts-starter plan-demo --id my-plan --depth standard"],
+    failure_hints: [
+      "Requires a pm workspace with a plan item; create one with `pm plan create`.",
+      "Pass --id <plan-id> to select a plan other than the active one.",
+      "--depth is one of: brief | standard | deep.",
+    ],
+    arguments: [
+      { name: "id", required: false, description: "Plan item id to show (optional; defaults to active)." },
+    ],
+    flags: [
+      { long: "--id", value_name: "id", value_type: "string", description: "Plan item id to show." },
+      { long: "--depth", value_name: "depth", value_type: "string", description: "Show depth: brief|standard|deep (default: standard)." },
+    ],
+    async run(ctx: any) {
+      const pmRoot = ctx.pm_root ?? ".";
+      const id =
+        (ctx.options["id"] as string | undefined) ??
+        (Array.isArray(ctx.args) && ctx.args.length > 0 ? String(ctx.args[0]) : undefined);
+      const depth = (ctx.options["depth"] as string | undefined) ?? "standard";
+      const args = ["plan", "show"];
+      if (id) args.push(id);
+      args.push("--depth", depth, "--json");
+      return pmJson<{ plan?: unknown }>(pmRoot, args, "plan");
+    },
+  });
+
+  api.registerCommand({
+    name: "ts-starter context-demo",
+    description: "Demonstrate integration with pm context (shells out to `pm context`).",
+    intent: "show how an extension can surface the current work context",
+    examples: ["pm ts-starter context-demo", "pm ts-starter context-demo --format json --depth brief"],
+    failure_hints: [
+      "Requires a pm workspace; run inside a directory with `.agents/pm`.",
+      "--format is one of: markdown | toon | json (default: json).",
+      "--depth is one of: brief | standard | deep.",
+    ],
+    arguments: [],
+    flags: [
+      { long: "--format", value_name: "format", value_type: "string", description: "Output format: markdown|toon|json (default: json)." },
+      { long: "--depth", value_name: "depth", value_type: "string", description: "Context depth: brief|standard|deep." },
+    ],
+    async run(ctx: any) {
+      const pmRoot = ctx.pm_root ?? ".";
+      const format = (ctx.options["format"] as string | undefined) ?? "json";
+      const depth = (ctx.options["depth"] as string | undefined);
+      const args = ["context", "--format", format];
+      if (depth) args.push("--depth", depth);
+      // `pm context` emits JSON only when --format json; for other formats we
+      // return the raw text so the caller still sees a structured payload.
+      if (format === "json") {
+        args.push("--json");
+        return pmJson(pmRoot, args, "context");
+      }
+      const run = runPm(pmRoot, args);
+      if (!run.ok) {
+        throw pmExpectedError(
+          `pm-ts-starter: \`${format}\` context demo failed (pm exited ${run.status}).`,
+          { exitCode: 1, context: { feature: "context", why: run.stderr.trim() || undefined } },
+        );
+      }
+      return { format, context: run.stdout };
+    },
+  });
+
+  api.registerCommand({
+    name: "ts-starter search-demo",
+    description: "Demonstrate integration with pm search (shells out to `pm search`).",
+    intent: "show how an extension can run a workspace search",
+    examples: ["pm ts-starter search-demo --query release", "pm ts-starter search-demo release --limit 10"],
+    failure_hints: [
+      "Pass a --query <text> (or a positional argument) with at least one term.",
+      "--limit caps the number of hits (default: 10).",
+      "Use `pm reindex` first if search returns nothing after a fresh import.",
+    ],
+    arguments: [
+      { name: "query", required: false, variadic: false, description: "Search query (overridden by --query)." },
+    ],
+    flags: [
+      { long: "--query", value_name: "query", value_type: "string", description: "Search query text." },
+      { long: "--limit", value_name: "n", value_type: "number", description: "Maximum hits to return (default: 10)." },
+    ],
+    async run(ctx: any) {
+      const pmRoot = ctx.pm_root ?? ".";
+      const rawQuery =
+        (ctx.options["query"] as string | undefined) ??
+        (Array.isArray(ctx.args) && ctx.args.length > 0 ? String(ctx.args[0]) : undefined);
+      const query = (rawQuery ?? "").trim();
+      if (!query) {
+        throw pmExpectedError(
+          "pm-ts-starter: search-demo requires a --query (or positional query) argument.",
+          { context: { command: "ts-starter search-demo", why: "Pass --query <text> or a positional query." } },
+        );
+      }
+      const limit = String(ctx.options["limit"] ?? 10);
+      return pmJson<{ hits?: unknown[] }>(pmRoot, ["search", query, "--limit", limit, "--json"], "search");
+    },
+  });
+
+  api.registerCommand({
+    name: "ts-starter history-compact-demo",
+    description: "Demonstrate integration with pm history-compact (dry-run only; shells out to `pm history-compact`).",
+    intent: "show how an extension can preview history compaction safely",
+    examples: ["pm ts-starter history-compact-demo --id my-task", "pm ts-starter history-compact-demo my-task"],
+    failure_hints: [
+      "Pass --id <item-id> (or a positional id) to select the item whose history to compact.",
+      "This demo always runs with --dry-run; it never mutates history.",
+      "If pm is not on PATH, the command exits 1 with a clear message.",
+    ],
+    arguments: [
+      { name: "id", required: false, description: "Item id whose history to preview-compact (required unless --id is used)." },
+    ],
+    flags: [
+      { long: "--id", value_name: "id", value_type: "string", description: "Item id to compact (overrides a positional id)." },
+    ],
+    async run(ctx: any) {
+      const pmRoot = ctx.pm_root ?? ".";
+      const rawId =
+        (ctx.options["id"] as string | undefined) ??
+        (Array.isArray(ctx.args) && ctx.args.length > 0 ? String(ctx.args[0]) : undefined);
+      const id = (rawId ?? "").trim();
+      if (!id) {
+        throw pmExpectedError(
+          "pm-ts-starter: history-compact-demo requires an --id (or positional id) argument.",
+          { context: { command: "ts-starter history-compact-demo", why: "Pass --id <item-id> or a positional id." } },
+        );
+      }
+      return pmJson<{ id?: string; dry_run?: boolean }>(
+        pmRoot,
+        ["history-compact", id, "--dry-run", "--json"],
+        "history-compact",
+      );
+    },
+  });
+
+  // ---------------------------------------------------------------------
+  // Guided setup — `ts-starter setup --interactive` walks a new user
+  // through onboarding (manifest name, capabilities, verbose logging) and
+  // prints a checklist. Without --interactive it prints a non-interactive
+  // summary so the command is safe to run in CI and tests.
+  // ---------------------------------------------------------------------
+
+  api.registerCommand({
+    name: "ts-starter setup",
+    description: "Guided first-run setup for the TypeScript starter extension.",
+    intent: "onboard a new extension author",
+    examples: ["pm ts-starter setup", "pm ts-starter setup --interactive"],
+    failure_hints: [
+      "--interactive enables prompted input; without it the command prints a summary only.",
+      "Interactive mode is skipped automatically when stdin is not a TTY.",
+    ],
+    arguments: [],
+    flags: [
+      { long: "--interactive", value_type: "boolean", description: "Run an interactive guided setup wizard." },
+    ],
+    async run(ctx: any) {
+      const interactive = Boolean(ctx.options["interactive"]);
+      const isTty = typeof process.stdin?.isTTY === "boolean" ? process.stdin.isTTY : false;
+      const runInteractive = interactive && isTty;
+
+      const summary = {
+        extension: "pm-ts-starter",
+        version: VERSION,
+        sdk_target: "2026.7.6",
+        capabilities: [
+          "commands", "schema", "hooks", "importers",
+          "renderers", "search", "parser", "preflight", "services",
+        ],
+        verbose_env: "PM_TS_STARTER_VERBOSE=1",
+        interactive_requested: interactive,
+        interactive_run: runInteractive,
+      };
+
+      if (runInteractive) {
+        const readline = await import("node:readline/promises");
+        const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+        try {
+          const name = (await rl.question("Extension name [pm-ts-starter]: ")).trim() || "pm-ts-starter";
+          const wantVerbose = /^y/i.test((await rl.question("Enable verbose logging? [y/N]: ")).trim());
+          console.error(`\n[ts-starter] Guided setup complete for "${name}".`);
+          if (wantVerbose) console.error("[ts-starter] Set PM_TS_STARTER_VERBOSE=1 to see activation logs.");
+          console.error("[ts-starter] Next: edit index.ts to keep only the capabilities you need, then `npm run build`.");
+        } finally {
+          rl.close();
+        }
+      } else {
+        console.error(JSON.stringify(summary, null, 2));
+        if (interactive && !isTty) {
+          console.error("[ts-starter] stdin is not a TTY; interactive mode skipped. Re-run in a terminal.");
+        }
+      }
+      return summary;
     },
   });
 }
@@ -135,6 +523,11 @@ function registerHooks(api: any): void {
   // afterCommand — runs after a command, with { command, ok, error, ... }.
   api.hooks.afterCommand((ctx: any) => {
     if (VERBOSE) console.error(`[ts-starter] afterCommand: ${ctx.command} (ok=${ctx.ok})`);
+    // Surface a concise hint when a command fails with an expected error so an
+    // operator scanning stderr gets an actionable next step, not just a stack.
+    if (VERBOSE && ctx.ok === false && ctx.error && isPmCliExpectedError(ctx.error)) {
+      console.error(`[ts-starter] hint: ${ctx.error.message}`);
+    }
   });
   // onWrite — fires when pm writes an item file to disk.
   api.hooks.onWrite((ctx: any) => {
@@ -157,21 +550,55 @@ function registerHooks(api: any): void {
 function registerImporters(api: any): void {
   // registerImporter("ts-starter-demo") auto-creates `pm ts-starter-demo import`
   // and registerExporter the matching `pm ts-starter-demo export`. Both are
-  // covered by the "importers" capability.
+  // covered by the "importers" capability. The 2026.7.6 SDK accepts an optional
+  // third `options` argument that adds a full command definition (description,
+  // flags, intent, examples, failure_hints, positional arguments) to the
+  // auto-created command path — surfaced in help exactly like registerCommand.
   if (typeof api.registerImporter === "function") {
-    api.registerImporter("ts-starter-demo", async (ctx: any) => {
-      if (VERBOSE) console.error("[ts-starter] Demo importer invoked:", JSON.stringify(ctx.options));
-      // Demo no-op importer — extend with real import logic.
-      return { imported: 0 };
-    });
+    api.registerImporter(
+      "ts-starter-demo",
+      async (ctx: any) => {
+        if (VERBOSE) console.error("[ts-starter] Demo importer invoked:", JSON.stringify(ctx.options));
+        // Demo no-op importer — extend with real import logic.
+        return { imported: 0 };
+      },
+      {
+        description: "Demo importer for the TypeScript starter extension.",
+        intent: "import demo data into a pm workspace",
+        examples: ["pm ts-starter-demo import", "pm ts-starter-demo import --source file.json"],
+        failure_hints: [
+          "The demo importer is a no-op; wire real parsing into the handler.",
+          "Pass --source <path> to point at an import file.",
+        ],
+        arguments: [{ name: "source", required: false, description: "Path to import source." }],
+        flags: [
+          { long: "--source", value_name: "path", value_type: "string", description: "Import source path." },
+        ],
+      },
+    );
   }
   if (typeof api.registerExporter === "function") {
-    api.registerExporter("ts-starter-demo", async (ctx: any) => {
-      if (VERBOSE) console.error("[ts-starter] Demo exporter invoked:", JSON.stringify(ctx.options));
-      // Demo exporter — echoes a tagged payload so the renderer demo can pick
-      // it up (`ts_starter` marker) without affecting any other command.
-      return { ts_starter: true, exported: 0 };
-    });
+    api.registerExporter(
+      "ts-starter-demo",
+      async (ctx: any) => {
+        if (VERBOSE) console.error("[ts-starter] Demo exporter invoked:", JSON.stringify(ctx.options));
+        // Demo exporter — echoes a tagged payload so the renderer demo can pick
+        // it up (`ts_starter` marker) without affecting any other command.
+        return { ts_starter: true, exported: 0 };
+      },
+      {
+        description: "Demo exporter for the TypeScript starter extension.",
+        intent: "export demo data from a pm workspace",
+        examples: ["pm ts-starter-demo export", "pm ts-starter-demo export --format json"],
+        failure_hints: [
+          "The demo exporter is a no-op; wire real serialization into the handler.",
+          "--format selects the export shape (default: json).",
+        ],
+        flags: [
+          { long: "--format", value_name: "format", value_type: "string", description: "Export format (default: json)." },
+        ],
+      },
+    );
   }
 }
 
@@ -205,7 +632,6 @@ function registerSearch(api: any): void {
       name: "ts-starter-prefix",
       async query(ctx: any) {
         const query = ctx.query ?? "";
-        const { spawnSync } = await import("node:child_process");
         const result = spawnSync("pm", ["--path", ctx.pm_root ?? ".", "list-all", "--json"], {
           encoding: "utf-8",
         });
@@ -322,12 +748,16 @@ function registerExtraFlags(api: any): void {
       {
         long: "--ts-starter-tag",
         value_name: "tag",
+        value_type: "string",
         description: "DEMO flag added by pm-ts-starter (inert; illustrates registerFlags).",
-        type: "string",
       },
     ]);
   }
 }
+
+// Re-export the expected-error helpers so downstream authors copying this
+// reference can import them without re-deriving the zero-runtime-coupling shim.
+export { pmExpectedError, isPmCliExpectedError };
 
 export default defineExtension({
   name: "pm-ts-starter",
@@ -338,11 +768,11 @@ export default defineExtension({
     // reference extension never pollutes other commands' stderr.
     if (VERBOSE) console.error("[pm-ts-starter] Activating…");
 
-    registerDemoCommands(api);  // registerCommand (with typed flags)
+    registerDemoCommands(api);  // registerCommand (with typed flags + failure_hints)
     registerExtraFlags(api);    // registerFlags (augments native `list`)
     registerSchema(api);        // registerItemFields/registerItemTypes/registerMigration
     registerHooks(api);         // hooks.before/after/onWrite/onRead/onIndex
-    registerImporters(api);     // registerImporter/registerExporter
+    registerImporters(api);     // registerImporter/registerExporter (with command-definition options)
     registerRenderers(api);     // registerRenderer
     registerSearch(api);        // registerSearchProvider/registerVectorStoreAdapter
     registerParser(api);        // registerParser

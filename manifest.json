@@ -1,7 +1,7 @@
 {
   "name": "pm-ts-starter",
   "version": "2026.7.6",
-  "description": "TypeScript reference extension covering all 9 SDK capability types: commands, renderers, hooks, schema, importers, search, parser, preflight, services. Demonstrates defineExtension plus registerCommand/registerFlags, registerItemFields/registerItemTypes/registerMigration, the five api.hooks.* lifecycle hooks, registerImporter/registerExporter, registerRenderer, registerSearchProvider/registerVectorStoreAdapter, registerParser, registerPreflight, and registerService - all fully typed.",
+  "description": "TypeScript reference extension covering all 9 SDK capability types: commands, renderers, hooks, schema, importers, search, parser, preflight, services. Aligned to the pm-cli 2026.7.6 SDK: demonstrates defineExtension plus registerCommand/registerFlags (with failure_hints + typed positional arguments), registerItemFields/registerItemTypes/registerMigration, the five api.hooks.* lifecycle hooks, registerImporter/registerExporter (with ImportExportRegistrationOptions), registerRenderer, registerSearchProvider/registerVectorStoreAdapter, registerParser, registerPreflight, registerService, PmCliExpectedError-shaped errors, demo commands for the plan/context/search/history-compact pm surfaces, and a guided `ts-starter setup --interactive` onboarding - all fully typed.",
   "author": "@unbraind",
   "entry": "./dist/index.js",
   "priority": 90,
