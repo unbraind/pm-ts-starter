@@ -12,6 +12,17 @@ test("extension has required shape", () => {
   assert.strictEqual(typeof extension.activate, "function", "activate should be a function");
 });
 
+test("package, manifest, and runtime versions stay aligned", () => {
+  const packageVersion = JSON.parse(
+    readFileSync(new URL("../package.json", import.meta.url), "utf-8"),
+  ).version;
+  const manifestVersion = JSON.parse(
+    readFileSync(new URL("../manifest.json", import.meta.url), "utf-8"),
+  ).version;
+  assert.strictEqual(manifestVersion, packageVersion);
+  assert.strictEqual(extension.version, packageVersion);
+});
+
 test("extension registers every demonstrated capability", () => {
   const registered: string[] = [];
   const commands: Record<string, any> = {};
@@ -135,7 +146,7 @@ test("every registered command carries failure_hints and typed arguments", () =>
   const searchArgs = commands["ts-starter search-demo"].arguments;
   assert.ok(searchArgs.some((a: any) => a.name === "query"), "search-demo should declare a `query` positional");
   const hcArgs = commands["ts-starter history-compact-demo"].arguments;
-  assert.ok(hcArgs.some((a: any) => a.name === "id" && a.required), "history-compact-demo should declare a required `id` positional");
+  assert.ok(hcArgs.some((a: any) => a.name === "id"), "history-compact-demo should declare an `id` positional");
 });
 
 test("hello command resolves the name from --name, positional, and default", async () => {
@@ -241,11 +252,21 @@ test("search-demo throws a typed expected error when no query is given", async (
   };
   extension.activate(api as any);
   const searchDemo = commands["ts-starter search-demo"];
+  const historyDemo = commands["ts-starter history-compact-demo"];
 
   await assert.rejects(
     () => searchDemo.run({ options: {}, args: [], pm_root: "." }),
     (err: unknown) => isPmCliExpectedError(err) && /query/.test((err as Error).message),
   );
+
+  for (const command of [searchDemo, historyDemo]) {
+    try {
+      await command.run({ options: {}, args: [0], pm_root: "." });
+    } catch (err) {
+      assert.ok(isPmCliExpectedError(err), "numeric arguments may fail in pm, but must remain expected errors");
+      assert.doesNotMatch((err as Error).message, /trim is not a function/);
+    }
+  }
 });
 
 test("setup command is non-interactive without --interactive and safe without a TTY", async () => {

@@ -165,10 +165,11 @@ function runPm(pmRoot: string, args: string[]): PmRunResult {
   const result = spawnSync("pm", ["--path", pmRoot, ...args], {
     encoding: "utf-8",
   });
+  const stderr = (result.stderr ?? "").trim() || result.error?.message || "";
   return {
-    ok: result.status === 0,
+    ok: result.status === 0 && !result.error,
     stdout: result.stdout ?? "",
-    stderr: result.stderr ?? "",
+    stderr,
     status: result.status,
   };
 }
@@ -292,10 +293,13 @@ function registerDemoCommands(api: any): void {
     ],
     async run(ctx: any) {
       const pmRoot = ctx.pm_root ?? ".";
-      const id = (ctx.options["id"] as string | undefined) ?? (ctx.args?.[0] as string | undefined);
+      const id =
+        (ctx.options["id"] as string | undefined) ??
+        (Array.isArray(ctx.args) && ctx.args.length > 0 ? String(ctx.args[0]) : undefined);
       const depth = (ctx.options["depth"] as string | undefined) ?? "standard";
-      const args = ["plan", "show", "--depth", depth, "--json"];
-      if (id) args.push("--id", id);
+      const args = ["plan", "show"];
+      if (id) args.push(id);
+      args.push("--depth", depth, "--json");
       return pmJson<{ plan?: unknown }>(pmRoot, args, "plan");
     },
   });
@@ -357,16 +361,18 @@ function registerDemoCommands(api: any): void {
     ],
     async run(ctx: any) {
       const pmRoot = ctx.pm_root ?? ".";
-      const query =
-        ((ctx.options["query"] as string | undefined) ?? ctx.args?.[0] as string | undefined) ?? "";
-      if (!query.trim()) {
+      const rawQuery =
+        (ctx.options["query"] as string | undefined) ??
+        (Array.isArray(ctx.args) && ctx.args.length > 0 ? String(ctx.args[0]) : undefined);
+      const query = (rawQuery ?? "").trim();
+      if (!query) {
         throw pmExpectedError(
           "pm-ts-starter: search-demo requires a --query (or positional query) argument.",
           { context: { command: "ts-starter search-demo", why: "Pass --query <text> or a positional query." } },
         );
       }
       const limit = String(ctx.options["limit"] ?? 10);
-      return pmJson<{ hits?: unknown[] }>(pmRoot, ["search", "--query", query, "--limit", limit, "--json"], "search");
+      return pmJson<{ hits?: unknown[] }>(pmRoot, ["search", query, "--limit", limit, "--json"], "search");
     },
   });
 
@@ -381,16 +387,18 @@ function registerDemoCommands(api: any): void {
       "If pm is not on PATH, the command exits 1 with a clear message.",
     ],
     arguments: [
-      { name: "id", required: true, description: "Item id whose history to preview-compact." },
+      { name: "id", required: false, description: "Item id whose history to preview-compact (required unless --id is used)." },
     ],
     flags: [
-      { long: "--id", value_name: "id", value_type: "string", description: "Item id (positional id takes precedence if both given)." },
+      { long: "--id", value_name: "id", value_type: "string", description: "Item id to compact (overrides a positional id)." },
     ],
     async run(ctx: any) {
       const pmRoot = ctx.pm_root ?? ".";
-      const id =
-        (ctx.options["id"] as string | undefined) ?? (ctx.args?.[0] as string | undefined);
-      if (!id || !id.trim()) {
+      const rawId =
+        (ctx.options["id"] as string | undefined) ??
+        (Array.isArray(ctx.args) && ctx.args.length > 0 ? String(ctx.args[0]) : undefined);
+      const id = (rawId ?? "").trim();
+      if (!id) {
         throw pmExpectedError(
           "pm-ts-starter: history-compact-demo requires an --id (or positional id) argument.",
           { context: { command: "ts-starter history-compact-demo", why: "Pass --id <item-id> or a positional id." } },
@@ -398,7 +406,7 @@ function registerDemoCommands(api: any): void {
       }
       return pmJson<{ id?: string; dry_run?: boolean }>(
         pmRoot,
-        ["history-compact", "--id", id, "--dry-run", "--json"],
+        ["history-compact", id, "--dry-run", "--json"],
         "history-compact",
       );
     },
@@ -516,7 +524,7 @@ function registerHooks(api: any): void {
     if (VERBOSE) console.error(`[ts-starter] afterCommand: ${ctx.command} (ok=${ctx.ok})`);
     // Surface a concise hint when a command fails with an expected error so an
     // operator scanning stderr gets an actionable next step, not just a stack.
-    if (ctx.ok === false && ctx.error && isPmCliExpectedError(ctx.error)) {
+    if (VERBOSE && ctx.ok === false && ctx.error && isPmCliExpectedError(ctx.error)) {
       console.error(`[ts-starter] hint: ${ctx.error.message}`);
     }
   });

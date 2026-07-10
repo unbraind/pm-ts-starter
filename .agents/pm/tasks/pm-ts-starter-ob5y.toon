@@ -6,9 +6,11 @@ status: in_progress
 priority: 1
 tags[4]: deps-2026-6-7,full-cycle-hardening,hardening-pass,wave-full-cycle-2026-06-07
 created_at: "2026-06-07T07:41:56.665Z"
-updated_at: "2026-06-07T08:00:45.261Z"
+updated_at: "2026-07-10T10:52:12.165Z"
 assignee: codex-5.3-full-cycle
 author: codex-5.3-full-cycle
+comments[1]{created_at,author,text}:
+  "2026-07-10T10:52:12.165Z",codex,"PR #17 finishing audit (2026-07-10): aligned manifest/runtime/package version at 2026.7.6 and added a regression invariant; made spawn failures expose result.error and remain expected errors; string-normalized positional plan/search/history inputs; kept afterCommand hints behind PM_TS_STARTER_VERBOSE; corrected --id precedence docs. Real CLI testing found mocked-contract gaps and fixed them: search keywords, history item id, and plan show id are positional in pm 2026.7.10. Verified npm ci/build/typecheck and 9/9 tests; installed local build into /tmp/fx-pm-ts-starter; timeout 20 pm --help returned 0; created two tasks plus a plan; context-demo, search-demo (1 hit), history-compact-demo (dry_run true), plan-demo (1 pending step), info/setup all succeeded. Blank search produced structured PmCliError guidance and exit 2 without a stack trace. Compared no-flag pm hello against origin/main: stdout and stderr identical. pm-changelog full and changelog:check passed. Bot decisions: Greptile version mismatch valid; Gemini/Cubic argument/spawn/default-noise/precedence findings valid; Cubic mock-dedup is maintainability-only and left unchanged to avoid unrelated churn; Hound dist warnings are false positives from parsing generated modern ESM as pre-ES6."
 notes[2]{created_at,author,text}:
   "2026-06-07T07:41:58.063Z",codex-5.3-full-cycle,"Hardening pass complete: release:check succeeded after dependency bump and changelog regeneration."
   "2026-06-07T08:00:45.261Z",codex-5.3-full-cycle,"Security gate: high-confidence token/key regex scan over tracked files and git history found no actionable secrets. Binary-history false positives were traced to embedded wasm base64 blobs, not credentials."
@@ -16,8 +18,8 @@ files[3]{path,scope,note}:
   CHANGELOG.md,project,Regenerated changelog to satisfy release gate
   package-lock.json,project,Regenerated lockfile after dependency alignment
   package.json,project,Upgraded @unbrained/pm-cli and pm-changelog to latest ranges
-tests[1]{command,path,scope,timeout_seconds,pm_context_mode,env_set,env_clear,shared_host_safe,assert_stdout_contains,assert_stdout_regex,assert_stderr_contains,assert_stderr_regex,assert_stdout_min_lines,assert_json_field_equals,assert_json_field_gte,note}:
-  "npm run release:check",.,project,2400,null,null,null,null,null,null,null,null,null,null,null,null
+tests[1]{command,path,scope,timeout_seconds}:
+  "npm run release:check",.,project,2400
 docs[1]{path,scope,note}:
   README.md,project,Primary package docs reference
 body: Master execution item for full-cycle hardening in pm-ts-starter.
