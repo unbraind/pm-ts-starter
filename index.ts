@@ -181,11 +181,12 @@ function runPm(pmRoot: string, args: string[]): PmRunResult {
 function pmJson<T = unknown>(pmRoot: string, args: string[], feature: string): T {
   const run = runPm(pmRoot, args);
   if (!run.ok) {
+    const detail = run.stderr.trim();
     throw pmExpectedError(
-      `pm-ts-starter: \`${feature}\` demo failed (pm exited ${run.status}).`,
+      `pm-ts-starter: \`${feature}\` demo failed (pm exited ${run.status})${detail ? `: ${detail}` : "."}`,
       {
         exitCode: 1,
-        context: { feature, attempted_command: "pm", why: run.stderr.trim() || undefined },
+        context: { feature, attempted_command: "pm", why: detail || undefined },
         cause: run.stderr ? new Error(run.stderr) : undefined,
       },
     );

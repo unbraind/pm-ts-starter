@@ -120,9 +120,10 @@ function runPm(pmRoot, args) {
 function pmJson(pmRoot, args, feature) {
     const run = runPm(pmRoot, args);
     if (!run.ok) {
-        throw pmExpectedError(`pm-ts-starter: \`${feature}\` demo failed (pm exited ${run.status}).`, {
+        const detail = run.stderr.trim();
+        throw pmExpectedError(`pm-ts-starter: \`${feature}\` demo failed (pm exited ${run.status})${detail ? `: ${detail}` : "."}`, {
             exitCode: 1,
-            context: { feature, attempted_command: "pm", why: run.stderr.trim() || undefined },
+            context: { feature, attempted_command: "pm", why: detail || undefined },
             cause: run.stderr ? new Error(run.stderr) : undefined,
         });
     }
