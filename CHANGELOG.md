@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Hands-on functional test pass 2026-05-29 (real data) ([pm-ts-starter-h8br](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/features/pm-ts-starter-h8br.toon))
+
+### Other
+
+- Harden release bun-verify so registry-mirror lag cannot block the GitHub release ([pm-ts-starter-yybv](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-yybv.toon))
+
 ## 2026.7.6 - 2026-07-06
 
 ### Fixed
