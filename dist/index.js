@@ -525,17 +525,60 @@ function registerRenderers(api) {
 // ---------------------------------------------------------------------------
 // 6. SEARCH — custom search provider
 // ---------------------------------------------------------------------------
+// Node's spawnSync defaults to a 1 MiB stdout cap, which a mature tracker's JSON
+// dump passes at a few hundred items. Past that the child is killed with ENOBUFS,
+// status null and EMPTY stderr, so the failure surfaces with nothing to diagnose
+// (and at larger sizes stdout is genuinely truncated mid-document).
+// 64 MiB matches the cap the sibling pm packages settled on.
+/** Read-buffer cap for `pm` output, in bytes. 64 MiB by default; override with the
+ * `PM_JSON_MAX_BUFFER` env var. Resolved per call so the override takes effect
+ * without an import-order dependency. Invalid or non-positive values fall back to
+ * the default rather than silently disabling the guard. */
+function pmJsonMaxBuffer() {
+    // Number(), not parseInt(): parseInt("64MiB") silently yields 64, which would
+    // impose a 64-BYTE cap and break every ordinary read while appearing to honor
+    // the documented invalid-value fallback. Number() rejects the whole string.
+    const raw = Number(process.env.PM_JSON_MAX_BUFFER);
+    return Number.isSafeInteger(raw) && raw > 0 ? raw : 64 * 1024 * 1024;
+}
+/** Name the real cause of a failed `pm` read. A stdout overrun kills the child
+ * with `status: null` and EMPTY stderr, so without this the failure surfaces as
+ * an unexplained error (or, worse, as an empty result set). */
+function describePmReadFailure(error, limitBytes) {
+    const code = error.code;
+    if (code === "ENOBUFS") {
+        // This read is always the full workspace, so "narrow the operation" would be a
+        // dead instruction here — name only the lever the reader actually has.
+        return `pm output exceeded the ${limitBytes} byte read buffer. `
+            + "Raise PM_JSON_MAX_BUFFER (in bytes) to increase the read limit for this workspace.";
+    }
+    return `pm read failed: ${error.message}`;
+}
 function registerSearch(api) {
     if (typeof api.registerSearchProvider === "function") {
         api.registerSearchProvider({
             name: "ts-starter-prefix",
             async query(ctx) {
                 const query = ctx.query ?? "";
+                const maxBuffer = pmJsonMaxBuffer();
                 const result = spawnSync("pm", ["--path", ctx.pm_root ?? ".", "list-all", "--json"], {
                     encoding: "utf-8",
+                    maxBuffer,
                 });
-                if (result.status !== 0)
+                // An empty result set and an unreadable workspace look identical to the
+                // caller, so name the read failure instead of returning a silent zero.
+                if (result.error) {
+                    console.error(`pm-ts-starter: search read failed — ${describePmReadFailure(result.error, maxBuffer)}`);
                     return { results: [] };
+                }
+                // A nonzero exit (unreadable or invalid workspace) is just as invisible as
+                // an overrun: the caller cannot tell it from "no matches". Surface stderr
+                // instead of discarding it, while keeping the empty-result contract.
+                if (result.status !== 0) {
+                    console.error(`pm-ts-starter: search read failed (pm exited ${result.status}) — `
+                        + (result.stderr?.trim() || "no stderr output"));
+                    return { results: [] };
+                }
                 const data = JSON.parse(result.stdout);
                 const items = (data.items || []).filter((item) => item.id.startsWith(query));
                 return { results: items };
