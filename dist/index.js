@@ -530,21 +530,21 @@ function registerRenderers(api) {
 // status null and EMPTY stderr, so the failure surfaces with nothing to diagnose
 // (and at larger sizes stdout is genuinely truncated mid-document).
 // 64 MiB matches the cap the sibling pm packages settled on.
-const PM_JSON_MAX_BUFFER = resolvePmJsonMaxBuffer();
-/** 64 MiB by default; override with the `PM_JSON_MAX_BUFFER` env var (bytes) for
- * workspaces larger than that. Invalid or non-positive values fall back to the
- * default rather than silently disabling the guard. */
-function resolvePmJsonMaxBuffer() {
+/** Read-buffer cap for `pm` output, in bytes. 64 MiB by default; override with the
+ * `PM_JSON_MAX_BUFFER` env var. Resolved per call so the override takes effect
+ * without an import-order dependency. Invalid or non-positive values fall back to
+ * the default rather than silently disabling the guard. */
+function pmJsonMaxBuffer() {
     const raw = Number.parseInt(process.env.PM_JSON_MAX_BUFFER ?? "", 10);
     return Number.isFinite(raw) && raw > 0 ? raw : 64 * 1024 * 1024;
 }
 /** Name the real cause of a failed `pm` read. A stdout overrun kills the child
  * with `status: null` and EMPTY stderr, so without this the failure surfaces as
  * an unexplained error (or, worse, as an empty result set). */
-function describePmReadFailure(error) {
+function describePmReadFailure(error, limitBytes) {
     const code = error.code;
     if (code === "ENOBUFS") {
-        return `pm output exceeded the ${PM_JSON_MAX_BUFFER} byte read buffer. `
+        return `pm output exceeded the ${limitBytes} byte read buffer. `
             + "The workspace is larger than this integration's read limit; narrow the "
             + "operation or raise PM_JSON_MAX_BUFFER.";
     }
@@ -556,14 +556,15 @@ function registerSearch(api) {
             name: "ts-starter-prefix",
             async query(ctx) {
                 const query = ctx.query ?? "";
+                const maxBuffer = pmJsonMaxBuffer();
                 const result = spawnSync("pm", ["--path", ctx.pm_root ?? ".", "list-all", "--json"], {
                     encoding: "utf-8",
-                    maxBuffer: PM_JSON_MAX_BUFFER,
+                    maxBuffer,
                 });
                 // An empty result set and an unreadable workspace look identical to the
                 // caller, so name the read failure instead of returning a silent zero.
                 if (result.error) {
-                    console.error(`pm-ts-starter: search read failed — ${describePmReadFailure(result.error)}`);
+                    console.error(`pm-ts-starter: search read failed — ${describePmReadFailure(result.error, maxBuffer)}`);
                     return { results: [] };
                 }
                 // A nonzero exit (unreadable or invalid workspace) is just as invisible as

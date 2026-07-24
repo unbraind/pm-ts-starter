@@ -323,3 +323,67 @@ test("pmExpectedError builds a PmCliExpectedError-shaped error", () => {
   assert.ok(isPmCliExpectedError(err), "isPmCliExpectedError should recognise the built error");
   assert.ok(!isPmCliExpectedError(new Error("plain")), "plain errors should not match");
 });
+
+// --- pm read buffer -----------------------------------------------------------
+// The search provider must never confuse an unreadable workspace with "no
+// matches". The read cap is env configurable, so the overrun branch is testable
+// against a real workspace without mocking spawnSync.
+
+test("search provider reports a read-buffer overrun instead of returning a silent empty result", async (t) => {
+  const { mkdtempSync, rmSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { execFileSync } = await import("node:child_process");
+  const extension = (await import("../dist/index.js")).default;
+
+  const dir = mkdtempSync(join(tmpdir(), "pm-ts-starter-buffer-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const pmRoot = join(dir, ".agents", "pm");
+  try {
+    execFileSync("pm", ["init", "--pm-path", pmRoot], { cwd: dir, stdio: "ignore" });
+    execFileSync("pm", ["create", "--pm-path", pmRoot, "--type", "issue", "--title", "Buffer probe item", "--author", "test"], { cwd: dir, stdio: "ignore" });
+  } catch {
+    t.skip("pm CLI unavailable");
+    return;
+  }
+
+  let provider: { query(ctx: any): Promise<{ results: unknown[] }> } | undefined;
+  extension.activate({
+    registerCommand: () => {},
+    registerParser: () => {},
+    registerPreflight: () => {},
+    registerService: () => {},
+    registerFlags: () => {},
+    registerRenderer: () => {},
+    registerImporter: () => {},
+    registerExporter: () => {},
+    registerSearchProvider: (p: any) => { provider = p; },
+    registerVectorStoreAdapter: () => {},
+    hooks: {
+      beforeCommand: () => {},
+      afterCommand: () => {},
+      onWrite: () => {},
+      onRead: () => {},
+      onIndex: () => {},
+    },
+  } as any);
+  assert.ok(provider, "search provider should be registered");
+
+  const messages: string[] = [];
+  const originalError = console.error;
+  const originalCap = process.env.PM_JSON_MAX_BUFFER;
+  console.error = (...values: unknown[]) => messages.push(values.join(" "));
+  process.env.PM_JSON_MAX_BUFFER = "64"; // too small to hold any payload
+  try {
+    const result = await provider!.query({ query: "pm-", pm_root: pmRoot });
+    assert.deepEqual(result.results, [], "the empty-result contract must still hold");
+    assert.ok(
+      messages.some((message) => /read buffer/.test(message)),
+      `overrun must be reported, not silent; saw: ${messages.join(" | ")}`
+    );
+  } finally {
+    console.error = originalError;
+    if (originalCap === undefined) delete process.env.PM_JSON_MAX_BUFFER;
+    else process.env.PM_JSON_MAX_BUFFER = originalCap;
+  }
+});
