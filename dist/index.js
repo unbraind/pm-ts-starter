@@ -525,6 +525,24 @@ function registerRenderers(api) {
 // ---------------------------------------------------------------------------
 // 6. SEARCH — custom search provider
 // ---------------------------------------------------------------------------
+// Node's spawnSync defaults to a 1 MiB stdout cap, which a mature tracker's JSON
+// dump passes at a few hundred items. Past that the child is killed with ENOBUFS,
+// status null and EMPTY stderr, so the failure surfaces with nothing to diagnose
+// (and at larger sizes stdout is genuinely truncated mid-document).
+// 64 MiB matches the cap the sibling pm packages settled on.
+const PM_JSON_MAX_BUFFER = 64 * 1024 * 1024;
+/** Name the real cause of a failed `pm` read. A stdout overrun kills the child
+ * with `status: null` and EMPTY stderr, so without this the failure surfaces as
+ * an unexplained error (or, worse, as an empty result set). */
+function describePmReadFailure(error) {
+    const code = error.code;
+    if (code === "ENOBUFS") {
+        return `pm output exceeded the ${PM_JSON_MAX_BUFFER} byte read buffer. `
+            + "The workspace is larger than this integration's read limit; narrow the "
+            + "operation or raise PM_JSON_MAX_BUFFER.";
+    }
+    return `pm read failed: ${error.message}`;
+}
 function registerSearch(api) {
     if (typeof api.registerSearchProvider === "function") {
         api.registerSearchProvider({
@@ -533,7 +551,14 @@ function registerSearch(api) {
                 const query = ctx.query ?? "";
                 const result = spawnSync("pm", ["--path", ctx.pm_root ?? ".", "list-all", "--json"], {
                     encoding: "utf-8",
+                    maxBuffer: PM_JSON_MAX_BUFFER,
                 });
+                // An empty result set and an unreadable workspace look identical to the
+                // caller, so name the read failure instead of returning a silent zero.
+                if (result.error) {
+                    console.error(`pm-ts-starter: search read failed — ${describePmReadFailure(result.error)}`);
+                    return { results: [] };
+                }
                 if (result.status !== 0)
                     return { results: [] };
                 const data = JSON.parse(result.stdout);
