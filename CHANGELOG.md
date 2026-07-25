@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Other
+
+- Enable governance duplicate-detection advisory mode and adopt pm-cli 2026.7.25 ([pm-ts-starter-4u91](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-4u91.toon))
+
 ## 2026.7.25 - 2026-07-25
 
 ### Fixed
