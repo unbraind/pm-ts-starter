@@ -1,0 +1,22 @@
+id: pm-ts-starter-fjtz
+title: Demonstrate the full sdk/authoring builder surface with harness-backed tests
+description: "Replace raw object literals with typed define* builders, adopt composeExtension/composeExtensionPackage, add assertRegistered*/runRegistered* test helpers, reconcile capabilities with deriveExtensionCapabilities/lintExtensionBlueprint, add defineCommandOverride and defineProjectProfile demos"
+type: Feature
+status: closed
+priority: 2
+tags: []
+created_at: "2026-07-26T12:06:05.212Z"
+updated_at: "2026-07-26T18:55:17.559Z"
+closed_at: "2026-07-26T18:55:17.558Z"
+author: pi-agent
+acceptance_criteria: All 24 sdk/authoring define* builders adopted; extension assembled via composeExtension/composeExtensionPackage; blueprint reconciles with deriveExtensionCapabilities + lintExtensionBlueprint; every capability exercised through createExtensionTestHarness (no hand-built api doubles); no type-escape casts hiding host contracts; tests green; extension activates and runs in a real pm workspace.
+resolution: "All 24 SDK builders + composeExtension adopted, and the two contract defects the real types exposed (fabricated vector-store adapter contract, stale hardcoded sdk_target) fixed and verified against a live pm host."
+expected_result: Reference extension demonstrates the real SDK contracts an author should copy.
+actual_result: "45/45 tests green. Functionally verified in a throwaway pm workspace: pm install -> activation health ok, blocking_failure_count 0, failed_count 0; 'pm hello --name FleetCheck' and 'pm ts-starter info' both return correct payloads; sdk_target now reports 2026.7.26 in the live host. Vector-store adapter rewritten from a fabricated {id,text}/{query} contract to the real points[]/vector contract plus delete; all 'as never' casts removed so drift now fails the build."
+notes[2]{created_at,author,text}:
+  "2026-07-26T12:06:17.593Z",pi-agent,"BEFORE: 0 of 24 builders adopted. defineExtension is a local shim (not imported). All 9 capabilities (commands,renderers,hooks,schema,importers,search,parser,preflight,services) demonstrated at runtime but via raw object literals. No defineCommandOverride or defineProjectProfile demo. Tests use hand-rolled fake api, not createExtensionTestHarness + assertRegistered*. No deriveExtensionCapabilities/lintExtensionBlueprint/reconcileExtensionCapabilityUsage. Missing builders: all 24 (defineCommand, defineCommandOverride, defineFlag, defineExporter, defineImporter, defineItemType, defineItemField, defineMigration, defineSearchProvider, defineRendererOverride, defineParserOverride, definePreflightOverride, defineServiceOverride, defineVectorStoreAdapter, defineProjectProfile, all 5 hook builders, defineExtensionManifest, defineExtensionBlueprint, composeExtension, composeExtensionPackage)"
+  "2026-07-26T18:54:51.824Z",claude-orchestrator,"AFTER: all 24 builders adopted and assembled via composeExtension/composeExtensionPackage; 45 harness-backed tests green. Two real defects found once the casts came off. (1) The vector-store adapter implemented a FABRICATED contract: upsert read ctx.id/ctx.text and query read ctx.query, but the host delivers ctx.points[] (each already carrying its vector) and a pre-embedded ctx.vector. It compiled only because VectorStore*Context each carry an index signature, and the test hid it with 'as never'. Against a real host it would have stored and matched nothing. Rewritten to the real contract, plus the previously missing delete op. (2) sdk_target was a hardcoded literal stuck at 2026.7.6, 20 releases behind the declared peer range, so 'ts-starter info' and 'ts-starter setup' both misreported the SDK this reference demonstrates; now derived from peerDependencies."
+learnings[1]{created_at,author,text}:
+  "2026-07-26T18:55:17.125Z",claude-orchestrator,"Type-escape casts in extension tests ('as never' on a host context) do not just weaken a test — they let the code under test drift to a contract the host never delivers, while still compiling, because most SDK *Context interfaces carry an [key: string]: unknown index signature. Isolate any unavoidable cast in a single named fixture so the fields the code actually reads stay checked."
+close_reason: completed
+body: ""

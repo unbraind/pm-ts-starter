@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- Demonstrate the full sdk/authoring builder surface with harness-backed tests ([pm-ts-starter-fjtz](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/features/pm-ts-starter-fjtz.toon))
+
 ### Removed
 
 - Adopt pm-cli 2026.7.26 typed authoring contracts and remove the any-cast defineExtension shim ([pm-ts-starter-0cd3](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/tasks/pm-ts-starter-0cd3.toon))
