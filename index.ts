@@ -317,10 +317,7 @@ const infoCommand = defineCommand({
       name: "pm-ts-starter",
       version: VERSION,
       sdk_target: SDK_TARGET,
-      capabilities: [
-        "commands", "schema", "hooks", "importers",
-        "renderers", "search", "parser", "preflight", "services",
-      ],
+      capabilities: derivedCapabilities,
     };
     console.error(JSON.stringify(info, null, 2));
     return info;
@@ -485,10 +482,7 @@ const setupCommand = defineCommand({
       extension: "pm-ts-starter",
       version: VERSION,
       sdk_target: SDK_TARGET,
-      capabilities: [
-        "commands", "schema", "hooks", "importers",
-        "renderers", "search", "parser", "preflight", "services",
-      ],
+      capabilities: derivedCapabilities,
       verbose_env: "PM_TS_STARTER_VERBOSE=1",
       interactive_requested: interactive,
       interactive_run: runInteractive,

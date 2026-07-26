@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import test from "node:test";
+import test, { before } from "node:test";
 
 import extension, {
   pmExpectedError,
@@ -31,7 +31,7 @@ import {
 
 import { demoProfile } from "../dist/index.js";
 
-import type { PmSettings } from "@unbrained/pm-cli/sdk";
+import type { ItemDocument, ItemMetadata, PmSettings } from "@unbrained/pm-cli/sdk";
 
 /**
  * Stand-in for the host-supplied `PmSettings` carried on search-provider and
@@ -53,6 +53,20 @@ import type { PmSettings } from "@unbrained/pm-cli/sdk";
  */
 const HOST_SETTINGS = {} as PmSettings;
 
+/**
+ * Build the minimal {@link ItemDocument} the prefix search provider consumes.
+ *
+ * The provider reads only `metadata.id`, but `ItemMetadata` is the full item
+ * record (title, type, status, timestamps, and the rest). As with
+ * {@link HOST_SETTINGS}, the cast is isolated here rather than applied to the
+ * whole context at the call site — so `documents`, `query`, `tokens` and the
+ * other {@link SearchProviderQueryContext} fields stay contract-checked.
+ */
+const itemDocument = (id: string): ItemDocument => ({
+  metadata: { id } as ItemMetadata,
+  body: "",
+});
+
 /** Manifest capabilities this reference extension declares, granted to the SDK host harness. */
 const CAPABILITIES = [
   "commands", "renderers", "hooks", "schema", "importers",
@@ -72,11 +86,18 @@ const MANIFEST = JSON.parse(
 
 let harness: ExtensionTestHarness;
 
-test("extension activates cleanly through the real SDK harness", async () => {
+// Built in `before` rather than inside the activation test: every later test
+// reads `harness`, so assigning it from within a test would make the whole
+// suite depend on execution order and fail with "Cannot read properties of
+// undefined" if that one test failed or the runner used concurrency.
+before(async () => {
   harness = await createExtensionTestHarness(extension, {
     name: "pm-ts-starter",
     capabilities: CAPABILITIES,
   });
+});
+
+test("extension activates cleanly through the real SDK harness", () => {
   assert.deepEqual(harness.activation.failed, [], "activation must not fail");
 });
 
@@ -116,7 +137,7 @@ test("blueprint passes lintExtensionBlueprint with no error-severity findings", 
   assert.deepEqual(errors, [], "no error-severity findings");
 });
 
-test("assertExtensionBlueprint throws on no errors", () => {
+test("assertExtensionBlueprint does not throw for a clean blueprint", () => {
   // This is the throwing CI guard — if it doesn't throw, the blueprint is clean.
   const result = assertExtensionBlueprint(blueprint, {
     declaredCapabilities: MANIFEST.capabilities,
@@ -196,8 +217,8 @@ test("registers migration 'ts-starter-noop' via assertRegisteredMigration", () =
   harness.assertMigration({ migration: "ts-starter-noop" });
 });
 
-test("registers project profile 'ts-starter-demo' via assertRegisteredProfile", () => {
-  harness.assertProfile({ profile: "ts-starter-demo" });
+test("registers project profile 'ts_starter_demo' via assertRegisteredProfile", () => {
+  harness.assertProfile({ profile: demoProfile.name });
 });
 
 test("registers all five hook kinds via assertRegisteredHook", () => {
@@ -331,12 +352,8 @@ test("search provider filters ctx.documents and returns SearchProviderHit shape"
       tokens: ["keep-"],
       options: {},
       settings: HOST_SETTINGS,
-      documents: [
-        { metadata: { id: "keep-1" }, body: "" },
-        { metadata: { id: "drop-1" }, body: "" },
-        { metadata: { id: "keep-2" }, body: "" },
-      ],
-    } as never,
+      documents: [itemDocument("keep-1"), itemDocument("drop-1"), itemDocument("keep-2")],
+    },
   });
 
   const hits: Array<{ id: string; score: number }> = Array.isArray(result)
@@ -488,9 +505,10 @@ test("command override for 'list' returns result unchanged", async () => {
 });
 
 test("migration 'ts-starter-noop' runs without error", async () => {
-  const result = await harness.runMigration({ migration: "ts-starter-noop" });
-  // The no-op migration returns undefined (no explicit return)
-  assert.ok(result !== undefined || result === undefined, "migration should run");
+  // The no-op migration returns undefined (no explicit return), so there is no
+  // return value worth asserting; what matters is that the runner resolves
+  // rather than rejects.
+  await assert.doesNotReject(() => harness.runMigration({ migration: "ts-starter-noop" }));
 });
 
 // ---------------------------------------------------------------------------
