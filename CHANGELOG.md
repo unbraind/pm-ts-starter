@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- Reference extension claimed to be fully typed but used any, hiding three wrong SDK contracts ([pm-ts-starter-v5gs](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-v5gs.toon))
+
 ### Other
 
 - Enable governance duplicate-detection advisory mode and adopt pm-cli 2026.7.25 ([pm-ts-starter-4u91](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-4u91.toon))

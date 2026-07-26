@@ -101,11 +101,41 @@ function isPmCliExpectedError(error) {
     return (error instanceof Error &&
         error.name === PM_CLI_EXPECTED_ERROR_NAME);
 }
-function runPm(pmRoot, args) {
+/** Read-buffer cap for `pm` output, in bytes. 64 MiB by default; override with the
+ * `PM_JSON_MAX_BUFFER` env var. Resolved per call so the override takes effect
+ * without an import-order dependency. Invalid or non-positive values fall back to
+ * the default rather than silently disabling the guard. */
+function pmJsonMaxBuffer() {
+    // Number(), not parseInt(): parseInt("64MiB") silently yields 64, which would
+    // impose a 64-BYTE cap and break every ordinary read while appearing to honor
+    // the documented invalid-value fallback. Number() rejects the whole string.
+    const raw = Number(process.env.PM_JSON_MAX_BUFFER);
+    return Number.isSafeInteger(raw) && raw > 0 ? raw : 64 * 1024 * 1024;
+}
+/** Name the real cause of a failed `pm` read. A stdout overrun kills the child
+ * with `status: null` and EMPTY stderr, so without this the failure surfaces as
+ * an unexplained error (or, worse, as an empty result set). */
+function describePmReadFailure(error, limitBytes) {
+    const code = error.code;
+    if (code === "ENOBUFS") {
+        // This read is always the full workspace, so "narrow the operation" would be a
+        // dead instruction here — name only the lever the reader actually has.
+        return `pm output exceeded the ${limitBytes} byte read buffer. `
+            + "Raise PM_JSON_MAX_BUFFER (in bytes) to increase the read limit for this workspace.";
+    }
+    return `pm read failed: ${error.message}`;
+}
+export function runPm(pmRoot, args) {
+    // maxBuffer is not optional in practice. Node defaults stdout to 1 MiB, and a
+    // pm read that exceeds it is killed with `status: null` and EMPTY stderr — the
+    // failure is invisible and reads as "no output" rather than as an error.
+    const maxBuffer = pmJsonMaxBuffer();
     const result = spawnSync("pm", ["--path", pmRoot, ...args], {
         encoding: "utf-8",
+        maxBuffer,
     });
-    const stderr = (result.stderr ?? "").trim() || result.error?.message || "";
+    const stderr = (result.stderr ?? "").trim()
+        || (result.error ? describePmReadFailure(result.error, maxBuffer) : "");
     return {
         ok: result.status === 0 && !result.error,
         stdout: result.stdout ?? "",
@@ -450,7 +480,7 @@ function registerHooks(api) {
     // onIndex — fires when pm (re)indexes items for search.
     api.hooks.onIndex((ctx) => {
         if (VERBOSE)
-            console.error(`[ts-starter] onIndex: ${(ctx && (ctx.count ?? ctx.path)) ?? "(index event)"}`);
+            console.error(`[ts-starter] onIndex: mode=${ctx.mode} total_items=${ctx.total_items ?? "(unreported)"}`);
     });
 }
 // ---------------------------------------------------------------------------
@@ -515,7 +545,7 @@ function registerRenderers(api) {
         // everything else so pm falls through to its native renderer.
         api.registerRenderer("json", (ctx) => {
             const result = ctx?.result;
-            if (result && typeof result === "object" && result.ts_starter) {
+            if (result && typeof result === "object" && "ts_starter" in result) {
                 return JSON.stringify({ rendered_by: "pm-ts-starter", ...result }, null, 2);
             }
             return null; // not ours → native rendering
@@ -530,58 +560,24 @@ function registerRenderers(api) {
 // status null and EMPTY stderr, so the failure surfaces with nothing to diagnose
 // (and at larger sizes stdout is genuinely truncated mid-document).
 // 64 MiB matches the cap the sibling pm packages settled on.
-/** Read-buffer cap for `pm` output, in bytes. 64 MiB by default; override with the
- * `PM_JSON_MAX_BUFFER` env var. Resolved per call so the override takes effect
- * without an import-order dependency. Invalid or non-positive values fall back to
- * the default rather than silently disabling the guard. */
-function pmJsonMaxBuffer() {
-    // Number(), not parseInt(): parseInt("64MiB") silently yields 64, which would
-    // impose a 64-BYTE cap and break every ordinary read while appearing to honor
-    // the documented invalid-value fallback. Number() rejects the whole string.
-    const raw = Number(process.env.PM_JSON_MAX_BUFFER);
-    return Number.isSafeInteger(raw) && raw > 0 ? raw : 64 * 1024 * 1024;
-}
-/** Name the real cause of a failed `pm` read. A stdout overrun kills the child
- * with `status: null` and EMPTY stderr, so without this the failure surfaces as
- * an unexplained error (or, worse, as an empty result set). */
-function describePmReadFailure(error, limitBytes) {
-    const code = error.code;
-    if (code === "ENOBUFS") {
-        // This read is always the full workspace, so "narrow the operation" would be a
-        // dead instruction here — name only the lever the reader actually has.
-        return `pm output exceeded the ${limitBytes} byte read buffer. `
-            + "Raise PM_JSON_MAX_BUFFER (in bytes) to increase the read limit for this workspace.";
-    }
-    return `pm read failed: ${error.message}`;
-}
 function registerSearch(api) {
     if (typeof api.registerSearchProvider === "function") {
         api.registerSearchProvider({
             name: "ts-starter-prefix",
-            async query(ctx) {
+            // `SearchProviderQueryContext` already carries the workspace's documents,
+            // so a provider never needs to read the tracker itself. An earlier version
+            // of this demo shelled out to `pm list-all --json` per query — a
+            // subprocess, a read-buffer ceiling, and two failure branches, all for
+            // data the host had already handed it.
+            query(ctx) {
                 const query = ctx.query ?? "";
-                const maxBuffer = pmJsonMaxBuffer();
-                const result = spawnSync("pm", ["--path", ctx.pm_root ?? ".", "list-all", "--json"], {
-                    encoding: "utf-8",
-                    maxBuffer,
-                });
-                // An empty result set and an unreadable workspace look identical to the
-                // caller, so name the read failure instead of returning a silent zero.
-                if (result.error) {
-                    console.error(`pm-ts-starter: search read failed — ${describePmReadFailure(result.error, maxBuffer)}`);
-                    return { results: [] };
-                }
-                // A nonzero exit (unreadable or invalid workspace) is just as invisible as
-                // an overrun: the caller cannot tell it from "no matches". Surface stderr
-                // instead of discarding it, while keeping the empty-result contract.
-                if (result.status !== 0) {
-                    console.error(`pm-ts-starter: search read failed (pm exited ${result.status}) — `
-                        + (result.stderr?.trim() || "no stderr output"));
-                    return { results: [] };
-                }
-                const data = JSON.parse(result.stdout);
-                const items = (data.items || []).filter((item) => item.id.startsWith(query));
-                return { results: items };
+                // The contract is `SearchProviderHit[] | { hits }`: a hit is an
+                // { id, score } pair, not a raw item. Returning items under a `results`
+                // key — as this demo previously did — yields zero hits for every caller.
+                const hits = ctx.documents.flatMap((document) => document.metadata.id.startsWith(query)
+                    ? [{ id: document.metadata.id, score: 1, matched_fields: ["id"] }]
+                    : []);
+                return { hits };
             },
         });
     }
@@ -614,7 +610,9 @@ function registerSearch(api) {
                     score: v.reduce((s, x, i) => s + x * (qVec[i] ?? 0), 0),
                 }));
                 scored.sort((a, b) => b.score - a.score);
-                return { results: scored.slice(0, ctx?.limit ?? 5) };
+                // VectorStoreQueryHit[] is a bare array — wrapping it in an object
+                // typechecked as `any` before and returned nothing usable to pm.
+                return scored.slice(0, ctx?.limit ?? 5);
             },
         });
     }

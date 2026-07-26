@@ -3,6 +3,26 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import extension, { isPmCliExpectedError, pmExpectedError } from "../dist/index.js";
+import { createExtensionTestHarness } from "@unbrained/pm-cli/sdk/testing";
+
+/** Manifest capabilities this reference extension declares, granted to the SDK host harness. */
+const CAPABILITIES = [
+  "commands", "renderers", "hooks", "schema", "importers",
+  "search", "parser", "preflight", "services",
+] as const;
+
+/**
+ * Activate through the SDK's own host harness rather than a hand-written double.
+ *
+ * A stub accepts whatever the extension registers; the real harness enforces the
+ * same manifest-capability governance the CLI does, so a registration this
+ * package is not entitled to fails here instead of at install time.
+ */
+async function harness() {
+  const created = await createExtensionTestHarness(extension, { name: "pm-ts-starter", capabilities: CAPABILITIES });
+  assert.deepEqual(created.activation.failed, [], "activation must not fail");
+  return created;
+}
 
 test("extension has required shape", () => {
   assert.ok(extension, "module should export a default value");
@@ -325,65 +345,72 @@ test("pmExpectedError builds a PmCliExpectedError-shaped error", () => {
 });
 
 // --- pm read buffer -----------------------------------------------------------
-// The search provider must never confuse an unreadable workspace with "no
-// matches". The read cap is env configurable, so the overrun branch is testable
-// against a real workspace without mocking spawnSync.
+// `runPm` is the single shell-out every demo command goes through. Node caps
+// child stdout at 1 MiB by default and kills the child with `status: null` and
+// EMPTY stderr on overrun, so an unguarded read fails invisibly. The cap is env
+// configurable, which makes the overrun branch testable against a real
+// workspace without mocking spawnSync.
 
-test("search provider reports a read-buffer overrun instead of returning a silent empty result", async (t) => {
+test("runPm names a read-buffer overrun instead of failing silently", async (t) => {
   const { mkdtempSync, rmSync } = await import("node:fs");
   const { tmpdir } = await import("node:os");
   const { join } = await import("node:path");
   const { execFileSync } = await import("node:child_process");
-  const extension = (await import("../dist/index.js")).default;
+  const { runPm } = await import("../dist/index.js");
 
   const dir = mkdtempSync(join(tmpdir(), "pm-ts-starter-buffer-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const pmRoot = join(dir, ".agents", "pm");
   try {
-    execFileSync("pm", ["init", "--pm-path", pmRoot], { cwd: dir, stdio: "ignore" });
-    execFileSync("pm", ["create", "--pm-path", pmRoot, "--type", "issue", "--title", "Buffer probe item", "--author", "test"], { cwd: dir, stdio: "ignore" });
+    execFileSync("pm", ["init", "--workspace", dir, "--defaults", "--author", "test"], { cwd: dir, stdio: "ignore" });
+    execFileSync("pm", ["create", "--pm-path", pmRoot, "--type", "Issue", "--title", "Buffer probe item", "--author", "test"], { cwd: dir, stdio: "ignore" });
   } catch {
     t.skip("pm CLI unavailable");
     return;
   }
 
-  let provider: { query(ctx: any): Promise<{ results: unknown[] }> } | undefined;
-  extension.activate({
-    registerCommand: () => {},
-    registerParser: () => {},
-    registerPreflight: () => {},
-    registerService: () => {},
-    registerFlags: () => {},
-    registerRenderer: () => {},
-    registerImporter: () => {},
-    registerExporter: () => {},
-    registerSearchProvider: (p: any) => { provider = p; },
-    registerVectorStoreAdapter: () => {},
-    hooks: {
-      beforeCommand: () => {},
-      afterCommand: () => {},
-      onWrite: () => {},
-      onRead: () => {},
-      onIndex: () => {},
-    },
-  } as any);
-  assert.ok(provider, "search provider should be registered");
-
-  const messages: string[] = [];
-  const originalError = console.error;
   const originalCap = process.env.PM_JSON_MAX_BUFFER;
-  console.error = (...values: unknown[]) => messages.push(values.join(" "));
   process.env.PM_JSON_MAX_BUFFER = "64"; // too small to hold any payload
   try {
-    const result = await provider!.query({ query: "pm-", pm_root: pmRoot });
-    assert.deepEqual(result.results, [], "the empty-result contract must still hold");
-    assert.ok(
-      messages.some((message) => /read buffer/.test(message)),
-      `overrun must be reported, not silent; saw: ${messages.join(" | ")}`
+    const run = runPm(pmRoot, ["list-all", "--json"]);
+    assert.strictEqual(run.ok, false, "an overrun must not report success");
+    assert.match(
+      run.stderr,
+      /read buffer/,
+      `overrun must be named, not silent; saw: ${run.stderr || "(empty stderr)"}`,
     );
   } finally {
-    console.error = originalError;
     if (originalCap === undefined) delete process.env.PM_JSON_MAX_BUFFER;
     else process.env.PM_JSON_MAX_BUFFER = originalCap;
   }
+});
+
+// --- search provider ----------------------------------------------------------
+// The provider reads ctx.documents, which the host supplies, and must return the
+// SearchProviderHit contract rather than raw items under a `results` key.
+
+test("search provider filters ctx.documents and returns SearchProviderHit shape", async () => {
+  const runner = await harness();
+  const result = await runner.runSearchProvider({
+    provider: "ts-starter-prefix",
+    operation: "query",
+    context: {
+      query: "keep-",
+      mode: "keyword",
+      tokens: ["keep-"],
+      options: {},
+      settings: {},
+      documents: [
+        { metadata: { id: "keep-1" }, body: "" },
+        { metadata: { id: "drop-1" }, body: "" },
+        { metadata: { id: "keep-2" }, body: "" },
+      ],
+    } as never,
+  });
+
+  const hits: Array<{ id: string; score: number }> = Array.isArray(result)
+    ? result
+    : ((result as { hits?: Array<{ id: string; score: number }> })?.hits ?? []);
+  assert.deepEqual(hits.map((hit) => hit.id), ["keep-1", "keep-2"]);
+  assert.ok(hits.every((hit) => typeof hit.score === "number"), "every hit needs a numeric score");
 });
