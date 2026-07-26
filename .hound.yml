@@ -1,0 +1,10 @@
+# Hound CI configuration.
+# `dist/` is generated ES2022 output, committed deliberately so the package can
+# be installed straight from a clone as a pm extension. Every `.js` file in this
+# repo is generated — the authored source is TypeScript, which jshint cannot
+# lint at all. jshint therefore has nothing valid to inspect here, and its
+# default ES5 profile reports every `const`, arrow function and `import` in the
+# generated bundle as a syntax error, burying real findings under noise.
+# Same rationale as pm-starter/.hound.yml and pm-web/.hound.yml.
+jshint:
+  enabled: false
