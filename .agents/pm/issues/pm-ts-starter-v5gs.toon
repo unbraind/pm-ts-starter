@@ -1,0 +1,18 @@
+id: pm-ts-starter-v5gs
+title: "Reference extension claimed to be fully typed but used any, hiding three wrong SDK contracts"
+description: ""
+type: Issue
+status: closed
+priority: 1
+tags: []
+created_at: "2026-07-26T00:08:25.804Z"
+updated_at: "2026-07-26T00:08:27.518Z"
+closed_at: "2026-07-26T00:08:27.517Z"
+author: claude
+notes[4]{created_at,author,text}:
+  "2026-07-26T00:08:26.191Z",claude,"This package is the reference extension for all 9 SDK capabilities and its manifest description ends \"all fully typed\", but every register* helper took api: any and every handler took ctx: any. Typing them against the real SDK types immediately surfaced three contract violations that the any had been absorbing."
+  "2026-07-26T00:08:26.541Z",claude,"DEFECT 1 - search provider returned { results: items }. The contract is SearchProviderHit[] | { hits }, where a hit is { id, score }, not a raw item. Every caller of this demo provider got zero hits. DEFECT 2 - vector store query returned { results: [...] } where the contract is a bare VectorStoreQueryHit[]. DEFECT 3 - the onIndex hook logged ctx.count and ctx.path; OnIndexHookContext has neither (it has mode and total_items), so the demo logged undefined."
+  "2026-07-26T00:08:26.909Z",claude,"DEFECT 4 (found while removing the now-orphaned buffer helpers): runPm - the single shell-out every demo command uses - passed no maxBuffer, so it inherited Nodes 1 MiB default. An overrun kills the child with status null and EMPTY stderr, so the failure was invisible. The pmJsonMaxBuffer/describePmReadFailure helpers already existed but were wired only into the search provider; they are now in runPm where the shell-outs actually are."
+  "2026-07-26T00:08:27.209Z",claude,"The search provider no longer shells out at all: SearchProviderQueryContext already carries ctx.documents, so the old implementation spawned a pm subprocess per query for data the host had already supplied. Tests now activate through the SDK host harness (createExtensionTestHarness) instead of a hand-written api double, which enforces manifest capability governance a stub cannot."
+close_reason: Typed against real SDK contracts; four defects fixed and covered by tests
+body: ""

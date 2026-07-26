@@ -37,6 +37,20 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import type {
+  AfterCommandHookContext,
+  BeforeCommandHookContext,
+  CommandHandlerContext,
+  ExtensionApi,
+  SearchProviderQueryContext,
+  ImportExportContext,
+  OnIndexHookContext,
+  OnReadHookContext,
+  OnWriteHookContext,
+  PreflightOverrideContext,
+  RendererOverrideContext,
+  ServiceOverrideContext,
+  VectorStoreQueryContext,
+  VectorStoreUpsertContext,
   defineExtension as defineExtensionType,
   PmCliExpectedError,
 } from "@unbrained/pm-cli/sdk";
@@ -161,11 +175,43 @@ interface PmRunResult {
   status: number | null;
 }
 
-function runPm(pmRoot: string, args: string[]): PmRunResult {
+/** Read-buffer cap for `pm` output, in bytes. 64 MiB by default; override with the
+ * `PM_JSON_MAX_BUFFER` env var. Resolved per call so the override takes effect
+ * without an import-order dependency. Invalid or non-positive values fall back to
+ * the default rather than silently disabling the guard. */
+function pmJsonMaxBuffer(): number {
+  // Number(), not parseInt(): parseInt("64MiB") silently yields 64, which would
+  // impose a 64-BYTE cap and break every ordinary read while appearing to honor
+  // the documented invalid-value fallback. Number() rejects the whole string.
+  const raw = Number(process.env.PM_JSON_MAX_BUFFER);
+  return Number.isSafeInteger(raw) && raw > 0 ? raw : 64 * 1024 * 1024;
+}
+
+/** Name the real cause of a failed `pm` read. A stdout overrun kills the child
+ * with `status: null` and EMPTY stderr, so without this the failure surfaces as
+ * an unexplained error (or, worse, as an empty result set). */
+function describePmReadFailure(error: Error, limitBytes: number): string {
+  const code = (error as NodeJS.ErrnoException).code;
+  if (code === "ENOBUFS") {
+    // This read is always the full workspace, so "narrow the operation" would be a
+    // dead instruction here — name only the lever the reader actually has.
+    return `pm output exceeded the ${limitBytes} byte read buffer. `
+      + "Raise PM_JSON_MAX_BUFFER (in bytes) to increase the read limit for this workspace.";
+  }
+  return `pm read failed: ${error.message}`;
+}
+
+export function runPm(pmRoot: string, args: string[]): PmRunResult {
+  // maxBuffer is not optional in practice. Node defaults stdout to 1 MiB, and a
+  // pm read that exceeds it is killed with `status: null` and EMPTY stderr — the
+  // failure is invisible and reads as "no output" rather than as an error.
+  const maxBuffer = pmJsonMaxBuffer();
   const result = spawnSync("pm", ["--path", pmRoot, ...args], {
     encoding: "utf-8",
+    maxBuffer,
   });
-  const stderr = (result.stderr ?? "").trim() || result.error?.message || "";
+  const stderr = (result.stderr ?? "").trim()
+    || (result.error ? describePmReadFailure(result.error, maxBuffer) : "");
   return {
     ok: result.status === 0 && !result.error,
     stdout: result.stdout ?? "",
@@ -205,7 +251,7 @@ function pmJson<T = unknown>(pmRoot: string, args: string[], feature: string): T
 // 1. COMMANDS — register custom CLI commands
 // ---------------------------------------------------------------------------
 
-function registerDemoCommands(api: any): void {
+function registerDemoCommands(api: ExtensionApi): void {
   api.registerCommand({
     name: "hello",
     description: "Say hello from the TypeScript starter extension.",
@@ -222,7 +268,7 @@ function registerDemoCommands(api: any): void {
       { long: "--name", value_name: "name", value_type: "string", description: "Name to greet (default: pm-cli)" },
       { long: "--loud", value_type: "boolean", description: "Uppercase the greeting" },
     ],
-    async run(ctx: any) {
+    async run(ctx: CommandHandlerContext) {
       // Typed argument resolution: prefer the explicit --name flag, then a
       // positional argument, then the default. A clearly-named expected error
       // is thrown when the name is empty after trimming.
@@ -292,7 +338,7 @@ function registerDemoCommands(api: any): void {
       { long: "--id", value_name: "id", value_type: "string", description: "Plan item id to show." },
       { long: "--depth", value_name: "depth", value_type: "string", description: "Show depth: brief|standard|deep (default: standard)." },
     ],
-    async run(ctx: any) {
+    async run(ctx: CommandHandlerContext) {
       const pmRoot = ctx.pm_root ?? ".";
       const id =
         (ctx.options["id"] as string | undefined) ??
@@ -320,7 +366,7 @@ function registerDemoCommands(api: any): void {
       { long: "--format", value_name: "format", value_type: "string", description: "Output format: markdown|toon|json (default: json)." },
       { long: "--depth", value_name: "depth", value_type: "string", description: "Context depth: brief|standard|deep." },
     ],
-    async run(ctx: any) {
+    async run(ctx: CommandHandlerContext) {
       const pmRoot = ctx.pm_root ?? ".";
       const format = (ctx.options["format"] as string | undefined) ?? "json";
       const depth = (ctx.options["depth"] as string | undefined);
@@ -360,7 +406,7 @@ function registerDemoCommands(api: any): void {
       { long: "--query", value_name: "query", value_type: "string", description: "Search query text." },
       { long: "--limit", value_name: "n", value_type: "number", description: "Maximum hits to return (default: 10)." },
     ],
-    async run(ctx: any) {
+    async run(ctx: CommandHandlerContext) {
       const pmRoot = ctx.pm_root ?? ".";
       const rawQuery =
         (ctx.options["query"] as string | undefined) ??
@@ -393,7 +439,7 @@ function registerDemoCommands(api: any): void {
     flags: [
       { long: "--id", value_name: "id", value_type: "string", description: "Item id to compact (overrides a positional id)." },
     ],
-    async run(ctx: any) {
+    async run(ctx: CommandHandlerContext) {
       const pmRoot = ctx.pm_root ?? ".";
       const rawId =
         (ctx.options["id"] as string | undefined) ??
@@ -433,7 +479,7 @@ function registerDemoCommands(api: any): void {
     flags: [
       { long: "--interactive", value_type: "boolean", description: "Run an interactive guided setup wizard." },
     ],
-    async run(ctx: any) {
+    async run(ctx: CommandHandlerContext) {
       const interactive = Boolean(ctx.options["interactive"]);
       const isTty = typeof process.stdin?.isTTY === "boolean" ? process.stdin.isTTY : false;
       const runInteractive = interactive && isTty;
@@ -478,7 +524,7 @@ function registerDemoCommands(api: any): void {
 // 2. SCHEMA — provide custom JSON schemas for item validation
 // ---------------------------------------------------------------------------
 
-function registerSchema(api: any): void {
+function registerSchema(api: ExtensionApi): void {
   // The real schema API is registerItemFields / registerItemTypes /
   // registerMigration (there is no `registerSchema`). Here we add an optional
   // custom field, a custom item type, and a no-op migration to demonstrate all
@@ -508,7 +554,7 @@ function registerSchema(api: any): void {
 // 3. HOOKS — react to lifecycle events
 // ---------------------------------------------------------------------------
 
-function registerHooks(api: any): void {
+function registerHooks(api: ExtensionApi): void {
   // The real ExtensionApi exposes ALL FIVE lifecycle hooks under `api.hooks.*`
   // (beforeCommand/afterCommand/onWrite/onRead/onIndex) — there is no
   // `registerHook`. All hooks here are observe-only and log only when
@@ -517,11 +563,11 @@ function registerHooks(api: any): void {
   if (!api.hooks) return;
 
   // beforeCommand — runs before any command handler.
-  api.hooks.beforeCommand((ctx: any) => {
+  api.hooks.beforeCommand((ctx: BeforeCommandHookContext) => {
     if (VERBOSE) console.error(`[ts-starter] beforeCommand: ${ctx.command}`);
   });
   // afterCommand — runs after a command, with { command, ok, error, ... }.
-  api.hooks.afterCommand((ctx: any) => {
+  api.hooks.afterCommand((ctx: AfterCommandHookContext) => {
     if (VERBOSE) console.error(`[ts-starter] afterCommand: ${ctx.command} (ok=${ctx.ok})`);
     // Surface a concise hint when a command fails with an expected error so an
     // operator scanning stderr gets an actionable next step, not just a stack.
@@ -530,16 +576,16 @@ function registerHooks(api: any): void {
     }
   });
   // onWrite — fires when pm writes an item file to disk.
-  api.hooks.onWrite((ctx: any) => {
+  api.hooks.onWrite((ctx: OnWriteHookContext) => {
     if (VERBOSE) console.error(`[ts-starter] onWrite: ${ctx?.op ?? ""} ${ctx?.path ?? ""}`.trimEnd());
   });
   // onRead — fires when pm reads an item file.
-  api.hooks.onRead((ctx: any) => {
+  api.hooks.onRead((ctx: OnReadHookContext) => {
     if (VERBOSE) console.error(`[ts-starter] onRead: ${ctx?.path ?? "(item)"}`);
   });
   // onIndex — fires when pm (re)indexes items for search.
-  api.hooks.onIndex((ctx: any) => {
-    if (VERBOSE) console.error(`[ts-starter] onIndex: ${(ctx && (ctx.count ?? ctx.path)) ?? "(index event)"}`);
+  api.hooks.onIndex((ctx: OnIndexHookContext) => {
+    if (VERBOSE) console.error(`[ts-starter] onIndex: mode=${ctx.mode} total_items=${ctx.total_items ?? "(unreported)"}`);
   });
 }
 
@@ -547,7 +593,7 @@ function registerHooks(api: any): void {
 // 4. IMPORTERS — programmatic data import
 // ---------------------------------------------------------------------------
 
-function registerImporters(api: any): void {
+function registerImporters(api: ExtensionApi): void {
   // registerImporter("ts-starter-demo") auto-creates `pm ts-starter-demo import`
   // and registerExporter the matching `pm ts-starter-demo export`. Both are
   // covered by the "importers" capability. The 2026.7.6 SDK accepts an optional
@@ -557,7 +603,7 @@ function registerImporters(api: any): void {
   if (typeof api.registerImporter === "function") {
     api.registerImporter(
       "ts-starter-demo",
-      async (ctx: any) => {
+      async (ctx: ImportExportContext) => {
         if (VERBOSE) console.error("[ts-starter] Demo importer invoked:", JSON.stringify(ctx.options));
         // Demo no-op importer — extend with real import logic.
         return { imported: 0 };
@@ -580,7 +626,7 @@ function registerImporters(api: any): void {
   if (typeof api.registerExporter === "function") {
     api.registerExporter(
       "ts-starter-demo",
-      async (ctx: any) => {
+      async (ctx: ImportExportContext) => {
         if (VERBOSE) console.error("[ts-starter] Demo exporter invoked:", JSON.stringify(ctx.options));
         // Demo exporter — echoes a tagged payload so the renderer demo can pick
         // it up (`ts_starter` marker) without affecting any other command.
@@ -606,15 +652,15 @@ function registerImporters(api: any): void {
 // 5. RENDERERS — custom output formatting
 // ---------------------------------------------------------------------------
 
-function registerRenderers(api: any): void {
+function registerRenderers(api: ExtensionApi): void {
   if (typeof api.registerRenderer === "function") {
     // A renderer override is registered per-format and runs for EVERY command
     // using that format. To avoid hijacking other commands' output, transform
     // ONLY our own payload (tagged with `ts_starter`) and return null for
     // everything else so pm falls through to its native renderer.
-    api.registerRenderer("json", (ctx: any) => {
+    api.registerRenderer("json", (ctx: RendererOverrideContext) => {
       const result = ctx?.result;
-      if (result && typeof result === "object" && (result as any).ts_starter) {
+      if (result && typeof result === "object" && "ts_starter" in result) {
         return JSON.stringify({ rendered_by: "pm-ts-starter", ...result }, null, 2);
       }
       return null; // not ours → native rendering
@@ -631,64 +677,26 @@ function registerRenderers(api: any): void {
 // status null and EMPTY stderr, so the failure surfaces with nothing to diagnose
 // (and at larger sizes stdout is genuinely truncated mid-document).
 // 64 MiB matches the cap the sibling pm packages settled on.
-/** Read-buffer cap for `pm` output, in bytes. 64 MiB by default; override with the
- * `PM_JSON_MAX_BUFFER` env var. Resolved per call so the override takes effect
- * without an import-order dependency. Invalid or non-positive values fall back to
- * the default rather than silently disabling the guard. */
-function pmJsonMaxBuffer(): number {
-  // Number(), not parseInt(): parseInt("64MiB") silently yields 64, which would
-  // impose a 64-BYTE cap and break every ordinary read while appearing to honor
-  // the documented invalid-value fallback. Number() rejects the whole string.
-  const raw = Number(process.env.PM_JSON_MAX_BUFFER);
-  return Number.isSafeInteger(raw) && raw > 0 ? raw : 64 * 1024 * 1024;
-}
-
-/** Name the real cause of a failed `pm` read. A stdout overrun kills the child
- * with `status: null` and EMPTY stderr, so without this the failure surfaces as
- * an unexplained error (or, worse, as an empty result set). */
-function describePmReadFailure(error: Error, limitBytes: number): string {
-  const code = (error as NodeJS.ErrnoException).code;
-  if (code === "ENOBUFS") {
-    // This read is always the full workspace, so "narrow the operation" would be a
-    // dead instruction here — name only the lever the reader actually has.
-    return `pm output exceeded the ${limitBytes} byte read buffer. `
-      + "Raise PM_JSON_MAX_BUFFER (in bytes) to increase the read limit for this workspace.";
-  }
-  return `pm read failed: ${error.message}`;
-}
-
-function registerSearch(api: any): void {
+function registerSearch(api: ExtensionApi): void {
   if (typeof api.registerSearchProvider === "function") {
     api.registerSearchProvider({
       name: "ts-starter-prefix",
-      async query(ctx: any) {
+      // `SearchProviderQueryContext` already carries the workspace's documents,
+      // so a provider never needs to read the tracker itself. An earlier version
+      // of this demo shelled out to `pm list-all --json` per query — a
+      // subprocess, a read-buffer ceiling, and two failure branches, all for
+      // data the host had already handed it.
+      query(ctx: SearchProviderQueryContext) {
         const query = ctx.query ?? "";
-        const maxBuffer = pmJsonMaxBuffer();
-        const result = spawnSync("pm", ["--path", ctx.pm_root ?? ".", "list-all", "--json"], {
-          encoding: "utf-8",
-          maxBuffer,
-        });
-        // An empty result set and an unreadable workspace look identical to the
-        // caller, so name the read failure instead of returning a silent zero.
-        if (result.error) {
-          console.error(`pm-ts-starter: search read failed — ${describePmReadFailure(result.error, maxBuffer)}`);
-          return { results: [] };
-        }
-        // A nonzero exit (unreadable or invalid workspace) is just as invisible as
-        // an overrun: the caller cannot tell it from "no matches". Surface stderr
-        // instead of discarding it, while keeping the empty-result contract.
-        if (result.status !== 0) {
-          console.error(
-            `pm-ts-starter: search read failed (pm exited ${result.status}) — `
-              + (result.stderr?.trim() || "no stderr output"),
-          );
-          return { results: [] };
-        }
-        const data = JSON.parse(result.stdout);
-        const items = (data.items || []).filter((item: any) =>
-          item.id.startsWith(query)
+        // The contract is `SearchProviderHit[] | { hits }`: a hit is an
+        // { id, score } pair, not a raw item. Returning items under a `results`
+        // key — as this demo previously did — yields zero hits for every caller.
+        const hits = ctx.documents.flatMap((document) =>
+          document.metadata.id.startsWith(query)
+            ? [{ id: document.metadata.id, score: 1, matched_fields: ["id"] }]
+            : [],
         );
-        return { results: items };
+        return { hits };
       },
     });
   }
@@ -707,20 +715,22 @@ function registerSearch(api: any): void {
     };
     api.registerVectorStoreAdapter({
       name: "ts-starter-memory",
-      async upsert(ctx: any) {
+      async upsert(ctx: VectorStoreUpsertContext) {
         const id = String(ctx?.id ?? "");
         const text = String(ctx?.text ?? ctx?.title ?? "");
         if (id) store.set(id, pseudoEmbed(text));
         return { upserted: id ? 1 : 0 };
       },
-      async query(ctx: any) {
+      async query(ctx: VectorStoreQueryContext) {
         const qVec = pseudoEmbed(String(ctx?.query ?? ""));
         const scored = [...store.entries()].map(([id, v]) => ({
           id,
           score: v.reduce((s, x, i) => s + x * (qVec[i] ?? 0), 0),
         }));
         scored.sort((a, b) => b.score - a.score);
-        return { results: scored.slice(0, ctx?.limit ?? 5) };
+        // VectorStoreQueryHit[] is a bare array — wrapping it in an object
+        // typechecked as `any` before and returned nothing usable to pm.
+        return scored.slice(0, ctx?.limit ?? 5);
       },
     });
   }
@@ -730,7 +740,7 @@ function registerSearch(api: any): void {
 // 7. PARSER — pre-normalize a command's args/options before its handler runs
 // ---------------------------------------------------------------------------
 
-function registerParser(api: any): void {
+function registerParser(api: ExtensionApi): void {
   // A parser override can adjust how a specific command's args/options are
   // parsed. Here it's a pass-through (returns no delta) for the `list` command,
   // shown purely to wire the capability. Requires the "parser" capability.
@@ -745,10 +755,10 @@ function registerParser(api: any): void {
 // 8. PREFLIGHT — adjust gate decisions the CLI makes before a command runs
 // ---------------------------------------------------------------------------
 
-function registerPreflight(api: any): void {
+function registerPreflight(api: ExtensionApi): void {
   if (typeof api.registerPreflight === "function") {
     // Preflight override — can modify preflight decisions before a command runs
-    api.registerPreflight(async (ctx: any) => {
+    api.registerPreflight(async (ctx: PreflightOverrideContext) => {
       if (VERBOSE) console.error(`[ts-starter] Preflight check for workspace: ${ctx.pm_root ?? "unknown"}`);
       // Return the current decision unchanged (pass-through)
       return {
@@ -765,14 +775,14 @@ function registerPreflight(api: any): void {
 // 9. SERVICES — override a named core service for the whole CLI
 // ---------------------------------------------------------------------------
 
-function registerServices(api: any): void {
+function registerServices(api: ExtensionApi): void {
   if (typeof api.registerService === "function") {
     // A service override REPLACES a core service for the whole CLI. The only
     // safe demonstration is a true pass-through that returns the incoming
     // payload UNCHANGED — returning a fabricated value (e.g. `{ format }`) would
     // corrupt every command's output. Do real work here only if you intend to
     // override the service globally.
-    api.registerService("output_format", async (ctx: any) => {
+    api.registerService("output_format", async (ctx: ServiceOverrideContext) => {
       return ctx?.payload;
     });
   }
@@ -786,7 +796,7 @@ function registerServices(api: any): void {
 // FLAGS — augment an EXISTING native command (part of the "commands" capability)
 // ---------------------------------------------------------------------------
 
-function registerExtraFlags(api: any): void {
+function registerExtraFlags(api: ExtensionApi): void {
   // registerFlags adds extra flags to an existing native command (here, `list`).
   // The flag is observe-only: native `list` ignores unknown options, so this
   // exists purely to show the wiring. registerFlags is covered by the
@@ -811,7 +821,7 @@ export default defineExtension({
   name: "pm-ts-starter",
   version: VERSION,
 
-  activate(api: any) {
+  activate(api: ExtensionApi) {
     // Incidental logging is opt-in (PM_TS_STARTER_VERBOSE) so installing this
     // reference extension never pollutes other commands' stderr.
     if (VERBOSE) console.error("[pm-ts-starter] Activating…");
