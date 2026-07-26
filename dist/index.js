@@ -11,30 +11,10 @@
 //     binary, exactly like the existing search provider does, so the demo
 //     never depends on a runtime import of `@unbrained/pm-cli`)
 //   - a guided `ts-starter setup --interactive` command for first-run onboarding
-// ---------------------------------------------------------------------------
-// `defineExtension` — typed identity helper + zero-runtime-coupling pattern
-//
-// `defineExtension` is the SDK's typed identity helper: it returns its argument
-// unchanged but constrains it to the `ExtensionModule` shape so TypeScript can
-// type-check `activate(api)` and the metadata fields against the real SDK.
-//
-// We import it as a TYPE ONLY (`import type`). A standalone-installed extension
-// loads only its own `dist/` at runtime, so `@unbrained/pm-cli` is NOT
-// resolvable as a runtime value — importing the real function would crash at
-// activation. Instead we provide a trivial identity implementation and let the
-// type import give us full compile-time checking with ZERO runtime coupling to
-// the CLI package. The real CLI supplies the live `api` object when it calls
-// `activate(api)`.
-//
-// The same zero-runtime-coupling rule applies to the expected-error helper: we
-// type against the SDK's `PmCliExpectedError` shape but build the error locally
-// so a standalone install never needs to resolve `@unbrained/pm-cli` at runtime.
-// ---------------------------------------------------------------------------
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-const defineExtension = ((extension) => extension);
 // Resolve the extension version from manifest.json (one directory above the
 // compiled dist/) instead of a hardcoded literal: the Daily Release workflow
 // auto-bumps manifest.json but cannot rewrite a bare constant, so a literal
@@ -689,6 +669,15 @@ function registerExtraFlags(api) {
 // Re-export the expected-error helpers so downstream authors copying this
 // reference can import them without re-deriving the zero-runtime-coupling shim.
 export { pmExpectedError, isPmCliExpectedError };
+/**
+ * Local stand-in for the SDK's `defineExtension` identity helper.
+ *
+ * Declared here rather than imported so this package keeps a type-only
+ * dependency on `@unbrained/pm-cli` and adds no runtime module edge. The
+ * generic constraint is the SDK's own, so the extension object is contract-
+ * checked against {@link ExtensionModule} exactly as the imported helper would.
+ */
+const defineExtension = (module) => module;
 export default defineExtension({
     name: "pm-ts-starter",
     version: VERSION,

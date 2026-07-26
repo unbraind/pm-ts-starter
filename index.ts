@@ -32,6 +32,7 @@
 // so a standalone install never needs to resolve `@unbrained/pm-cli` at runtime.
 // ---------------------------------------------------------------------------
 
+import type { ExtensionModule } from "@unbrained/pm-cli/sdk/authoring";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -51,11 +52,9 @@ import type {
   ServiceOverrideContext,
   VectorStoreQueryContext,
   VectorStoreUpsertContext,
-  defineExtension as defineExtensionType,
   PmCliExpectedError,
 } from "@unbrained/pm-cli/sdk";
 
-const defineExtension: typeof defineExtensionType = ((extension: any) => extension) as any;
 
 // Resolve the extension version from manifest.json (one directory above the
 // compiled dist/) instead of a hardcoded literal: the Daily Release workflow
@@ -816,6 +815,16 @@ function registerExtraFlags(api: ExtensionApi): void {
 // Re-export the expected-error helpers so downstream authors copying this
 // reference can import them without re-deriving the zero-runtime-coupling shim.
 export { pmExpectedError, isPmCliExpectedError };
+
+/**
+ * Local stand-in for the SDK's `defineExtension` identity helper.
+ *
+ * Declared here rather than imported so this package keeps a type-only
+ * dependency on `@unbrained/pm-cli` and adds no runtime module edge. The
+ * generic constraint is the SDK's own, so the extension object is contract-
+ * checked against {@link ExtensionModule} exactly as the imported helper would.
+ */
+const defineExtension = <TModule extends ExtensionModule>(module: TModule): TModule => module;
 
 export default defineExtension({
   name: "pm-ts-starter",
