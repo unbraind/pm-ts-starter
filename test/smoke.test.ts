@@ -10,7 +10,7 @@ import extension, {
   derivedCapabilities,
   manifestMirror,
   synthesizedManifest,
-} from "../dist/index.js";
+} from "../index.ts";
 
 import {
   createExtensionTestHarness,
@@ -29,7 +29,7 @@ import {
   lintProjectProfile,
 } from "@unbrained/pm-cli/sdk/authoring";
 
-import { demoProfile } from "../dist/index.js";
+import { demoProfile } from "../index.ts";
 
 import type { ItemDocument, ItemMetadata, PmSettings } from "@unbrained/pm-cli/sdk";
 

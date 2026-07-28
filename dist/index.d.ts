@@ -71,7 +71,7 @@ declare const blueprint: ExtensionBlueprint;
 declare const derivedCapabilities: ("commands" | "hooks" | "importers" | "parser" | "preflight" | "renderers" | "schema" | "search" | "services")[];
 declare const manifestMirror: {
     name: string;
-    version: any;
+    version: string;
     entry: string;
     priority: number;
     capabilities: ("commands" | "hooks" | "importers" | "parser" | "preflight" | "renderers" | "schema" | "search" | "services")[];

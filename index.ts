@@ -91,18 +91,34 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
 // ---------------------------------------------------------------------------
+// Root-file resolution — manifest.json and package.json both live at the
+// repository root. When this module is compiled into dist/ they sit one
+// directory up (../<file>); when it runs as a source .ts from the repository
+// root they sit in the module's own directory (./<file>). Try the parent first
+// (the published artifact's location) and fall back to the current directory
+// so the version and SDK-target reads resolve identically either way.
+// ---------------------------------------------------------------------------
+
+function readRootJson(fileName: string): unknown {
+  const base = dirname(fileURLToPath(import.meta.url));
+  for (const candidate of [join(base, "..", fileName), join(base, fileName)]) {
+    try {
+      return JSON.parse(readFileSync(candidate, "utf-8"));
+    } catch {
+      // try the next candidate location
+    }
+  }
+  return undefined;
+}
+
+// ---------------------------------------------------------------------------
 // Version resolution — read from manifest.json so the Daily Release workflow's
 // auto-bump is reflected without a source literal that silently drifts.
 // ---------------------------------------------------------------------------
 
 const VERSION = (() => {
-  try {
-    const manifestPath = join(dirname(fileURLToPath(import.meta.url)), "..", "manifest.json");
-    const manifest = JSON.parse(readFileSync(manifestPath, "utf-8"));
-    return typeof manifest.version === "string" ? manifest.version : "0.0.0";
-  } catch {
-    return "0.0.0";
-  }
+  const manifest = readRootJson("manifest.json") as { version?: unknown } | undefined;
+  return typeof manifest?.version === "string" ? manifest.version : "0.0.0";
 })();
 
 /**
@@ -116,14 +132,9 @@ const VERSION = (() => {
  * commands misreported the SDK contract this extension actually demonstrates.
  */
 const SDK_TARGET = (() => {
-  try {
-    const packagePath = join(dirname(fileURLToPath(import.meta.url)), "..", "package.json");
-    const manifest = JSON.parse(readFileSync(packagePath, "utf-8"));
-    const range: unknown = manifest?.peerDependencies?.["@unbrained/pm-cli"];
-    return typeof range === "string" ? range.replace(/^[^0-9]*/, "") : "unknown";
-  } catch {
-    return "unknown";
-  }
+  const pkg = readRootJson("package.json") as { peerDependencies?: { [k: string]: unknown } } | undefined;
+  const range = pkg?.peerDependencies?.["@unbrained/pm-cli"];
+  return typeof range === "string" ? range.replace(/^[^0-9]*/, "") : "unknown";
 })();
 
 const VERBOSE = !!process.env.PM_TS_STARTER_VERBOSE;
