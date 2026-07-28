@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Stop the output_format demo override from claiming and reprinting the host envelope ([pm-ts-starter-84ai](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-84ai.toon))
+
 ## 2026.7.28 - 2026-07-28
 
 ### Other
@@ -33,6 +39,10 @@
 
 - pm item reads are capped at Node's 1 MiB spawnSync default, so a mature tracker fails with no diagnosis ([pm-ts-starter-bftc](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-bftc.toon))
 
+### Other
+
+- Adopt --respect-item-release in changelog scripts and bump pm-changelog to 2026.7.24 ([pm-ts-starter-rgr8](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-rgr8.toon))
+
 ## 2026.7.23 - 2026-07-23
 
 ### Fixed
@@ -52,6 +62,12 @@
 ### Other
 
 - Harden release bun-verify so registry-mirror lag cannot block the GitHub release ([pm-ts-starter-yybv](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-yybv.toon))
+
+## 2026.7.10 - 2026-07-10
+
+### Other
+
+- Full-cycle hardening wave: pm-ts-starter ([pm-ts-starter-ob5y](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/tasks/pm-ts-starter-ob5y.toon))
 
 ## 2026.7.6 - 2026-07-06
 
@@ -98,6 +114,12 @@
 ### Fixed
 
 - Fix output-corruption + demonstrate all 9 SDK capabilities correctly (typed reference) ([pm-ts-starter-l3ga](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/features/pm-ts-starter-l3ga.toon))
+
+## 2026.5.30 - 2026-05-30
+
+### Other
+
+- Production-readiness audit 2026-05-28 ([pm-ts-starter-w3h7](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/tasks/pm-ts-starter-w3h7.toon))
 
 ## 2026.5.28 - 2026-05-28
 

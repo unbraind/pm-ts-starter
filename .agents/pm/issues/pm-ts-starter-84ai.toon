@@ -1,0 +1,16 @@
+id: pm-ts-starter-84ai
+title: Stop the output_format demo override from claiming and reprinting the host envelope
+description: "The output_format service override in index.ts returned a shallow copy of ctx.payload to claim it. For output_format, ctx.payload is the host internal envelope (global, format, options, result), and whatever the override returns replaces all printed output. Claiming the envelope printed the envelope verbatim on every pm command, burying the real payload under result and making pm health ok return null. Fix: return ctx.payload by reference unchanged, which the host reads as a decline (handled false) per unbraind/pm-cli 741, so the native formatter runs. Upstream API design tracking: unbraind/pm-cli 794."
+type: Issue
+status: closed
+priority: 0
+tags: []
+created_at: "2026-07-28T11:15:53.848Z"
+updated_at: "2026-07-28T11:16:24.412Z"
+closed_at: "2026-07-28T11:16:24.411Z"
+author: pi-agent
+acceptance_criteria: "The output_format override declines (handled false) rather than claims the payload; A regression test exercises the real registered override via runRegisteredServiceOverrideForTest and asserts handled is false; pm list json keys do not include global format options or result; pm health json ok is a boolean not null; npm run typecheck build test audit:prod and pack:dry-run all pass"
+notes[1]{created_at,author,text}:
+  "2026-07-28T11:16:08.278Z",pi-agent,"Fixed: override now returns ctx.payload by reference (decline). Updated the regression test from asserting a claim to asserting handled false against the real registered override via the SDK harness. Verified the test fails against the old shallow-copy override (true !== false) and passes against the fix. Functional proof in a throwaway workspace: pm list json keys are the real payload, pm health json ok is a boolean. typecheck build test audit:prod pack:dry-run all green."
+close_reason: "The output_format demo override now declines by returning ctx.payload by reference (handled false), so the host falls through to its native formatter. Regression test asserts handled false against the real registered override. Functional proof confirms pm list json and pm health json render correctly."
+body: ""
