@@ -4,6 +4,7 @@
 
 ### Other
 
+- Adopt pm-cli 2026.7.28 ([pm-ts-starter-p0xi](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-p0xi.toon))
 - Adopt pm-cli 2026.7.27 ([pm-ts-starter-b2f4](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-b2f4.toon))
 
 ## 2026.7.27 - 2026-07-27
