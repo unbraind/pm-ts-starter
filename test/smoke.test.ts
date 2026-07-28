@@ -478,18 +478,26 @@ test("preflight override returns pass-through decision", async () => {
   assert.ok(result.overridden, "preflight override should fire");
 });
 
-test("service override claims the payload and returns it unchanged", async () => {
+test("service override for 'output_format' declines and leaves the host envelope untouched", async () => {
   // The host decides an override "claimed" the payload by reference identity:
-  // returning `ctx.payload` itself reads as declining and yields
-  // `handled: false` with no warning (unbraind/pm-cli#741). The override
-  // therefore returns a copy — same contents, different reference — so this
-  // asserts both halves: that it fires, and that it does not mutate.
+  // returning `ctx.payload` itself reads as declining and yields `handled: false`
+  // (unbraind/pm-cli#741), so the host falls through to its native formatter and
+  // the printed output is the real command payload — not the internal
+  // `{global, format, options, result}` envelope.
+  //
+  // The override under test is a reference demonstration that contributes
+  // nothing to output formatting, so it MUST decline. Asserting against the
+  // real registered override (runRegisteredServiceOverrideForTest via the SDK
+  // harness) — not a hand-rolled `api` double — is what guards this: a double
+  // would assert against itself and silently re-ship the bug, which is how the
+  // prior "claims the payload" test passed while every `pm` command broke.
+  const envelope = { global: { json: true }, format: "json", options: {}, result: { items: [] } };
   const result = await harness.runServiceOverride({
     service: "output_format",
-    payload: { format: "json" },
+    payload: envelope,
   });
-  assert.ok(result.handled, "service override should be handled");
-  assert.deepStrictEqual(result.result, { format: "json" });
+  assert.strictEqual(result.handled, false, "override must decline, not claim, the output_format payload");
+  assert.deepStrictEqual(result.result, envelope, "decline must leave the host envelope untouched");
 });
 
 test("command override for 'list' returns result unchanged", async () => {

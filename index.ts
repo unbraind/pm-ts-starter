@@ -742,16 +742,29 @@ const preflightOverride = definePreflightOverride(async (ctx: PreflightOverrideC
 // 9. SERVICES — defineServiceOverride (capability: "services")
 // ===========================================================================
 
-// A service override signals "I claimed this payload" by returning a value that
-// is NOT the same object reference it was handed. Returning `ctx.payload` itself
-// — or `undefined` — is read as declining, and the host reports
-// `handled: false` with no warning, so a pass-through override written the
-// obvious way silently never takes effect. Return a copy to actually claim the
-// payload while leaving its contents untouched. (Upstream: unbraind/pm-cli#741.)
+// For the `output_format` service, `ctx.payload` is the host's INTERNAL output
+// envelope — the `{ global, format, options, result }` record the CLI assembles
+// before printing — NOT the command's result in isolation. Whatever an override
+// returns here REPLACES the entirety of the printed output, verbatim, so a
+// pass-through that hands the envelope back prints the envelope itself.
+//
+// The override signals "I claim this payload" by returning a value whose
+// reference is NOT the payload it was handed. Returning `ctx.payload` BY
+// REFERENCE (unchanged) is read as declining — `handled: false` — per
+// unbraind/pm-cli#741, and the host falls through to its native formatter. A
+// reference demonstration that contributes nothing to formatting should do
+// exactly that.
+//
+// Returning a COPY instead (e.g. `{ ...payload }`) claims the payload: same
+// contents, different reference. That is the bug this package shipped — a
+// claimed envelope prints as `global` / `format` / `options` / `result`,
+// burying the real payload under `.result` and breaking every `pm` command in
+// the workspace. The override now declines by returning `ctx.payload` by
+// reference.
+//
+// Upstream API-design tracking: unbraind/pm-cli#794.
 const outputFormatServiceOverride = defineServiceOverride((ctx: ServiceOverrideContext) => {
-  const payload = ctx?.payload;
-  if (payload === undefined || payload === null) return payload;
-  return typeof payload === "object" ? { ...(payload as Record<string, unknown>) } : payload;
+  return ctx.payload;
 });
 
 // ===========================================================================

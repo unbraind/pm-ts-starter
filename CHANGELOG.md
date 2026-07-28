@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Stop the output_format demo override from claiming and reprinting the host envelope ([pm-ts-starter-84ai](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-84ai.toon))
+
+### Other
+
+- Production-readiness audit 2026-05-28 ([pm-ts-starter-w3h7](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/tasks/pm-ts-starter-w3h7.toon))
+- Full-cycle hardening wave: pm-ts-starter ([pm-ts-starter-ob5y](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/tasks/pm-ts-starter-ob5y.toon))
+- Adopt --respect-item-release in changelog scripts and bump pm-changelog to 2026.7.24 ([pm-ts-starter-rgr8](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-rgr8.toon))
+
 ## 2026.7.28 - 2026-07-28
 
 ### Other
