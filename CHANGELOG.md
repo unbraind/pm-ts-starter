@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Enforce a real coverage gate by running tests against TypeScript sources ([pm-ts-starter-ho5h](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/features/pm-ts-starter-ho5h.toon))
+
 ## 2026.7.28-1 - 2026-07-28
 
 ### Fixed

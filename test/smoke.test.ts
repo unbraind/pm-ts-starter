@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test, { before } from "node:test";
 
 import extension, {
@@ -10,7 +12,8 @@ import extension, {
   derivedCapabilities,
   manifestMirror,
   synthesizedManifest,
-} from "../dist/index.js";
+  readRootJson,
+} from "../index.ts";
 
 import {
   createExtensionTestHarness,
@@ -29,7 +32,7 @@ import {
   lintProjectProfile,
 } from "@unbrained/pm-cli/sdk/authoring";
 
-import { demoProfile } from "../dist/index.js";
+import { demoProfile } from "../index.ts";
 
 import type { ItemDocument, ItemMetadata, PmSettings } from "@unbrained/pm-cli/sdk";
 
@@ -597,4 +600,51 @@ test("runPm names a read-buffer overrun instead of failing silently", async (t) 
     if (originalCap === undefined) delete process.env.PM_JSON_MAX_BUFFER;
     else process.env.PM_JSON_MAX_BUFFER = originalCap;
   }
+});
+// ---------------------------------------------------------------------------
+// Root-file resolution must work from both module layouts: as source at the
+// package root, and compiled into dist/ one level below it. Getting the order
+// wrong is silent — the wrong package.json parses fine and only the values are
+// wrong — so both layouts are asserted against a synthetic tree rather than
+// against this repository, whose own parent happens to have no package.json.
+// ---------------------------------------------------------------------------
+
+test("readRootJson prefers the package's own directory over an enclosing package", () => {
+  const enclosing = mkdtempSync(join(tmpdir(), "pm-ts-starter-root-"));
+  const pkgRoot = join(enclosing, "pkg");
+  mkdirSync(join(pkgRoot, "dist"), { recursive: true });
+  writeFileSync(join(enclosing, "package.json"), JSON.stringify({ name: "enclosing" }));
+  writeFileSync(join(pkgRoot, "package.json"), JSON.stringify({ name: "the-package" }));
+
+  const fromSource = readRootJson("package.json", pkgRoot) as { name?: string } | undefined;
+  assert.strictEqual(
+    fromSource?.name,
+    "the-package",
+    "running as source, the module must read its own package.json, not the one enclosing the checkout",
+  );
+
+  const fromDist = readRootJson("package.json", join(pkgRoot, "dist")) as { name?: string } | undefined;
+  assert.strictEqual(
+    fromDist?.name,
+    "the-package",
+    "published in dist/, the module must still find the package root one level up",
+  );
+});
+
+test("readRootJson does not fall through to the parent when its own file is malformed", () => {
+  // A corrupt file at the package root must not be answered with the enclosing
+  // package's data: that is the same silent-wrong-package failure the candidate
+  // order prevents, reached by a different route.
+  const enclosing = mkdtempSync(join(tmpdir(), "pm-ts-starter-corrupt-"));
+  const pkgRoot = join(enclosing, "pkg");
+  mkdirSync(pkgRoot, { recursive: true });
+  writeFileSync(join(enclosing, "package.json"), JSON.stringify({ name: "enclosing" }));
+  writeFileSync(join(pkgRoot, "package.json"), "{ this is not json");
+
+  assert.strictEqual(readRootJson("package.json", pkgRoot), undefined);
+});
+
+test("readRootJson returns undefined when neither candidate is readable", () => {
+  const empty = mkdtempSync(join(tmpdir(), "pm-ts-starter-noroot-"));
+  assert.strictEqual(readRootJson("package.json", join(empty, "nested", "deeper")), undefined);
 });

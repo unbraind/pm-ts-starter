@@ -41,18 +41,55 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 // ---------------------------------------------------------------------------
+// Root-file resolution — manifest.json and package.json both live at the
+// repository root. When this module is compiled into dist/ they sit one
+// directory up (../<file>); when it runs as a source .ts from the repository
+// root they sit in the module's own directory (./<file>). Try the parent first
+// (the published artifact's location) and fall back to the current directory
+// so the version and SDK-target reads resolve identically either way.
+// ---------------------------------------------------------------------------
+/**
+ * Reads a JSON file that sits at the package root, from either module layout.
+ *
+ * Same directory first, then the parent. Published, this module sits in `dist/`
+ * and the file is one level up, so the same-directory candidate simply misses
+ * there and the parent still wins — `dist/` contains neither `package.json` nor
+ * `manifest.json`. Run as source from the package root, the same-directory
+ * candidate is the correct one, and trying the parent first would read whatever
+ * package happens to enclose the checkout.
+ *
+ * Only a *missing* same-directory file advances to the parent. If that file
+ * exists but is unreadable or malformed, falling through would answer the
+ * question with a different package's data and report nothing wrong — the same
+ * silent-wrong-package failure the candidate order exists to prevent, reached
+ * by a different route.
+ *
+ * @param fileName - Bare file name to look for, e.g. `package.json`.
+ * @param base - Directory to resolve from. Defaults to this module's own
+ *   directory; tests pass an explicit base to exercise both layouts.
+ * @returns The parsed JSON, or `undefined` when no candidate yields usable data.
+ */
+export function readRootJson(fileName, base = dirname(fileURLToPath(import.meta.url))) {
+    const candidates = [join(base, fileName), join(base, "..", fileName)];
+    for (const [index, candidate] of candidates.entries()) {
+        try {
+            return JSON.parse(readFileSync(candidate, "utf-8"));
+        }
+        catch (error) {
+            const missing = error.code === "ENOENT";
+            if (index === 0 && !missing)
+                return undefined;
+        }
+    }
+    return undefined;
+}
+// ---------------------------------------------------------------------------
 // Version resolution — read from manifest.json so the Daily Release workflow's
 // auto-bump is reflected without a source literal that silently drifts.
 // ---------------------------------------------------------------------------
 const VERSION = (() => {
-    try {
-        const manifestPath = join(dirname(fileURLToPath(import.meta.url)), "..", "manifest.json");
-        const manifest = JSON.parse(readFileSync(manifestPath, "utf-8"));
-        return typeof manifest.version === "string" ? manifest.version : "0.0.0";
-    }
-    catch {
-        return "0.0.0";
-    }
+    const manifest = readRootJson("manifest.json");
+    return typeof manifest?.version === "string" ? manifest.version : "0.0.0";
 })();
 /**
  * The pm-cli SDK release this reference is written against, reported by
@@ -65,15 +102,9 @@ const VERSION = (() => {
  * commands misreported the SDK contract this extension actually demonstrates.
  */
 const SDK_TARGET = (() => {
-    try {
-        const packagePath = join(dirname(fileURLToPath(import.meta.url)), "..", "package.json");
-        const manifest = JSON.parse(readFileSync(packagePath, "utf-8"));
-        const range = manifest?.peerDependencies?.["@unbrained/pm-cli"];
-        return typeof range === "string" ? range.replace(/^[^0-9]*/, "") : "unknown";
-    }
-    catch {
-        return "unknown";
-    }
+    const pkg = readRootJson("package.json");
+    const range = pkg?.peerDependencies?.["@unbrained/pm-cli"];
+    return typeof range === "string" ? range.replace(/^[^0-9]*/, "") : "unknown";
 })();
 const VERBOSE = !!process.env.PM_TS_STARTER_VERBOSE;
 // ---------------------------------------------------------------------------
