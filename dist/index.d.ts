@@ -1,5 +1,21 @@
 import { type ExtensionBlueprint, type ExtensionModule } from "@unbrained/pm-cli/sdk/authoring";
 import type { PmCliExpectedError } from "@unbrained/pm-cli/sdk";
+/**
+ * Reads a JSON file that sits at the package root, from either module layout.
+ *
+ * Same directory first, then the parent. Published, this module sits in `dist/`
+ * and the file is one level up, so the same-directory candidate simply misses
+ * there and the parent still wins — `dist/` contains neither `package.json` nor
+ * `manifest.json`. Run as source from the package root, the same-directory
+ * candidate is the correct one, and trying the parent first would read whatever
+ * package happens to enclose the checkout.
+ *
+ * @param fileName - Bare file name to look for, e.g. `package.json`.
+ * @param base - Directory to resolve from. Defaults to this module's own
+ *   directory; tests pass an explicit base to exercise both layouts.
+ * @returns The parsed JSON, or `undefined` when neither candidate is readable.
+ */
+export declare function readRootJson(fileName: string, base?: string): unknown;
 interface TsStarterErrorContextInput {
     feature?: string;
     command?: string;

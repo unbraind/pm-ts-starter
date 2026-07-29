@@ -48,14 +48,22 @@ import { spawnSync } from "node:child_process";
 // (the published artifact's location) and fall back to the current directory
 // so the version and SDK-target reads resolve identically either way.
 // ---------------------------------------------------------------------------
-function readRootJson(fileName) {
-    const base = dirname(fileURLToPath(import.meta.url));
-    // Same directory first, then the parent. Published, this module sits in
-    // dist/ and the file is one level up, so the parent candidate still wins
-    // there — dist/ never contains a package.json or manifest.json. Run as
-    // source from the package root, the same-directory candidate is the correct
-    // one, and trying the parent first would read whatever package happens to
-    // enclose the checkout.
+/**
+ * Reads a JSON file that sits at the package root, from either module layout.
+ *
+ * Same directory first, then the parent. Published, this module sits in `dist/`
+ * and the file is one level up, so the same-directory candidate simply misses
+ * there and the parent still wins — `dist/` contains neither `package.json` nor
+ * `manifest.json`. Run as source from the package root, the same-directory
+ * candidate is the correct one, and trying the parent first would read whatever
+ * package happens to enclose the checkout.
+ *
+ * @param fileName - Bare file name to look for, e.g. `package.json`.
+ * @param base - Directory to resolve from. Defaults to this module's own
+ *   directory; tests pass an explicit base to exercise both layouts.
+ * @returns The parsed JSON, or `undefined` when neither candidate is readable.
+ */
+export function readRootJson(fileName, base = dirname(fileURLToPath(import.meta.url))) {
     for (const candidate of [join(base, fileName), join(base, "..", fileName)]) {
         try {
             return JSON.parse(readFileSync(candidate, "utf-8"));
