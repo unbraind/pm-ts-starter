@@ -50,7 +50,13 @@ import { spawnSync } from "node:child_process";
 // ---------------------------------------------------------------------------
 function readRootJson(fileName) {
     const base = dirname(fileURLToPath(import.meta.url));
-    for (const candidate of [join(base, "..", fileName), join(base, fileName)]) {
+    // Same directory first, then the parent. Published, this module sits in
+    // dist/ and the file is one level up, so the parent candidate still wins
+    // there — dist/ never contains a package.json or manifest.json. Run as
+    // source from the package root, the same-directory candidate is the correct
+    // one, and trying the parent first would read whatever package happens to
+    // enclose the checkout.
+    for (const candidate of [join(base, fileName), join(base, "..", fileName)]) {
         try {
             return JSON.parse(readFileSync(candidate, "utf-8"));
         }
