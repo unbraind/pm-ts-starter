@@ -1,0 +1,18 @@
+id: pm-ts-starter-hxet
+title: Adopt pm-cli 2026.7.29
+description: "Bump @unbrained/pm-cli devDependency to 2026.7.29, set peerDependency to >=2026.7.29, audit for removed --all flag and newly-fixed upstream workarounds, pass all quality gates."
+type: Chore
+status: closed
+priority: 2
+tags: []
+created_at: "2026-07-29T04:28:16.535Z"
+updated_at: "2026-07-29T04:36:03.856Z"
+closed_at: "2026-07-29T04:29:42.191Z"
+completed_at: "2026-07-29T04:29:42.191Z"
+author: pi-agent
+comments[1]{created_at,author,text}:
+  "2026-07-29T04:29:09.047Z",pi-agent,"Audit complete. --all flag: no hits found in source, docs, README, or CI. Workaround audit: GH-651 (activity bare windows) - no workaround present; GH-672 (context low_level rows) - no workaround present; GH-676 (list --tag CSV) - no workaround present; GH-785/GH-792 (health runtime/ dir, --warn-only) - no CI scaffolding or pre-creation of runtime/ dirs; GH-794 (output_format service override) - code already returns ctx.payload by reference (correct contract), no destructive copy workaround present. None applicable to remove."
+notes[1]{created_at,author,text}:
+  "2026-07-29T04:36:03.852Z",claude-orchestrator,"Precision correction appended by the orchestrator (not edited: the history stream is append-only and hash-chained). The audit line 'no --all hits' refers specifically to the host flag 'pm list --all' removed by pm-cli 2026.7.29 GH-793. It does not refer to '--all-release-tags', which is a pm-changelog flag used in .github/workflows/release.yml lines 105-107 and is unaffected by GH-793; that workflow needs no change. Re-verified after CodeRabbit review: grep for 'list --all' across ts, md, json and yml sources returns no output. Supersedes an identical note briefly recorded under author pi-agent, which was an attribution error since the orchestrator wrote it."
+close_reason: "Bumped @unbrained/pm-cli devDependency to 2026.7.29, set peerDependency to >=2026.7.29. Audited for removed --all flag (no hits). Audited for GH-651/672/676/785/792/794 workarounds (none applicable to remove). All quality gates green: 48 tests pass, coverage lines 90.30% branches 69.41% functions 74.36% thresholds met, audit:prod 0 vulnerabilities, changelog:check up to date."
+body: ""

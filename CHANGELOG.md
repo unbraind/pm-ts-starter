@@ -6,6 +6,10 @@
 
 - Enforce a real coverage gate by running tests against TypeScript sources ([pm-ts-starter-ho5h](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/features/pm-ts-starter-ho5h.toon))
 
+### Other
+
+- Adopt pm-cli 2026.7.29 ([pm-ts-starter-hxet](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-hxet.toon))
+
 ## 2026.7.28-1 - 2026-07-28
 
 ### Fixed
