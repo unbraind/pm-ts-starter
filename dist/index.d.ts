@@ -10,10 +10,16 @@ import type { PmCliExpectedError } from "@unbrained/pm-cli/sdk";
  * candidate is the correct one, and trying the parent first would read whatever
  * package happens to enclose the checkout.
  *
+ * Only a *missing* same-directory file advances to the parent. If that file
+ * exists but is unreadable or malformed, falling through would answer the
+ * question with a different package's data and report nothing wrong — the same
+ * silent-wrong-package failure the candidate order exists to prevent, reached
+ * by a different route.
+ *
  * @param fileName - Bare file name to look for, e.g. `package.json`.
  * @param base - Directory to resolve from. Defaults to this module's own
  *   directory; tests pass an explicit base to exercise both layouts.
- * @returns The parsed JSON, or `undefined` when neither candidate is readable.
+ * @returns The parsed JSON, or `undefined` when no candidate yields usable data.
  */
 export declare function readRootJson(fileName: string, base?: string): unknown;
 interface TsStarterErrorContextInput {

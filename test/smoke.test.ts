@@ -631,6 +631,19 @@ test("readRootJson prefers the package's own directory over an enclosing package
   );
 });
 
+test("readRootJson does not fall through to the parent when its own file is malformed", () => {
+  // A corrupt file at the package root must not be answered with the enclosing
+  // package's data: that is the same silent-wrong-package failure the candidate
+  // order prevents, reached by a different route.
+  const enclosing = mkdtempSync(join(tmpdir(), "pm-ts-starter-corrupt-"));
+  const pkgRoot = join(enclosing, "pkg");
+  mkdirSync(pkgRoot, { recursive: true });
+  writeFileSync(join(enclosing, "package.json"), JSON.stringify({ name: "enclosing" }));
+  writeFileSync(join(pkgRoot, "package.json"), "{ this is not json");
+
+  assert.strictEqual(readRootJson("package.json", pkgRoot), undefined);
+});
+
 test("readRootJson returns undefined when neither candidate is readable", () => {
   const empty = mkdtempSync(join(tmpdir(), "pm-ts-starter-noroot-"));
   assert.strictEqual(readRootJson("package.json", join(empty, "nested", "deeper")), undefined);

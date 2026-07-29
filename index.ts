@@ -109,17 +109,25 @@ import { spawnSync } from "node:child_process";
  * candidate is the correct one, and trying the parent first would read whatever
  * package happens to enclose the checkout.
  *
+ * Only a *missing* same-directory file advances to the parent. If that file
+ * exists but is unreadable or malformed, falling through would answer the
+ * question with a different package's data and report nothing wrong — the same
+ * silent-wrong-package failure the candidate order exists to prevent, reached
+ * by a different route.
+ *
  * @param fileName - Bare file name to look for, e.g. `package.json`.
  * @param base - Directory to resolve from. Defaults to this module's own
  *   directory; tests pass an explicit base to exercise both layouts.
- * @returns The parsed JSON, or `undefined` when neither candidate is readable.
+ * @returns The parsed JSON, or `undefined` when no candidate yields usable data.
  */
 export function readRootJson(fileName: string, base = dirname(fileURLToPath(import.meta.url))): unknown {
-  for (const candidate of [join(base, fileName), join(base, "..", fileName)]) {
+  const candidates = [join(base, fileName), join(base, "..", fileName)];
+  for (const [index, candidate] of candidates.entries()) {
     try {
       return JSON.parse(readFileSync(candidate, "utf-8"));
-    } catch {
-      // try the next candidate location
+    } catch (error) {
+      const missing = (error as NodeJS.ErrnoException).code === "ENOENT";
+      if (index === 0 && !missing) return undefined;
     }
   }
   return undefined;
