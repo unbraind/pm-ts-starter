@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Deprecated
+
+- Migrate the output_format service override from the deprecated payload-echo protocol to declineServiceOverride ([pm-ts-starter-75o3](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-75o3.toon))
+
 ## 2026.8.4 - 2026-08-04
 
 ### Other
