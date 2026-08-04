@@ -33,7 +33,7 @@ import {
 // Object-definition builders (generic, preserve literal types)
 defineCommand, defineFlag, defineItemType, defineItemField, defineMigration, defineSearchProvider, defineVectorStoreAdapter, defineProjectProfile, defineExtensionManifest, defineExtensionBlueprint, 
 // Function-definition builders (non-generic, contextually type the param)
-defineCommandOverride, defineImporter, defineExporter, defineRendererOverride, defineParserOverride, definePreflightOverride, defineServiceOverride, defineBeforeCommandHook, defineAfterCommandHook, defineOnWriteHook, defineOnReadHook, defineOnIndexHook, 
+defineCommandOverride, defineImporter, defineExporter, defineRendererOverride, defineParserOverride, definePreflightOverride, defineServiceOverride, declineServiceOverride, defineBeforeCommandHook, defineAfterCommandHook, defineOnWriteHook, defineOnReadHook, defineOnIndexHook, 
 // Declarative assembly capstone
 composeExtension, composeExtensionPackage, mergeExtensionBlueprints, deriveExtensionCapabilities, } from "@unbrained/pm-cli/sdk/authoring";
 import { readFileSync } from "node:fs";
@@ -626,27 +626,26 @@ const preflightOverride = definePreflightOverride(async (ctx) => {
 // For the `output_format` service, `ctx.payload` is the host's INTERNAL output
 // envelope — the `{ global, format, options, result }` record the CLI assembles
 // before printing — NOT the command's result in isolation. Whatever an override
-// returns here REPLACES the entirety of the printed output, verbatim, so a
-// pass-through that hands the envelope back prints the envelope itself.
+// CLAIMS here REPLACES the entirety of the printed output, verbatim, so a
+// pass-through that claims the envelope prints the envelope itself: every `pm`
+// command in the workspace renders as `global` / `format` / `options` /
+// `result`, with the real payload buried under `.result`. That is the bug this
+// package once shipped (unbraind/pm-cli#794).
 //
-// The override signals "I claim this payload" by returning a value whose
-// reference is NOT the payload it was handed. Returning `ctx.payload` BY
-// REFERENCE (unchanged) is read as declining — `handled: false` — per
-// unbraind/pm-cli#741, and the host falls through to its native formatter. A
-// reference demonstration that contributes nothing to formatting should do
-// exactly that.
+// Claiming and declining are now both EXPLICIT, which is why this reads as a
+// one-liner rather than a lecture about reference identity:
 //
-// Returning a COPY instead (e.g. `{ ...payload }`) claims the payload: same
-// contents, different reference. That is the bug this package shipped — a
-// claimed envelope prints as `global` / `format` / `options` / `result`,
-// burying the real payload under `.result` and breaking every `pm` command in
-// the workspace. The override now declines by returning `ctx.payload` by
-// reference.
+//   declineServiceOverride()      -> `{ handled: false }`, host formats natively
+//   handleServiceOverride(result) -> `{ handled: true, result }`, we own the output
 //
-// Upstream API-design tracking: unbraind/pm-cli#794.
-const outputFormatServiceOverride = defineServiceOverride((ctx) => {
-    return ctx.payload;
-});
+// The older protocol inferred the same decision from reference identity —
+// returning `ctx.payload` unchanged declined, returning a copy claimed
+// (unbraind/pm-cli#741). The host still honours that for compatibility, but it
+// now emits `extension_output_format_payload_echo_deprecated` when it does, and
+// a rule that turns `{ ...payload }` into a workspace-wide outage is a bad rule
+// to keep depending on. A reference demonstration that contributes nothing to
+// formatting declines, and now says so.
+const outputFormatServiceOverride = defineServiceOverride(() => declineServiceOverride());
 // ===========================================================================
 // BLUEPRINT ASSEMBLY — defineExtensionBlueprint + mergeExtensionBlueprints
 // ===========================================================================

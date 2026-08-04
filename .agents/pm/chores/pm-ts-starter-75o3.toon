@@ -1,0 +1,25 @@
+id: pm-ts-starter-75o3
+title: Migrate the output_format service override from the deprecated payload-echo protocol to declineServiceOverride
+description: ""
+type: Chore
+status: closed
+priority: 2
+tags[3]: deprecation,sdk,services
+created_at: "2026-08-04T06:34:15.053Z"
+updated_at: "2026-08-04T06:43:19.310Z"
+closed_at: "2026-08-04T06:34:45.195Z"
+completed_at: "2026-08-04T06:34:45.195Z"
+author: codex
+acceptance_criteria: The override declines via declineServiceOverride() rather than by returning ctx.payload by reference; the host no longer emits extension_output_format_payload_echo_deprecated in a workspace with this package installed; pm output is unchanged and is not replaced by the host envelope
+resolution: Replaced the reference-identity decline with an explicit declineServiceOverride() call and removed the now-unused ServiceOverrideContext import
+expected_result: "A workspace with pm-ts-starter installed emits no extension_output_format_payload_echo_deprecated warning, and pm command output is produced by the host formatter unchanged"
+actual_result: "Warning count for payload_echo_deprecated is 0 on stderr in a 17-package workspace. Six commands verified to return their own payload rather than the host envelope: list, read, stats, health, contracts and graph audit under --json, plus read under the default TOON format. All 48 unit tests pass."
+notes[2]{created_at,author,text}:
+  "2026-08-04T06:34:25.298Z",codex,"The old protocol inferred claim-vs-decline from reference identity: returning ctx.payload unchanged declined, returning a copy claimed it (upstream 741). That made { ...payload } a workspace-wide outage — a claimed output_format payload replaces ALL printed output, so every pm command renders as global/format/options/result with the real payload buried under .result, which is the defect this package shipped in 2026.7.28 (upstream 794). The host now offers explicit declineServiceOverride() and handleServiceOverride(result), and emits extension_output_format_payload_echo_deprecated when it falls back to inferring from reference identity. Migrated to the explicit form and dropped the now-unused ServiceOverrideContext type import. Verified functionally, not just by unit test: reinstalled into a workspace holding all 17 published packages and confirmed the deprecation warning is gone from stderr while pm list --json still returns the real payload keys (items, count, filters) and not the host envelope."
+  "2026-08-04T06:43:18.816Z",codex,"Scope correction on the close record, from CodeRabbit review on PR 53. The close_reason says pm output confirmed unchanged while the actual_result cited only pm list --json, which claimed more than it evidenced. Rather than narrow the claim, the evidence was widened: in the 17-package workspace, pm list --json, pm read <id> --json, pm stats --json, pm health --json, pm contracts --json and pm graph audit --json each return their own payload keys and none returns the host global/format/options/result envelope. The default TOON format was checked too — pm read <id> renders item/id/title as normal. The original close_reason and its history event are left intact; this note is the append-only correction."
+files[1]{path,scope,note}:
+  index.ts,project,output_format service override migrated to declineServiceOverride
+tests[1]{command,scope}:
+  npm test,project
+close_reason: Migrated to declineServiceOverride; deprecation warning verified gone in a 17-package workspace and pm output confirmed unchanged
+body: ""
