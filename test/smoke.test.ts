@@ -460,21 +460,14 @@ test("renderer override declares non-empty ownership so it cannot claim every co
   // every command, which is what makes an unscoped renderer able to replace all
   // --json output. Assert the declaration exists rather than trusting the
   // callback's internal guard.
-  assert.ok(
-    Array.isArray(registered.commands) && registered.commands.length > 0,
-    "renderer must declare the command paths it owns",
-  );
+  // Asserted as an exact set, not a prefix pattern. A prefix check would let
+  // the extension quietly widen its claim to any ts-starter path later, which
+  // is the drift this ownership declaration exists to prevent. The set is one
+  // command because demoExporter is the only handler emitting a ts_starter
+  // payload; demoImporter returns { imported: 0 } and listCommandOverride
+  // passes ctx.result through untouched.
+  assert.deepStrictEqual(registered.commands, ["ts-starter-demo export"]);
   assert.strictEqual(typeof registered.resultDiscriminator, "function");
-  assert.ok(
-    !registered.commands.includes("list"),
-    "list is a pass-through command override and must not be owned by the renderer",
-  );
-  for (const command of registered.commands) {
-    assert.ok(
-      command === "hello" || command.startsWith("ts-starter"),
-      `owned command ${command} must be namespaced to this extension`,
-    );
-  }
 });
 
 test("renderer resultDiscriminator accepts only this extension's payload shape", () => {

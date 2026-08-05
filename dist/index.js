@@ -553,21 +553,16 @@ const demoExporter = defineExporter(async (ctx) => {
  * treated as claiming every command, which both warns forever and puts all
  * `--json` output one bug away from corruption.
  *
- * Deliberately excludes `list`. This extension does override the `list`
- * command, but {@link listCommandOverride} returns `ctx.result` untouched, so
- * `list` never produces a payload this renderer should reshape.
+ * This is exactly one command because exactly one handler emits a payload the
+ * renderer reshapes: {@link demoExporter} returns `{ ts_starter: true, ... }`.
+ * Every other surface here returns something else — {@link demoImporter}
+ * returns `{ imported: 0 }`, and {@link listCommandOverride} passes
+ * `ctx.result` through untouched — so claiming their command paths would assert
+ * an ownership this extension does not actually exercise. Scope a renderer to
+ * the commands whose results it truly produces, not to the whole namespace it
+ * happens to register under.
  */
-const RENDERER_OWNED_COMMANDS = [
-    "hello",
-    "ts-starter info",
-    "ts-starter plan-demo",
-    "ts-starter context-demo",
-    "ts-starter search-demo",
-    "ts-starter history-compact-demo",
-    "ts-starter setup",
-    "ts-starter-demo import",
-    "ts-starter-demo export",
-];
+const RENDERER_OWNED_COMMANDS = ["ts-starter-demo export"];
 /**
  * Narrows a rendered result to this extension's own payload shape.
  *
