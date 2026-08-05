@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Scope the json renderer to the commands this extension owns so it stops colliding with sibling extensions ([pm-ts-starter-tezw](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-tezw.toon))
+
 ## 2026.8.5 - 2026-08-05
 
 ### Deprecated
