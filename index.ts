@@ -681,12 +681,56 @@ const demoExporter = defineExporter(async (ctx: ImportExportContext) => {
 // 5. RENDERERS — defineRendererOverride (capability: "renderers")
 // ===========================================================================
 
-const jsonRenderer = defineRendererOverride((ctx: RendererOverrideContext) => {
-  const result = ctx?.result;
-  if (result && typeof result === "object" && "ts_starter" in result) {
-    return JSON.stringify({ rendered_by: "pm-ts-starter", ...result }, null, 2);
-  }
-  return null;
+/**
+ * Command paths whose `--json` output this extension's renderer owns.
+ *
+ * Ownership is what keeps a renderer override a good citizen in a workspace
+ * that has several extensions installed: the host refuses to invoke the
+ * callback for a command outside this list, and its collision check suppresses
+ * a warning only when two renderers for the same format declare non-empty,
+ * statically disjoint command sets. An override registered without it is
+ * treated as claiming every command, which both warns forever and puts all
+ * `--json` output one bug away from corruption.
+ *
+ * Deliberately excludes `list`. This extension does override the `list`
+ * command, but {@link listCommandOverride} returns `ctx.result` untouched, so
+ * `list` never produces a payload this renderer should reshape.
+ */
+const RENDERER_OWNED_COMMANDS = [
+  "hello",
+  "ts-starter info",
+  "ts-starter plan-demo",
+  "ts-starter context-demo",
+  "ts-starter search-demo",
+  "ts-starter history-compact-demo",
+  "ts-starter setup",
+  "ts-starter-demo import",
+  "ts-starter-demo export",
+];
+
+/**
+ * Narrows a rendered result to this extension's own payload shape.
+ *
+ * Serves double duty: the host evaluates it as the renderer's
+ * `resultDiscriminator` before invoking the callback, and the callback reuses
+ * it so the spread below is type-safe without a cast.
+ */
+const isTsStarterResult = (result: unknown): result is Record<string, unknown> =>
+  typeof result === "object" && result !== null && "ts_starter" in result;
+
+const jsonRenderer = defineRendererOverride({
+  commands: RENDERER_OWNED_COMMANDS,
+  resultDiscriminator: isTsStarterResult,
+  run: (ctx: RendererOverrideContext) => {
+    // The host evaluates resultDiscriminator before calling this, so the guard
+    // is defence in depth rather than the primary filter: it keeps the callback
+    // correct if it is ever invoked directly, and it narrows the type so the
+    // spread below needs no cast.
+    const result = ctx.result;
+    return isTsStarterResult(result)
+      ? JSON.stringify({ rendered_by: "pm-ts-starter", ...result }, null, 2)
+      : null;
+  },
 });
 
 // ===========================================================================

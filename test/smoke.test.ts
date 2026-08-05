@@ -34,7 +34,12 @@ import {
 
 import { demoProfile } from "../index.ts";
 
-import type { ItemDocument, ItemMetadata, PmSettings } from "@unbrained/pm-cli/sdk";
+import type {
+  ItemDocument,
+  ItemMetadata,
+  PmSettings,
+  RendererOverrideContext,
+} from "@unbrained/pm-cli/sdk";
 
 /**
  * Stand-in for the host-supplied `PmSettings` carried on search-provider and
@@ -430,10 +435,10 @@ test("importer returns imported: 0", async () => {
 });
 
 test("renderer override reshapes ts_starter payload and passes through others", async () => {
-  // Our payload → reshaped
+  // Our payload on a command we own → reshaped
   const ours = await harness.runRendererOverride({
     format: "json",
-    command: "ts-starter-demo",
+    command: "ts-starter-demo export",
     result: { ts_starter: true, exported: 0 },
   });
   assert.ok(ours.overridden, "renderer should handle our payload");
@@ -446,6 +451,68 @@ test("renderer override reshapes ts_starter payload and passes through others", 
     result: { other: true },
   });
   assert.ok(!other.overridden, "renderer should NOT handle unrelated payloads");
+});
+
+test("renderer override declares non-empty ownership so it cannot claim every command", () => {
+  const registered = harness.assertRendererOverride({ format: "json" });
+
+  // An override registered without ownership is treated by the host as owning
+  // every command, which is what makes an unscoped renderer able to replace all
+  // --json output. Assert the declaration exists rather than trusting the
+  // callback's internal guard.
+  assert.ok(
+    Array.isArray(registered.commands) && registered.commands.length > 0,
+    "renderer must declare the command paths it owns",
+  );
+  assert.strictEqual(typeof registered.resultDiscriminator, "function");
+  assert.ok(
+    !registered.commands.includes("list"),
+    "list is a pass-through command override and must not be owned by the renderer",
+  );
+  for (const command of registered.commands) {
+    assert.ok(
+      command === "hello" || command.startsWith("ts-starter"),
+      `owned command ${command} must be namespaced to this extension`,
+    );
+  }
+});
+
+test("renderer resultDiscriminator accepts only this extension's payload shape", () => {
+  const { resultDiscriminator } = harness.assertRendererOverride({ format: "json" });
+  assert.ok(resultDiscriminator, "renderer must declare a result discriminator");
+
+  assert.strictEqual(resultDiscriminator({ ts_starter: true }), true);
+  assert.strictEqual(resultDiscriminator({ other: true }), false, "foreign object");
+  assert.strictEqual(resultDiscriminator(null), false, "null is typeof object");
+  assert.strictEqual(resultDiscriminator("ts_starter"), false, "non-object");
+});
+
+test("renderer callback still declines a foreign payload when invoked directly", () => {
+  // The host filters on resultDiscriminator before calling run, so this arm is
+  // unreachable through runRendererOverride. Exercise it directly: the callback
+  // must stay correct on its own, because returning a rendered string for a
+  // payload that is not ours is exactly how a renderer override corrupts
+  // unrelated command output.
+  const { run } = harness.assertRendererOverride({ format: "json" });
+
+  assert.strictEqual(run({ result: { other: true } } as RendererOverrideContext), null);
+  assert.match(
+    String(run({ result: { ts_starter: true, exported: 0 } } as RendererOverrideContext)),
+    /pm-ts-starter/,
+  );
+});
+
+test("renderer override declines a command it does not own even for our own payload", async () => {
+  // Ownership is enforced by the host ahead of the callback, so a payload this
+  // extension would otherwise reshape must still fall through on a foreign
+  // command. This is the property that keeps sibling extensions from
+  // colliding on the shared json renderer surface.
+  const foreign = await harness.runRendererOverride({
+    format: "json",
+    command: "context-pack",
+    result: { ts_starter: true, exported: 0 },
+  });
+  assert.ok(!foreign.overridden, "renderer must not run on an unowned command");
 });
 
 test("parser override for 'list' returns empty delta (pass-through)", async () => {
