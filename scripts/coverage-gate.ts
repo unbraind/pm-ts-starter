@@ -35,7 +35,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -251,17 +251,6 @@ export function runCoverageGate(rootDir: string, stdio: "inherit" | "ignore" = "
   const exempt = new Set(config.ignore ?? []);
   const required = expected.filter((file) => !exempt.has(file));
 
-  /**
-   * Rejects an `ignore` entry that still carries runtime code.
-   *
-   * The exemption exists for type-only modules, which erase to nothing and so
-   * can never appear in a coverage report. Left untested, it is also the one
-   * way to remove an executable module from both the measured set and the
-   * required set — exactly the escape this gate exists to prevent. TypeScript
-   * emits `export {};` and nothing else for a module that erases completely, so
-   * the compiled output settles the question rather than the author's say-so.
-   */
-
   // Validate every `ignore` entry is under `sources` before resolving emit
   // paths. A stale `ignore` entry pointing at a file that was removed or never
   // existed is a configuration error that should be reported on its own, not
@@ -285,6 +274,14 @@ export function runCoverageGate(rootDir: string, stdio: "inherit" | "ignore" = "
     throw err;
   }
 
+  // Rejects an `ignore` entry that still carries runtime code.
+  //
+  // The exemption exists for type-only modules, which erase to nothing and so
+  // can never appear in a coverage report. Left untested, it is also the one
+  // way to remove an executable module from both the measured set and the
+  // required set — exactly the escape this gate exists to prevent. TypeScript
+  // emits `export {};` and nothing else for a module that erases completely, so
+  // the compiled output settles the question rather than the author's say-so.
   for (const file of config.ignore ?? []) {
     const emitted = join(
       rootDir,
@@ -448,7 +445,14 @@ const repoRoot = resolve(import.meta.dirname, "..");
  *   script's own parent directory.
  */
 export function runScriptEntry(rootDir: string = repoRoot): void {
-  if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  // Compare canonical paths rather than just-normalised ones: `resolve` only
+  // normalises `process.argv[1]`, while `fileURLToPath(import.meta.url)` reflects
+  // the ESM loader's symlink-resolved path (unless --preserve-symlinks is set).
+  // Without realpathSync on both sides, invoking the script through a symlinked
+  // path component would leave the guard false and the gate would return
+  // without running — a silent pass, which is the one outcome this gate exists
+  // to prevent.
+  if (process.argv[1] && realpathSync(resolve(process.argv[1])) === realpathSync(fileURLToPath(import.meta.url))) {
     process.exit(runCoverageGate(rootDir));
   }
 }

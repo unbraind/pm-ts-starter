@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Fix review findings: POSIX-only gate tests, orphaned docstring, stale tsc references ([pm-ts-starter-f7z6](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/tasks/pm-ts-starter-f7z6.toon))
 - Scope the json renderer to the commands this extension owns so it stops colliding with sibling extensions ([pm-ts-starter-tezw](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-tezw.toon))
 
 ### Other

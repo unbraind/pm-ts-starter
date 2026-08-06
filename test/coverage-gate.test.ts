@@ -16,7 +16,7 @@
 import assert from "node:assert/strict";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -24,10 +24,20 @@ import { runCoverageGate, runScriptEntry } from "../scripts/coverage-gate.ts";
 
 /**
  * The parent package's `node_modules/.bin`, prepended to `PATH` in fixtures so
- * `npx tsc --showConfig` (called by the gate's `resolveEmitPaths`) can find the
+ * `tsc --showConfig` (called by the gate's `resolveEmitPaths`) can find the
  * TypeScript compiler installed in the real package.
  */
 const NODE_MODULES_BIN = join(import.meta.dirname, "..", "node_modules", ".bin");
+
+/**
+ * Skip reason for tests that exec a `#!/bin/sh` fixture script. cmd.exe does
+ * not honour a shebang, so those fixtures cannot run on Windows; on every
+ * other platform this is `false` and the test runs normally.
+ */
+const SHEBANG_SKIP: string | false =
+  process.platform === "win32"
+    ? "fake tsc/node is a #!/bin/sh script; shebang is not honoured under cmd.exe"
+    : false;
 
 /**
  * Writes a minimal `package.json` with a `coverageGate` block into a directory.
@@ -120,7 +130,8 @@ async function captureOutput(fn: () => Promise<number>): Promise<{ code: number;
 }
 
 /**
- * Creates a fixture project directory with `PATH` set for `npx tsc`.
+ * Creates a fixture project directory under a fresh `mkdtemp` temp directory.
+ * `PATH` is later set up by {@link runGate}, not here.
  *
  * @param prefix - The `mkdtemp` prefix for the temp directory.
  * @returns The fixture directory path and a cleanup function.
@@ -135,14 +146,14 @@ function createFixture(prefix: string): { dir: string; cleanup: () => void } {
 
 /**
  * Runs the gate against a fixture directory with `PATH` including the parent
- * package's `node_modules/.bin` so `npx tsc` works, and captures output.
+ * package's `node_modules/.bin` so `tsc` works, and captures output.
  *
  * @param dir - The fixture root directory.
  * @returns The exit code and captured stderr/stdout text.
  */
 async function runGate(dir: string): Promise<{ code: number; stderr: string; stdout: string }> {
   const savedPath = process.env.PATH;
-  process.env.PATH = `${NODE_MODULES_BIN}:${savedPath ?? ""}`;
+  process.env.PATH = [NODE_MODULES_BIN, savedPath ?? ""].filter(Boolean).join(delimiter);
   try {
     return await captureOutput(() => Promise.resolve(runCoverageGate(dir, "ignore")));
   } finally {
@@ -540,7 +551,7 @@ test("coverage gate propagates unexpected filesystem errors from the source walk
   });
 
   const savedPath = process.env.PATH;
-  process.env.PATH = `${NODE_MODULES_BIN}:${savedPath ?? ""}`;
+  process.env.PATH = [NODE_MODULES_BIN, savedPath ?? ""].filter(Boolean).join(delimiter);
   try {
     await assert.rejects(
       () => captureOutput(() => Promise.resolve(runCoverageGate(fixture.dir, "ignore"))),
@@ -556,7 +567,7 @@ test("coverage gate propagates unexpected filesystem errors from the source walk
 // Re-throw non-CoverageGateFailure errors from resolveEmitPaths
 // ---------------------------------------------------------------------------
 
-test("coverage gate propagates non-JSON tsc output as an unexpected error", async (t) => {
+test("coverage gate propagates non-JSON tsc output as an unexpected error", { skip: SHEBANG_SKIP }, async (t) => {
   const fixture = createFixture("cg-bad-tsc-output-");
   t.after(fixture.cleanup);
 
@@ -577,7 +588,7 @@ test("coverage gate propagates non-JSON tsc output as an unexpected error", asyn
 
   // Bypass runGate (which prepends NODE_MODULES_BIN) so the fake tsc is found first.
   const savedPath = process.env.PATH;
-  process.env.PATH = `${fixture.dir}:${savedPath ?? ""}`;
+  process.env.PATH = [fixture.dir, savedPath ?? ""].filter(Boolean).join(delimiter);
   try {
     await assert.rejects(
       () => captureOutput(() => Promise.resolve(runCoverageGate(fixture.dir, "ignore"))),
@@ -621,7 +632,7 @@ test("coverage gate reports a runner startup failure when the binary is missing"
 // No coverage report — the test runner exits 0 but writes no lcov file
 // ---------------------------------------------------------------------------
 
-test("coverage gate reports a missing coverage report when the runner exits 0 but writes nothing", async (t) => {
+test("coverage gate reports a missing coverage report when the runner exits 0 but writes nothing", { skip: SHEBANG_SKIP }, async (t) => {
   const fixture = createFixture("cg-no-report-");
   t.after(fixture.cleanup);
 
@@ -694,7 +705,7 @@ test("runScriptEntry runs the gate and exits when argv[1] matches the script pat
 // resolveEmitPaths: stderr in error message (line 163 true branch)
 // ---------------------------------------------------------------------------
 
-test("coverage gate includes tsc stderr in the resolve-failure message", async (t) => {
+test("coverage gate includes tsc stderr in the resolve-failure message", { skip: SHEBANG_SKIP }, async (t) => {
   const fixture = createFixture("cg-tsc-stderr-");
   t.after(fixture.cleanup);
 
@@ -714,7 +725,7 @@ test("coverage gate includes tsc stderr in the resolve-failure message", async (
   });
 
   const savedPath = process.env.PATH;
-  process.env.PATH = `${fixture.dir}:${savedPath ?? ""}`;
+  process.env.PATH = [fixture.dir, savedPath ?? ""].filter(Boolean).join(delimiter);
   try {
     const { code, stderr } = await captureOutput(() => Promise.resolve(runCoverageGate(fixture.dir, "ignore")));
     assert.strictEqual(code, 1);
@@ -729,7 +740,7 @@ test("coverage gate includes tsc stderr in the resolve-failure message", async (
 // resolveEmitPaths: missing compilerOptions uses defaults (lines 169-170)
 // ---------------------------------------------------------------------------
 
-test("coverage gate uses default emit paths when tsc output has no compilerOptions", async (t) => {
+test("coverage gate uses default emit paths when tsc output has no compilerOptions", { skip: SHEBANG_SKIP }, async (t) => {
   const fixture = createFixture("cg-no-compopts-");
   t.after(fixture.cleanup);
 
@@ -753,7 +764,7 @@ test("coverage gate uses default emit paths when tsc output has no compilerOptio
   });
 
   const savedPath = process.env.PATH;
-  process.env.PATH = `${fixture.dir}:${savedPath ?? ""}`;
+  process.env.PATH = [fixture.dir, savedPath ?? ""].filter(Boolean).join(delimiter);
   try {
     const { code, stdout, stderr } = await captureOutput(() => Promise.resolve(runCoverageGate(fixture.dir, "ignore")));
     assert.strictEqual(code, 0, `gate should pass with default emit paths; stderr: ${stderr}`);
@@ -767,7 +778,7 @@ test("coverage gate uses default emit paths when tsc output has no compilerOptio
 // result.status null fallback (line 380)
 // ---------------------------------------------------------------------------
 
-test("coverage gate returns 1 when the test runner is killed by a signal", async (t) => {
+test("coverage gate returns 1 when the test runner is killed by a signal", { skip: SHEBANG_SKIP }, async (t) => {
   const fixture = createFixture("cg-signal-kill-");
   t.after(fixture.cleanup);
 
@@ -801,7 +812,7 @@ test("coverage gate returns 1 when the test runner is killed by a signal", async
 // Absolute SF: path in lcov report (line 399 true branch)
 // ---------------------------------------------------------------------------
 
-test("coverage gate normalises absolute SF: paths in the lcov report", async (t) => {
+test("coverage gate normalises absolute SF: paths in the lcov report", { skip: SHEBANG_SKIP }, async (t) => {
   const fixture = createFixture("cg-abs-lcov-");
   t.after(fixture.cleanup);
 
