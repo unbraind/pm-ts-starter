@@ -22,6 +22,38 @@ import type { PmCliExpectedError } from "@unbrained/pm-cli/sdk";
  * @returns The parsed JSON, or `undefined` when no candidate yields usable data.
  */
 export declare function readRootJson(fileName: string, base?: string): unknown;
+/**
+ * Resolves the extension version from a parsed `manifest.json` value.
+ *
+ * Falls back to `"0.0.0"` when the manifest is missing or its `version` field
+ * is not a string, so a corrupt or partial manifest never crashes the host —
+ * the extension loads with a sentinel that surfaces in `ts-starter info`.
+ *
+ * @param manifest - The parsed contents of `manifest.json` (or `undefined`).
+ * @returns The version string, or `"0.0.0"` as a fallback.
+ */
+export declare function resolveVersion(manifest: unknown): string;
+/**
+ * The pm-cli SDK release this reference is written against, reported by
+ * `ts-starter info` and `ts-starter setup`.
+ *
+ * Derived from the declared `@unbrained/pm-cli` peer-dependency range rather
+ * than a source literal, for the same reason {@link VERSION} reads
+ * `manifest.json`: a hardcoded target silently drifts. This one had already
+ * drifted 20 releases (`2026.7.6`) behind the declared peer range, so both
+ * commands misreported the SDK contract this extension actually demonstrates.
+ */
+/**
+ * Resolves the pm-cli SDK target from a parsed `package.json` value.
+ *
+ * Reads the `@unbrained/pm-cli` peer-dependency range and strips the leading
+ * comparator (`>=`, `^`, etc.) so the bare version is what `ts-starter info`
+ * reports. Falls back to `"unknown"` when the range is missing or not a string.
+ *
+ * @param pkg - The parsed contents of `package.json` (or `undefined`).
+ * @returns The SDK target version, or `"unknown"` as a fallback.
+ */
+export declare function resolveSdkTarget(pkg: unknown): string;
 interface TsStarterErrorContextInput {
     feature?: string;
     command?: string;

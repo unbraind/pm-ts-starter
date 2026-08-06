@@ -1,0 +1,18 @@
+id: pm-ts-starter-f7z6
+title: "Fix review findings: POSIX-only gate tests, orphaned docstring, stale tsc references"
+description: ""
+type: Task
+status: closed
+priority: 2
+tags: []
+created_at: "2026-08-06T21:41:02.415Z"
+updated_at: "2026-08-06T21:41:11.965Z"
+closed_at: "2026-08-06T21:41:11.960Z"
+completed_at: "2026-08-06T21:41:11.960Z"
+author: pi-agent
+acceptance_criteria: "coverage-gate tests use path.delimiter for PATH joins and skip #!/bin/sh fixture tests on win32; orphaned JSDoc reattached as a // comment on the runtime-code check loop; stale npx tsc references corrected to tsc; runScriptEntry compares canonical realpath paths; release:check passes with coverage still 100.00/100.00/100.00 over index.ts and scripts/coverage-gate.ts, ignore []"
+resolution: fixed
+expected_result: "release:check passes all six gates; coverage stays a measured 100.00/100.00/100.00 over index.ts and scripts/coverage-gate.ts; coverageGate.ignore remains []; the POSIX fix does not drop Linux coverage below 100 (0 skipped on Linux)"
+actual_result: "Measured 100.00/100.00/100.00 over the same 2 source files; 118 tests pass with 0 skipped on Linux; release:check all six gates green including changelog:check; ignore []"
+close_reason: "Fixed four CodeRabbit review findings on PR #55. (1) Made coverage-gate tests POSIX-safe: import path.delimiter and use it for every PATH join, and skip the six #!/bin/sh fixture tests on win32 via node:test skip option, matching the pm-starter fix. (2) Reattached the orphaned JSDoc 'Rejects an ignore entry that still carries runtime code' as a // comment on the runtime-code verification loop it actually describes. (3) Corrected three stale npx tsc references in test doc comments to tsc, and fixed the createFixture description. (4) Hardened runScriptEntry to compare canonical realpathSync paths so a symlinked invocation path cannot silently skip the gate. Thresholds stay 100/100/100, ignore stays []"
+body: ""

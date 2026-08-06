@@ -40,6 +40,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import * as readline from "node:readline/promises";
 // ---------------------------------------------------------------------------
 // Root-file resolution — manifest.json and package.json both live at the
 // repository root. When this module is compiled into dist/ they sit one
@@ -87,10 +88,22 @@ export function readRootJson(fileName, base = dirname(fileURLToPath(import.meta.
 // Version resolution — read from manifest.json so the Daily Release workflow's
 // auto-bump is reflected without a source literal that silently drifts.
 // ---------------------------------------------------------------------------
-const VERSION = (() => {
-    const manifest = readRootJson("manifest.json");
-    return typeof manifest?.version === "string" ? manifest.version : "0.0.0";
-})();
+/**
+ * Resolves the extension version from a parsed `manifest.json` value.
+ *
+ * Falls back to `"0.0.0"` when the manifest is missing or its `version` field
+ * is not a string, so a corrupt or partial manifest never crashes the host —
+ * the extension loads with a sentinel that surfaces in `ts-starter info`.
+ *
+ * @param manifest - The parsed contents of `manifest.json` (or `undefined`).
+ * @returns The version string, or `"0.0.0"` as a fallback.
+ */
+export function resolveVersion(manifest) {
+    return typeof manifest?.version === "string"
+        ? manifest.version
+        : "0.0.0";
+}
+const VERSION = resolveVersion(readRootJson("manifest.json"));
 /**
  * The pm-cli SDK release this reference is written against, reported by
  * `ts-starter info` and `ts-starter setup`.
@@ -101,12 +114,32 @@ const VERSION = (() => {
  * drifted 20 releases (`2026.7.6`) behind the declared peer range, so both
  * commands misreported the SDK contract this extension actually demonstrates.
  */
-const SDK_TARGET = (() => {
-    const pkg = readRootJson("package.json");
+/**
+ * Resolves the pm-cli SDK target from a parsed `package.json` value.
+ *
+ * Reads the `@unbrained/pm-cli` peer-dependency range and strips the leading
+ * comparator (`>=`, `^`, etc.) so the bare version is what `ts-starter info`
+ * reports. Falls back to `"unknown"` when the range is missing or not a string.
+ *
+ * @param pkg - The parsed contents of `package.json` (or `undefined`).
+ * @returns The SDK target version, or `"unknown"` as a fallback.
+ */
+export function resolveSdkTarget(pkg) {
     const range = pkg?.peerDependencies?.["@unbrained/pm-cli"];
     return typeof range === "string" ? range.replace(/^[^0-9]*/, "") : "unknown";
-})();
-const VERBOSE = !!process.env.PM_TS_STARTER_VERBOSE;
+}
+const SDK_TARGET = resolveSdkTarget(readRootJson("package.json"));
+/**
+ * Whether verbose activation logging is on.
+ *
+ * Re-read from the environment at each call rather than captured once at module
+ * load, so a test (or a hot-reload) can toggle the flag without restarting the
+ * process. Every hook and override that logs conditionally calls this instead
+ * of reading a frozen constant.
+ */
+function isVerboseLogging() {
+    return !!process.env.PM_TS_STARTER_VERBOSE;
+}
 // ---------------------------------------------------------------------------
 // Expected-error helper — build a PmCliExpectedError-shaped error without a
 // runtime import of the full CLI error class. The CLI's top-level handler
@@ -393,7 +426,6 @@ const setupCommand = defineCommand({
             interactive_run: runInteractive,
         };
         if (runInteractive) {
-            const readline = await import("node:readline/promises");
             const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
             try {
                 const name = (await rl.question("Extension name [pm-ts-starter]: ")).trim() || "pm-ts-starter";
@@ -424,7 +456,7 @@ const setupCommand = defineCommand({
 // wiring without altering behavior. Command overrides are a single-winner
 // surface — only one extension can override a given command path.
 const listCommandOverride = defineCommandOverride((ctx) => {
-    if (VERBOSE)
+    if (isVerboseLogging())
         console.error(`[ts-starter] command override for: ${ctx.command}`);
     return ctx.result;
 });
@@ -504,38 +536,43 @@ const demoProfile = defineProjectProfile({
 // 3. HOOKS — all five lifecycle hooks (capability: "hooks")
 // ===========================================================================
 const beforeCommandHook = defineBeforeCommandHook((ctx) => {
-    if (VERBOSE)
+    if (isVerboseLogging())
         console.error(`[ts-starter] beforeCommand: ${ctx.command}`);
 });
 const afterCommandHook = defineAfterCommandHook((ctx) => {
-    if (VERBOSE)
+    if (isVerboseLogging()) {
         console.error(`[ts-starter] afterCommand: ${ctx.command} (ok=${ctx.ok})`);
-    if (VERBOSE && ctx.ok === false && ctx.error && isPmCliExpectedError(ctx.error)) {
-        console.error(`[ts-starter] hint: ${ctx.error.message}`);
+        // `ctx.error` is the runtime's error *message string* (not an Error
+        // object), so a truthiness check is the correct guard — the earlier
+        // `isPmCliExpectedError(ctx.error)` could never return true on a string
+        // and left this branch permanently unreachable.
+        if (ctx.ok === false && ctx.error) {
+            console.error(`[ts-starter] hint: ${ctx.error}`);
+        }
     }
 });
 const onWriteHook = defineOnWriteHook((ctx) => {
-    if (VERBOSE)
+    if (isVerboseLogging())
         console.error(`[ts-starter] onWrite: ${ctx?.op ?? ""} ${ctx?.path ?? ""}`.trimEnd());
 });
 const onReadHook = defineOnReadHook((ctx) => {
-    if (VERBOSE)
+    if (isVerboseLogging())
         console.error(`[ts-starter] onRead: ${ctx?.path ?? "(item)"}`);
 });
 const onIndexHook = defineOnIndexHook((ctx) => {
-    if (VERBOSE)
+    if (isVerboseLogging())
         console.error(`[ts-starter] onIndex: mode=${ctx.mode} total_items=${ctx.total_items ?? "(unreported)"}`);
 });
 // ===========================================================================
 // 4. IMPORTERS / EXPORTERS — defineImporter, defineExporter (capability: "importers")
 // ===========================================================================
 const demoImporter = defineImporter(async (ctx) => {
-    if (VERBOSE)
+    if (isVerboseLogging())
         console.error("[ts-starter] Demo importer invoked:", JSON.stringify(ctx.options));
     return { imported: 0 };
 });
 const demoExporter = defineExporter(async (ctx) => {
-    if (VERBOSE)
+    if (isVerboseLogging())
         console.error("[ts-starter] Demo exporter invoked:", JSON.stringify(ctx.options));
     return { ts_starter: true, exported: 0 };
 });
@@ -647,7 +684,7 @@ const listParserOverride = defineParserOverride(() => {
 // 8. PREFLIGHT — definePreflightOverride (capability: "preflight")
 // ===========================================================================
 const preflightOverride = definePreflightOverride(async (ctx) => {
-    if (VERBOSE)
+    if (isVerboseLogging())
         console.error(`[ts-starter] Preflight check for workspace: ${ctx.pm_root ?? "unknown"}`);
     return {
         enforce_item_format_gate: ctx.decision?.enforce_item_format_gate ?? true,

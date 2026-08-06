@@ -1,0 +1,20 @@
+id: pm-ts-starter-kksc
+title: Raise the coverage gate to a measured 100/100/100 and bring scripts/coverage-gate.ts under it
+description: ""
+type: Task
+status: closed
+priority: 2
+tags: []
+created_at: "2026-08-05T20:33:47.189Z"
+updated_at: "2026-08-06T20:51:38.709Z"
+closed_at: "2026-08-06T20:51:22.809Z"
+completed_at: "2026-08-06T20:51:22.809Z"
+claim_principal: pi-agent
+author: pi-agent
+resolution: fixed
+expected_result: "npm run coverage exits 0 with a measured 100.00 line, 100.00 branch and 100.00 function coverage across every gated source file, with scripts/coverage-gate.ts itself inside coverageGate.sources and no ignore entries"
+actual_result: "Measured 100.00/100.00/100.00 over 2 reported source files (index.ts and scripts/coverage-gate.ts) with ignore empty; full release:check passes all six gates including changelog:check"
+notes[1]{created_at,author,text}:
+  "2026-08-05T20:34:16.672Z",pi-agent,"Baseline coverage: index.ts 90.67% lines / 70.79% branches / 75% functions. scripts/coverage-gate.ts unmeasured (DEFAULT_SKIP_DIRS contains 'scripts'). Uncovered index.ts lines: 223-224 258 277-298 349-356 378-386 406-422 477-492 525-535 644 648-651 655 659 663"
+close_reason: "Repaired the stranded mid-edit state (three TS2304 stderr errors in the gate test), raised the gate from 90/70/75 to a measured 100/100/100, and brought scripts/coverage-gate.ts under coverageGate.sources with an empty ignore list. The gate now measures itself: runScriptEntry is exported and guarded on process.argv[1], so the entry branch is exercised in-process by tests with a mocked process.exit rather than escaping measurement in a separate wrapper file."
+body: ""

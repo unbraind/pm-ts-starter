@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Reconcile PR with same-day release before changelog CI ([pm-ts-starter-cpm7](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-cpm7.toon))
+- Gate durable PM project health in CI on pm CLI 2026.8.6 ([pm-ts-starter-gddt](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-gddt.toon))
+- Fix review findings: POSIX-only gate tests, orphaned docstring, stale tsc references ([pm-ts-starter-f7z6](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/tasks/pm-ts-starter-f7z6.toon))
+
+### Other
+
+- Make exact coverage-path tests deterministic and cross-platform ([pm-ts-starter-q6xq](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/tasks/pm-ts-starter-q6xq.toon))
+- Raise the coverage gate to a measured 100/100/100 and bring scripts/coverage-gate.ts under it ([pm-ts-starter-kksc](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/tasks/pm-ts-starter-kksc.toon))
+
 ## 2026.8.6 - 2026-08-06
 
 ### Fixed
