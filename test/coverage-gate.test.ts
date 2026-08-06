@@ -14,7 +14,7 @@
  */
 
 import assert from "node:assert/strict";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import test from "node:test";
@@ -28,16 +28,6 @@ import { runCoverageGate, runScriptEntry } from "../scripts/coverage-gate.ts";
  * TypeScript compiler installed in the real package.
  */
 const NODE_MODULES_BIN = join(import.meta.dirname, "..", "node_modules", ".bin");
-
-/**
- * Skip reason for tests that exec a `#!/bin/sh` fixture script. cmd.exe does
- * not honour a shebang, so those fixtures cannot run on Windows; on every
- * other platform this is `false` and the test runs normally.
- */
-const SHEBANG_SKIP: string | false =
-  process.platform === "win32"
-    ? "fake tsc/node is a #!/bin/sh script; shebang is not honoured under cmd.exe"
-    : false;
 
 /**
  * Writes a minimal `package.json` with a `coverageGate` block into a directory.
@@ -91,6 +81,13 @@ function writeTest(dir: string, sourceName: string, testName: string): void {
     'test("value is 42", () => { assert.strictEqual(value, 42); });',
     "",
   ].join("\n"));
+}
+
+/** Write a platform-independent Node fixture used as a spawned command. */
+function writeNodeCommand(dir: string, name: string, source: string): string {
+  const path = join(dir, `${name}.mjs`);
+  writeFileSync(path, source);
+  return path;
 }
 
 /**
@@ -531,43 +528,27 @@ test("coverage gate walks subdirectories to find source files", async (t) => {
 
 test("coverage gate propagates unexpected filesystem errors from the source walk", async (t) => {
   const fixture = createFixture("cg-walk-error-");
-  // Restore permissions before cleanup so rmSync can delete the directory.
-  t.after(() => {
-    try { chmodSync(join(fixture.dir, "noperm"), 0o755); } catch { /* already gone */ }
-    fixture.cleanup();
-  });
-
-  writeTsConfig(fixture.dir);
-  writeSource(fixture.dir, "src");
-  writeTest(fixture.dir, "src", "src");
-  // Create a directory with no read permissions — readdirSync will throw EACCES,
-  // which is not a CoverageGateFailure, so it must be re-thrown, not swallowed.
-  mkdirSync(join(fixture.dir, "noperm"), { recursive: true });
-  chmodSync(join(fixture.dir, "noperm"), 0o000);
+  t.after(fixture.cleanup);
   writePackageJson(fixture.dir, {
     sources: ["."],
-    tests: [testPath("src")],
+    tests: [],
     thresholds: { lines: 100, branches: 100, functions: 100 },
   });
-
-  const savedPath = process.env.PATH;
-  process.env.PATH = [NODE_MODULES_BIN, savedPath ?? ""].filter(Boolean).join(delimiter);
-  try {
-    await assert.rejects(
-      () => captureOutput(() => Promise.resolve(runCoverageGate(fixture.dir, "ignore"))),
-      (err: unknown) => err instanceof Error && (err as NodeJS.ErrnoException).code === "EACCES",
-      "the gate must re-throw the EACCES error, not swallow it",
-    );
-  } finally {
-    process.env.PATH = savedPath;
-  }
+  const filesystemError = Object.assign(new Error("source walk failed"), { code: "EIO" });
+  await assert.rejects(
+    () => captureOutput(() => Promise.resolve(runCoverageGate(fixture.dir, "ignore", {
+      sourceCollector: () => { throw filesystemError; },
+    }))),
+    (err: unknown) => err === filesystemError,
+    "the gate must re-throw the original filesystem error",
+  );
 });
 
 // ---------------------------------------------------------------------------
 // Re-throw non-CoverageGateFailure errors from resolveEmitPaths
 // ---------------------------------------------------------------------------
 
-test("coverage gate propagates non-JSON tsc output as an unexpected error", { skip: SHEBANG_SKIP }, async (t) => {
+test("coverage gate propagates non-JSON tsc output as an unexpected error", async (t) => {
   const fixture = createFixture("cg-bad-tsc-output-");
   t.after(fixture.cleanup);
 
@@ -576,9 +557,7 @@ test("coverage gate propagates non-JSON tsc output as an unexpected error", { sk
   writeTest(fixture.dir, "src", "src");
   // Create a fake `tsc` that exits 0 but prints non-JSON — JSON.parse will
   // throw SyntaxError, which is not a CoverageGateFailure and must be re-thrown.
-  const fakeTsc = join(fixture.dir, "tsc");
-  writeFileSync(fakeTsc, "#!/bin/sh\necho 'this is not json'\n");
-  chmodSync(fakeTsc, 0o755);
+  const fakeTsc = writeNodeCommand(fixture.dir, "fake-tsc", 'console.log("this is not json");\n');
   writePackageJson(fixture.dir, {
     sources: ["."],
     tests: [testPath("src")],
@@ -586,18 +565,13 @@ test("coverage gate propagates non-JSON tsc output as an unexpected error", { sk
     ignore: ["src.ts"],
   });
 
-  // Bypass runGate (which prepends NODE_MODULES_BIN) so the fake tsc is found first.
-  const savedPath = process.env.PATH;
-  process.env.PATH = [fixture.dir, savedPath ?? ""].filter(Boolean).join(delimiter);
-  try {
-    await assert.rejects(
-      () => captureOutput(() => Promise.resolve(runCoverageGate(fixture.dir, "ignore"))),
-      (err: unknown) => err instanceof SyntaxError,
-      "the gate must re-throw the JSON.parse SyntaxError, not swallow it",
-    );
-  } finally {
-    process.env.PATH = savedPath;
-  }
+  await assert.rejects(
+    () => captureOutput(() => Promise.resolve(runCoverageGate(fixture.dir, "ignore", {
+      compiler: { executable: process.execPath, args: [fakeTsc] },
+    }))),
+    (err: unknown) => err instanceof SyntaxError,
+    "the gate must re-throw the JSON.parse SyntaxError, not swallow it",
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -617,22 +591,18 @@ test("coverage gate reports a runner startup failure when the binary is missing"
     thresholds: { lines: 100, branches: 100, functions: 100 },
   });
 
-  const savedExecPath = process.execPath;
-  process.execPath = "/nonexistent-node-binary";
-  try {
-    const { code, stderr } = await runGate(fixture.dir);
-    assert.strictEqual(code, 1);
-    assert.match(stderr, /failed to start the test runner/);
-  } finally {
-    process.execPath = savedExecPath;
-  }
+  const { code, stderr } = await captureOutput(() => Promise.resolve(runCoverageGate(fixture.dir, "ignore", {
+    runner: { executable: "/nonexistent-node-binary", args: [] },
+  })));
+  assert.strictEqual(code, 1);
+  assert.match(stderr, /failed to start the test runner/);
 });
 
 // ---------------------------------------------------------------------------
 // No coverage report — the test runner exits 0 but writes no lcov file
 // ---------------------------------------------------------------------------
 
-test("coverage gate reports a missing coverage report when the runner exits 0 but writes nothing", { skip: SHEBANG_SKIP }, async (t) => {
+test("coverage gate reports a missing coverage report when the runner exits 0 but writes nothing", async (t) => {
   const fixture = createFixture("cg-no-report-");
   t.after(fixture.cleanup);
 
@@ -645,24 +615,12 @@ test("coverage gate reports a missing coverage report when the runner exits 0 bu
     thresholds: { lines: 100, branches: 100, functions: 100 },
   });
 
-  // Replace process.execPath with a script that exits 0 without running any
-  // tests or writing coverage. The gate creates the coverage/ directory and
-  // deletes any stale lcov file before spawning, so after the fake runner
-  // exits 0 the lcov file is absent — the defensive "no coverage report"
-  // check must fire.
-  const fakeNode = join(fixture.dir, "fake-node");
-  writeFileSync(fakeNode, "#!/bin/sh\nexit 0\n");
-  chmodSync(fakeNode, 0o755);
-
-  const savedExecPath = process.execPath;
-  process.execPath = fakeNode;
-  try {
-    const { code, stderr } = await runGate(fixture.dir);
-    assert.strictEqual(code, 1);
-    assert.match(stderr, /no coverage report was written/);
-  } finally {
-    process.execPath = savedExecPath;
-  }
+  const fakeNode = writeNodeCommand(fixture.dir, "fake-node", "process.exit(0);\n");
+  const { code, stderr } = await captureOutput(() => Promise.resolve(runCoverageGate(fixture.dir, "ignore", {
+    runner: { executable: process.execPath, args: [fakeNode] },
+  })));
+  assert.strictEqual(code, 1);
+  assert.match(stderr, /no coverage report was written/);
 });
 
 // ---------------------------------------------------------------------------
@@ -705,7 +663,7 @@ test("runScriptEntry runs the gate and exits when argv[1] matches the script pat
 // resolveEmitPaths: stderr in error message (line 163 true branch)
 // ---------------------------------------------------------------------------
 
-test("coverage gate includes tsc stderr in the resolve-failure message", { skip: SHEBANG_SKIP }, async (t) => {
+test("coverage gate includes tsc stderr in the resolve-failure message", async (t) => {
   const fixture = createFixture("cg-tsc-stderr-");
   t.after(fixture.cleanup);
 
@@ -714,9 +672,7 @@ test("coverage gate includes tsc stderr in the resolve-failure message", { skip:
   writeTest(fixture.dir, "src", "src");
   // Create a fake `tsc` that exits 1 with stderr — the gate should include
   // the stderr text in the CoverageGateFailure message.
-  const fakeTsc = join(fixture.dir, "tsc");
-  writeFileSync(fakeTsc, "#!/bin/sh\necho 'tsconfig syntax error' >&2\nexit 1\n");
-  chmodSync(fakeTsc, 0o755);
+  const fakeTsc = writeNodeCommand(fixture.dir, "fake-tsc", 'console.error("tsconfig syntax error");\nprocess.exit(1);\n');
   writePackageJson(fixture.dir, {
     sources: ["."],
     tests: [testPath("src")],
@@ -724,23 +680,19 @@ test("coverage gate includes tsc stderr in the resolve-failure message", { skip:
     ignore: ["src.ts"],
   });
 
-  const savedPath = process.env.PATH;
-  process.env.PATH = [fixture.dir, savedPath ?? ""].filter(Boolean).join(delimiter);
-  try {
-    const { code, stderr } = await captureOutput(() => Promise.resolve(runCoverageGate(fixture.dir, "ignore")));
-    assert.strictEqual(code, 1);
-    assert.match(stderr, /could not resolve.*tsconfig/);
-    assert.match(stderr, /tsconfig syntax error/, "the tsc stderr must appear in the message");
-  } finally {
-    process.env.PATH = savedPath;
-  }
+  const { code, stderr } = await captureOutput(() => Promise.resolve(runCoverageGate(fixture.dir, "ignore", {
+    compiler: { executable: process.execPath, args: [fakeTsc] },
+  })));
+  assert.strictEqual(code, 1);
+  assert.match(stderr, /could not resolve.*tsconfig/);
+  assert.match(stderr, /tsconfig syntax error/, "the tsc stderr must appear in the message");
 });
 
 // ---------------------------------------------------------------------------
 // resolveEmitPaths: missing compilerOptions uses defaults (lines 169-170)
 // ---------------------------------------------------------------------------
 
-test("coverage gate uses default emit paths when tsc output has no compilerOptions", { skip: SHEBANG_SKIP }, async (t) => {
+test("coverage gate uses default emit paths when tsc output has no compilerOptions", async (t) => {
   const fixture = createFixture("cg-no-compopts-");
   t.after(fixture.cleanup);
 
@@ -753,9 +705,7 @@ test("coverage gate uses default emit paths when tsc output has no compilerOptio
   mkdirSync(join(fixture.dir, "dist"), { recursive: true });
   writeFileSync(join(fixture.dir, "dist", "types.js"), "export {};\n");
   // Fake `tsc` that outputs `{}` — no compilerOptions, so defaults are used.
-  const fakeTsc = join(fixture.dir, "tsc");
-  writeFileSync(fakeTsc, "#!/bin/sh\necho '{}'\n");
-  chmodSync(fakeTsc, 0o755);
+  const fakeTsc = writeNodeCommand(fixture.dir, "fake-tsc", 'console.log("{}");\n');
   writePackageJson(fixture.dir, {
     sources: ["."],
     tests: [testPath("main")],
@@ -763,22 +713,18 @@ test("coverage gate uses default emit paths when tsc output has no compilerOptio
     ignore: ["types.ts"],
   });
 
-  const savedPath = process.env.PATH;
-  process.env.PATH = [fixture.dir, savedPath ?? ""].filter(Boolean).join(delimiter);
-  try {
-    const { code, stdout, stderr } = await captureOutput(() => Promise.resolve(runCoverageGate(fixture.dir, "ignore")));
-    assert.strictEqual(code, 0, `gate should pass with default emit paths; stderr: ${stderr}`);
-    assert.match(stdout, /thresholds met/);
-  } finally {
-    process.env.PATH = savedPath;
-  }
+  const { code, stdout, stderr } = await captureOutput(() => Promise.resolve(runCoverageGate(fixture.dir, "ignore", {
+    compiler: { executable: process.execPath, args: [fakeTsc] },
+  })));
+  assert.strictEqual(code, 0, `gate should pass with default emit paths; stderr: ${stderr}`);
+  assert.match(stdout, /thresholds met/);
 });
 
 // ---------------------------------------------------------------------------
 // result.status null fallback (line 380)
 // ---------------------------------------------------------------------------
 
-test("coverage gate returns 1 when the test runner is killed by a signal", { skip: SHEBANG_SKIP }, async (t) => {
+test("coverage gate returns 1 when the test runner is killed by a signal", async (t) => {
   const fixture = createFixture("cg-signal-kill-");
   t.after(fixture.cleanup);
 
@@ -794,25 +740,18 @@ test("coverage gate returns 1 when the test runner is killed by a signal", { ski
   // Fake "node" that kills itself with SIGTERM — spawnSync returns
   // status: null, signal: 'SIGTERM', error: undefined, so the gate reaches
   // `result.status ?? 1` and returns the fallback 1.
-  const fakeNode = join(fixture.dir, "fake-node");
-  writeFileSync(fakeNode, "#!/bin/sh\nkill -TERM $$\n");
-  chmodSync(fakeNode, 0o755);
-
-  const savedExecPath = process.execPath;
-  process.execPath = fakeNode;
-  try {
-    const { code } = await runGate(fixture.dir);
-    assert.strictEqual(code, 1, "a signal-killed runner should yield exit code 1");
-  } finally {
-    process.execPath = savedExecPath;
-  }
+  const fakeNode = writeNodeCommand(fixture.dir, "fake-node", 'process.kill(process.pid, "SIGTERM");\n');
+  const { code } = await captureOutput(() => Promise.resolve(runCoverageGate(fixture.dir, "ignore", {
+    runner: { executable: process.execPath, args: [fakeNode] },
+  })));
+  assert.strictEqual(code, 1, "a signal-killed runner should yield exit code 1");
 });
 
 // ---------------------------------------------------------------------------
 // Absolute SF: path in lcov report (line 399 true branch)
 // ---------------------------------------------------------------------------
 
-test("coverage gate normalises absolute SF: paths in the lcov report", { skip: SHEBANG_SKIP }, async (t) => {
+test("coverage gate normalises absolute SF: paths in the lcov report", async (t) => {
   const fixture = createFixture("cg-abs-lcov-");
   t.after(fixture.cleanup);
 
@@ -828,31 +767,17 @@ test("coverage gate normalises absolute SF: paths in the lcov report", { skip: S
   // Fake "node" that writes an lcov file with an absolute SF: path, then
   // exits 0. The gate must normalise the absolute path to a repo-relative
   // one so the presence check matches the walked source set.
-  const fakeNode = join(fixture.dir, "fake-node");
-  writeFileSync(fakeNode, [
-    "#!/bin/sh",
-    'lcov=""',
-    'for arg in "$@"; do',
-    '  case "$arg" in',
-    '    --test-reporter-destination=stdout) ;;',
-    '    --test-reporter-destination=*) lcov="${arg#--test-reporter-destination=}" ;;',
-    '  esac',
-    'done',
-    'if [ -n "$lcov" ]; then',
-    '  printf "SF:%s/src.ts\nend_of_record\n" "$(pwd)" > "$lcov"',
-    'fi',
-    'exit 0',
+  const fakeNode = writeNodeCommand(fixture.dir, "fake-node", [
+    'import { writeFileSync } from "node:fs";',
+    'import { join } from "node:path";',
+    'const prefix = "--test-reporter-destination=";',
+    'const destination = process.argv.find((argument) => argument.startsWith(prefix) && argument !== `${prefix}stdout`);',
+    'if (destination) writeFileSync(destination.slice(prefix.length), `SF:${join(process.cwd(), "src.ts")}\\nend_of_record\\n`);',
     "",
   ].join("\n"));
-  chmodSync(fakeNode, 0o755);
-
-  const savedExecPath = process.execPath;
-  process.execPath = fakeNode;
-  try {
-    const { code, stdout, stderr } = await runGate(fixture.dir);
-    assert.strictEqual(code, 0, `gate should pass with absolute SF: paths; stderr: ${stderr}`);
-    assert.match(stdout, /thresholds met/);
-  } finally {
-    process.execPath = savedExecPath;
-  }
+  const { code, stdout, stderr } = await captureOutput(() => Promise.resolve(runCoverageGate(fixture.dir, "ignore", {
+    runner: { executable: process.execPath, args: [fakeNode] },
+  })));
+  assert.strictEqual(code, 0, `gate should pass with absolute SF: paths; stderr: ${stderr}`);
+  assert.match(stdout, /thresholds met/);
 });

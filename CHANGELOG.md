@@ -9,6 +9,7 @@
 
 ### Other
 
+- Make exact coverage-path tests deterministic and cross-platform ([pm-ts-starter-q6xq](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/tasks/pm-ts-starter-q6xq.toon))
 - Raise the coverage gate to a measured 100/100/100 and bring scripts/coverage-gate.ts under it ([pm-ts-starter-kksc](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/tasks/pm-ts-starter-kksc.toon))
 
 ## 2026.8.6 - 2026-08-06

@@ -1,0 +1,30 @@
+id: pm-ts-starter-q6xq
+title: Make exact coverage-path tests deterministic and cross-platform
+description: "Disposition CodeRabbit findings by removing permission-bit dependence, injecting runner executables instead of mutating process.execPath, verifying duplicate-declaration reports against the compiled head, and replacing POSIX-only coverage-path fixtures with Node fixtures."
+type: Task
+status: closed
+priority: 1
+tags: []
+created_at: "2026-08-06T23:17:58.157Z"
+updated_at: "2026-08-06T23:29:10.454Z"
+closed_at: "2026-08-06T23:28:57.839Z"
+completed_at: "2026-08-06T23:28:57.839Z"
+author: codex
+estimated_minutes: 90
+acceptance_criteria: coverage-path tests run without root or Windows skips; fake runner behavior is injected explicitly; no duplicate declarations remain; exact 100/100/100 and release gates pass
+resolution: Introduced typed runtime injection and platform-independent Node fixtures for every coverage-path process failure.
+expected_result: "Coverage-path tests run deterministically without process-global mutation, POSIX shebangs, permission bits, or skipped branches."
+actual_result: 118 tests pass with zero skips and exact 100/100/100; typecheck confirms the duplicate-declaration report is not present on the exact head.
+dependencies[1]{id,kind,created_at,author,source_kind,author_source}:
+  pm-ts-starter-kksc,related,"2026-08-06T23:17:58.157Z",codex,"cli:create:dep",detected
+notes[1]{created_at,author,text}:
+  "2026-08-06T23:28:57.305Z",codex,"The duplicate declaration finding was false on the exact head: each cited test body has one declaration, and tsc --noEmit passes. Valid portability findings were fixed with typed compiler/runner/source-walk injection and platform-independent Node fixtures; the coverage-path suite has zero skips."
+files[2]{path,scope}:
+  scripts/coverage-gate.ts,project
+  test/coverage-gate.test.ts,project
+tests[1]{command,scope,timeout_seconds,pm_context_mode}:
+  "npm run release:check",project,900,tracker
+docs[1]{path,scope}:
+  "https://github.com/unbraind/pm-ts-starter/pull/55",project
+close_reason: "Removed global process mutation, POSIX-only runner/compiler fixtures, and permission-bit dependence; exact 100/100/100 and the full release gate pass."
+body: ""
