@@ -1,12 +1,16 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
+import { Readable, Writable } from "node:stream";
 import test, { before } from "node:test";
 
 import extension, {
   pmExpectedError,
   isPmCliExpectedError,
+  resolveSdkTarget,
+  resolveVersion,
   runPm,
   blueprint,
   derivedCapabilities,
@@ -35,10 +39,17 @@ import {
 import { demoProfile } from "../index.ts";
 
 import type {
+  AfterCommandHookContext,
+  BeforeCommandHookContext,
   ItemDocument,
   ItemMetadata,
+  OnIndexHookContext,
+  OnReadHookContext,
+  OnWriteHookContext,
+  PreflightOverrideContext,
   PmSettings,
   RendererOverrideContext,
+  SearchProviderQueryContext,
 } from "@unbrained/pm-cli/sdk";
 
 /**
@@ -630,11 +641,6 @@ test("pmExpectedError builds a PmCliExpectedError-shaped error", () => {
 // ---------------------------------------------------------------------------
 
 test("runPm names a read-buffer overrun instead of failing silently", async (t) => {
-  const { mkdtempSync, rmSync } = await import("node:fs");
-  const { tmpdir } = await import("node:os");
-  const { join } = await import("node:path");
-  const { execFileSync } = await import("node:child_process");
-
   const dir = mkdtempSync(join(tmpdir(), "pm-ts-starter-buffer-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const pmRoot = join(dir, ".agents", "pm");
@@ -707,4 +713,653 @@ test("readRootJson does not fall through to the parent when its own file is malf
 test("readRootJson returns undefined when neither candidate is readable", () => {
   const empty = mkdtempSync(join(tmpdir(), "pm-ts-starter-noroot-"));
   assert.strictEqual(readRootJson("package.json", join(empty, "nested", "deeper")), undefined);
+});
+
+// ---------------------------------------------------------------------------
+// pmExpectedError cause attachment
+// ---------------------------------------------------------------------------
+
+test("pmExpectedError attaches a cause when one is provided", () => {
+  const cause = new Error("underlying problem");
+  const err = pmExpectedError("wrapper message", { exitCode: 1, cause });
+  assert.strictEqual(
+    (err as Error & { cause?: unknown }).cause,
+    cause,
+    "the cause should be attached non-enumerably",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// runPm non-ENOBUFS error (pm not on PATH)
+// ---------------------------------------------------------------------------
+
+test("runPm names a spawn failure when pm is not on PATH", () => {
+  const savedPath = process.env.PATH;
+  process.env.PATH = "/nonexistent";
+  try {
+    const run = runPm(".", ["list"]);
+    assert.strictEqual(run.ok, false, "a missing pm binary must not report success");
+    assert.match(run.stderr, /pm read failed/, `overrun must be named, not silent; saw: ${run.stderr}`);
+  } finally {
+    process.env.PATH = savedPath;
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Demo command bodies + pmJson failure / parse-error / success paths
+//
+// pmJson is private, so it is exercised through the demo commands that call it.
+// Each demo command shells out to `pm`; a non-existent pm root makes pm exit
+// non-zero, which exercises the `!run.ok` arm. A fake `pm` that prints non-JSON
+// and exits 0 exercises the JSON.parse catch arm. A real pm workspace exercises
+// the success arm.
+// ---------------------------------------------------------------------------
+
+test("info command returns extension metadata", async () => {
+  const result = await harness.runCommand({ command: "ts-starter info", options: {}, args: [] });
+  const info = result.result as { name: string; version: string; sdk_target: string; capabilities: unknown[] };
+  assert.strictEqual(info.name, "pm-ts-starter");
+  assert.ok(typeof info.version === "string");
+  assert.ok(typeof info.sdk_target === "string");
+  assert.ok(Array.isArray(info.capabilities));
+});
+
+test("plan-demo throws a typed expected error when pm exits non-zero (no id)", async () => {
+  await assert.rejects(
+    () => harness.runCommand({ command: "ts-starter plan-demo", options: {}, args: [], pmRoot: "/nonexistent-pm-root" }),
+    (err: unknown) => isPmCliExpectedError(err) && /plan.*demo failed/.test((err as Error).message),
+  );
+});
+
+test("plan-demo with --id throws a typed expected error when pm exits non-zero", async () => {
+  await assert.rejects(
+    () => harness.runCommand({ command: "ts-starter plan-demo", options: { id: "some-plan" }, args: [], pmRoot: "/nonexistent-pm-root" }),
+    (err: unknown) => isPmCliExpectedError(err) && /plan.*demo failed/.test((err as Error).message),
+  );
+});
+
+test("context-demo non-json throws when pm exits non-zero", async () => {
+  await assert.rejects(
+    () => harness.runCommand({ command: "ts-starter context-demo", options: { format: "markdown" }, args: [], pmRoot: "/nonexistent-pm-root" }),
+    (err: unknown) => isPmCliExpectedError(err) && /context demo failed/.test((err as Error).message),
+  );
+});
+
+test("context-demo non-json with --depth throws when pm exits non-zero", async () => {
+  await assert.rejects(
+    () => harness.runCommand({ command: "ts-starter context-demo", options: { format: "markdown", depth: "brief" }, args: [], pmRoot: "/nonexistent-pm-root" }),
+    (err: unknown) => isPmCliExpectedError(err) && /context demo failed/.test((err as Error).message),
+  );
+});
+
+test("context-demo json throws when pm exits non-zero", async () => {
+  await assert.rejects(
+    () => harness.runCommand({ command: "ts-starter context-demo", options: { format: "json" }, args: [], pmRoot: "/nonexistent-pm-root" }),
+    (err: unknown) => isPmCliExpectedError(err) && /context.*demo failed/.test((err as Error).message),
+  );
+});
+
+test("search-demo with query throws when pm exits non-zero", async () => {
+  await assert.rejects(
+    () => harness.runCommand({ command: "ts-starter search-demo", options: { query: "test" }, args: [], pmRoot: "/nonexistent-pm-root" }),
+    (err: unknown) => isPmCliExpectedError(err) && /search.*demo failed/.test((err as Error).message),
+  );
+});
+
+test("history-compact-demo throws when no id is given", async () => {
+  await assert.rejects(
+    () => harness.runCommand({ command: "ts-starter history-compact-demo", options: {}, args: [] }),
+    (err: unknown) => isPmCliExpectedError(err) && /--id/.test((err as Error).message),
+  );
+});
+
+test("history-compact-demo with id throws when pm exits non-zero", async () => {
+  await assert.rejects(
+    () => harness.runCommand({ command: "ts-starter history-compact-demo", options: { id: "some-task" }, args: [], pmRoot: "/nonexistent-pm-root" }),
+    (err: unknown) => isPmCliExpectedError(err) && /history-compact.*demo failed/.test((err as Error).message),
+  );
+});
+
+/**
+ * Creates a minimal pm workspace in a temp directory for integration tests that
+ * need pm to exit 0 and return valid JSON. Returns the pm root path.
+ */
+function createPmWorkspace(dir: string): string | null {
+  const pmRoot = join(dir, ".agents", "pm");
+  try {
+    execFileSync("pm", ["init", "--workspace", dir, "--defaults", "--author", "test"], { cwd: dir, stdio: "ignore" });
+  } catch {
+    return null;
+  }
+  return pmRoot;
+}
+
+test("context-demo json returns parsed JSON when pm succeeds", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "pm-ts-starter-ctx-ok-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const pmRoot = createPmWorkspace(dir);
+  if (!pmRoot) { t.skip("pm CLI unavailable"); return; }
+
+  const result = await harness.runCommand({ command: "ts-starter context-demo", options: { format: "json" }, args: [], pmRoot: dir });
+  assert.ok(result.result, "context-demo json must return a truthy result on success");
+});
+
+test("context-demo non-json returns stdout when pm succeeds", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "pm-ts-starter-ctx-md-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const pmRoot = createPmWorkspace(dir);
+  if (!pmRoot) { t.skip("pm CLI unavailable"); return; }
+
+  const result = await harness.runCommand({ command: "ts-starter context-demo", options: { format: "markdown" }, args: [], pmRoot: dir });
+  const payload = result.result as { format: string; context: string };
+  assert.strictEqual(payload.format, "markdown");
+  assert.ok(typeof payload.context === "string");
+});
+
+test("pmJson throws on non-JSON pm output (exercised via search-demo)", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "pm-ts-starter-fakepm-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+
+  // Create a fake `pm` that exits 0 but prints non-JSON.
+  const fakePm = join(dir, "pm");
+  writeFileSync(fakePm, "#!/bin/sh\necho 'this is not json'\n");
+  chmodSync(fakePm, 0o755);
+
+  const savedPath = process.env.PATH;
+  process.env.PATH = `${dir}:${savedPath}`;
+  try {
+    await assert.rejects(
+      () => harness.runCommand({ command: "ts-starter search-demo", options: { query: "test" }, args: [], pmRoot: "/tmp" }),
+      (err: unknown) => isPmCliExpectedError(err) && /non-JSON/.test((err as Error).message),
+    );
+  } finally {
+    process.env.PATH = savedPath;
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Setup interactive mode — readline requires a TTY-flagged stdin with data.
+// ---------------------------------------------------------------------------
+
+/**
+ * Replaces `process.stdin` / `process.stdout` with mock streams so the
+ * interactive setup wizard can run inside a non-TTY test process.
+ *
+ * Lines are pushed with a small delay between them: readline consumes all
+ * buffered data at once, so pushing every line synchronously makes it emit
+ * every `line` event before the second `question` call is awaited — the
+ * subsequent lines are lost. Staggering the pushes gives each `question` time
+ * to register its listener before the next line arrives.
+ *
+ * @param input - Lines the mock stdin will emit, one per `question` prompt.
+ * @returns A teardown function that restores the original streams.
+ */
+function mockStdio(input: string[]): () => void {
+  const mockStdin = new Readable({ read() {} });
+  (mockStdin as { isTTY?: boolean }).isTTY = true;
+  if (input.length > 0) mockStdin.push(`${input[0]}\n`);
+  for (let i = 1; i < input.length; i++) {
+    setTimeout(() => mockStdin.push(`${input[i]}\n`), 50 * i);
+  }
+  const mockStdout = new Writable({ write(_chunk, _enc, cb) { cb(); } });
+
+  const stdinDesc = Object.getOwnPropertyDescriptor(process, "stdin");
+  const stdoutDesc = Object.getOwnPropertyDescriptor(process, "stdout");
+  Object.defineProperty(process, "stdin", { value: mockStdin, configurable: true });
+  Object.defineProperty(process, "stdout", { value: mockStdout, configurable: true });
+
+  return () => {
+    if (stdinDesc) Object.defineProperty(process, "stdin", stdinDesc);
+    if (stdoutDesc) Object.defineProperty(process, "stdout", stdoutDesc);
+  };
+}
+
+test("setup interactive wizard completes with a custom name and verbose yes", async () => {
+  const restore = mockStdio(["my-extension", "y"]);
+  try {
+    const result = await harness.runCommand({ command: "ts-starter setup", options: { interactive: true }, args: [] });
+    const payload = result.result as { interactive_run: boolean };
+    assert.strictEqual(payload.interactive_run, true, "interactive mode should run when stdin is a TTY");
+  } finally {
+    restore();
+  }
+});
+
+test("setup interactive wizard defaults name and declines verbose", async () => {
+  const restore = mockStdio(["", "n"]);
+  try {
+    const result = await harness.runCommand({ command: "ts-starter setup", options: { interactive: true }, args: [] });
+    const payload = result.result as { interactive_run: boolean };
+    assert.strictEqual(payload.interactive_run, true);
+  } finally {
+    restore();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Lifecycle hooks — invoked via harness.runHook to cover the verbose branches.
+// ---------------------------------------------------------------------------
+
+/** Minimal context for before_command hooks. */
+const beforeCtx: BeforeCommandHookContext = {
+  command: "list",
+  args: [],
+  options: {},
+  pm_root: ".",
+};
+
+test("hooks fire without warnings in non-verbose mode", async () => {
+  const before = await harness.runHook({ kind: "before_command", context: beforeCtx });
+  assert.deepEqual(before, []);
+
+  const after = await harness.runHook({ kind: "after_command", context: { ...beforeCtx, ok: true } });
+  assert.deepEqual(after, []);
+
+  const onWrite = await harness.runHook({
+    kind: "on_write",
+    context: { path: "/test", scope: "project" as const, op: "create" },
+  });
+  assert.deepEqual(onWrite, []);
+
+  const onRead = await harness.runHook({
+    kind: "on_read",
+    context: { path: "/test", scope: "project" as const },
+  });
+  assert.deepEqual(onRead, []);
+
+  const onIndex = await harness.runHook({
+    kind: "on_index",
+    context: { mode: "full", total_items: 0 },
+  });
+  assert.deepEqual(onIndex, []);
+});
+
+test("hooks log without warnings in verbose mode", async () => {
+  const savedVerbose = process.env.PM_TS_STARTER_VERBOSE;
+  process.env.PM_TS_STARTER_VERBOSE = "1";
+  try {
+    const before = await harness.runHook({ kind: "before_command", context: beforeCtx });
+    assert.deepEqual(before, []);
+
+    const after = await harness.runHook({ kind: "after_command", context: { ...beforeCtx, ok: true } });
+    assert.deepEqual(after, []);
+
+    const onWrite = await harness.runHook({
+      kind: "on_write",
+      context: { path: "/test", scope: "project" as const, op: "create" },
+    });
+    assert.deepEqual(onWrite, []);
+
+    const onRead = await harness.runHook({
+      kind: "on_read",
+      context: { path: "/test", scope: "project" as const },
+    });
+    assert.deepEqual(onRead, []);
+
+    const onIndex = await harness.runHook({
+      kind: "on_index",
+      context: { mode: "full", total_items: 42 },
+    });
+    assert.deepEqual(onIndex, []);
+  } finally {
+    if (savedVerbose === undefined) delete process.env.PM_TS_STARTER_VERBOSE;
+    else process.env.PM_TS_STARTER_VERBOSE = savedVerbose;
+  }
+});
+
+test("afterCommand hook logs a hint in verbose mode on failure with error", async () => {
+  const savedVerbose = process.env.PM_TS_STARTER_VERBOSE;
+  process.env.PM_TS_STARTER_VERBOSE = "1";
+  try {
+    const warnings = await harness.runHook({
+      kind: "after_command",
+      context: { ...beforeCtx, ok: false, error: "something went wrong" },
+    });
+    assert.deepEqual(warnings, [], "a console.error in a hook is not a warning");
+  } finally {
+    if (savedVerbose === undefined) delete process.env.PM_TS_STARTER_VERBOSE;
+    else process.env.PM_TS_STARTER_VERBOSE = savedVerbose;
+  }
+});
+
+test("afterCommand hook skips hint in verbose mode on failure without error", async () => {
+  const savedVerbose = process.env.PM_TS_STARTER_VERBOSE;
+  process.env.PM_TS_STARTER_VERBOSE = "1";
+  try {
+    const warnings = await harness.runHook({
+      kind: "after_command",
+      context: { ...beforeCtx, ok: false },
+    });
+    assert.deepEqual(warnings, []);
+  } finally {
+    if (savedVerbose === undefined) delete process.env.PM_TS_STARTER_VERBOSE;
+    else process.env.PM_TS_STARTER_VERBOSE = savedVerbose;
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Verbose true-arm coverage for command override, importer, exporter, preflight
+// ---------------------------------------------------------------------------
+
+test("command override, importer, exporter, and preflight log in verbose mode", async () => {
+  const savedVerbose = process.env.PM_TS_STARTER_VERBOSE;
+  process.env.PM_TS_STARTER_VERBOSE = "1";
+  try {
+    const overrideResult = await harness.runCommandOverride({
+      command: "list",
+      args: [],
+      options: {},
+      pm_root: ".",
+      result: { items: [] },
+    });
+    assert.ok(overrideResult.overridden);
+
+    const importResult = await harness.runImporter({ importer: "ts-starter-demo" });
+    assert.strictEqual((importResult.result as { imported: number }).imported, 0);
+
+    const exportResult = await harness.runExporter({ exporter: "ts-starter-demo" });
+    assert.ok((exportResult.result as { ts_starter: boolean }).ts_starter);
+
+    const preflightResult = await harness.runPreflightOverride({
+      command: "list",
+      args: [],
+      options: {},
+      global: {},
+      pm_root: ".",
+      decision: {
+        enforce_item_format_gate: true,
+        run_preflight_item_format_sync: false,
+        run_extension_migrations: true,
+        enforce_mandatory_migration_gate: false,
+      },
+    });
+    assert.ok(preflightResult.overridden);
+  } finally {
+    if (savedVerbose === undefined) delete process.env.PM_TS_STARTER_VERBOSE;
+    else process.env.PM_TS_STARTER_VERBOSE = savedVerbose;
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Remaining branch coverage: version/sdk fallbacks, pm_root default, positional
+// args, default format, empty-stderr pmJson, hook optional fields, search
+// provider undefined query, dotProduct dimension mismatch, preflight no decision
+// ---------------------------------------------------------------------------
+
+test("resolveVersion returns the version string when manifest has one", () => {
+  assert.strictEqual(resolveVersion({ version: "2026.8.5" }), "2026.8.5");
+});
+
+test("resolveVersion falls back to 0.0.0 for a missing or non-string version", () => {
+  assert.strictEqual(resolveVersion(undefined), "0.0.0");
+  assert.strictEqual(resolveVersion({ version: 42 }), "0.0.0");
+  assert.strictEqual(resolveVersion({}), "0.0.0");
+});
+
+test("resolveSdkTarget strips the leading comparator and returns the version", () => {
+  assert.strictEqual(resolveSdkTarget({ peerDependencies: { "@unbrained/pm-cli": ">=2026.7.29" } }), "2026.7.29");
+  assert.strictEqual(resolveSdkTarget({ peerDependencies: { "@unbrained/pm-cli": "^2026.8.1" } }), "2026.8.1");
+});
+
+test("resolveSdkTarget falls back to unknown for a missing or non-string range", () => {
+  assert.strictEqual(resolveSdkTarget(undefined), "unknown");
+  assert.strictEqual(resolveSdkTarget({}), "unknown");
+  assert.strictEqual(resolveSdkTarget({ peerDependencies: {} }), "unknown");
+  assert.strictEqual(resolveSdkTarget({ peerDependencies: { "@unbrained/pm-cli": 123 } }), "unknown");
+});
+
+test("demo commands fall back to '.' for pm_root when it is undefined", async () => {
+  // The harness always sets pm_root to "", never undefined. Call the handler
+  // directly to exercise the `ctx.pm_root ?? "."` defensive default.
+  const specs = [
+    { command: "ts-starter plan-demo", options: {}, args: [] },
+    { command: "ts-starter context-demo", options: { format: "json" }, args: [] },
+    { command: "ts-starter search-demo", options: { query: "test" }, args: [] },
+    { command: "ts-starter history-compact-demo", options: { id: "test" }, args: [] },
+  ];
+  for (const { command, options, args } of specs) {
+    const entry = harness.activation.commands.handlers.find((h) => h.command === command);
+    assert.ok(entry, `${command} handler must be registered`);
+    try {
+      const result = await entry.run({
+        command,
+        args,
+        options,
+        global: {},
+        pm_root: undefined as unknown as string,
+      });
+      assert.ok(result, `${command} should return a truthy result on success`);
+    } catch (err) {
+      assert.ok(isPmCliExpectedError(err), `${command} should throw a pmExpectedError on failure, got: ${(err as Error).message}`);
+    }
+  }
+});
+
+test("plan-demo resolves id from a positional argument", async () => {
+  await assert.rejects(
+    () => harness.runCommand({ command: "ts-starter plan-demo", options: {}, args: ["positional-plan"], pmRoot: "/nonexistent-pm-root" }),
+    (err: unknown) => isPmCliExpectedError(err) && /plan.*demo failed/.test((err as Error).message),
+  );
+});
+
+test("search-demo resolves query from a positional argument", async () => {
+  await assert.rejects(
+    () => harness.runCommand({ command: "ts-starter search-demo", options: {}, args: ["positional-query"], pmRoot: "/nonexistent-pm-root" }),
+    (err: unknown) => isPmCliExpectedError(err) && /search.*demo failed/.test((err as Error).message),
+  );
+});
+
+test("history-compact-demo resolves id from a positional argument", async () => {
+  await assert.rejects(
+    () => harness.runCommand({ command: "ts-starter history-compact-demo", options: {}, args: ["positional-task"], pmRoot: "/nonexistent-pm-root" }),
+    (err: unknown) => isPmCliExpectedError(err) && /history-compact.*demo failed/.test((err as Error).message),
+  );
+});
+
+test("context-demo defaults to json format when --format is omitted", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "pm-ts-starter-default-fmt-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const pmRoot = createPmWorkspace(dir);
+  if (!pmRoot) { t.skip("pm CLI unavailable"); return; }
+
+  const result = await harness.runCommand({ command: "ts-starter context-demo", options: {}, args: [], pmRoot: dir });
+  assert.ok(result.result, "context-demo with default json format must return a truthy result");
+});
+
+test("pmJson failure with empty stderr uses the period fallback in the message", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "pm-ts-starter-silent-fail-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+
+  // Create a fake `pm` that exits 1 with no output — exercises the empty-detail
+  // arms of the pmJson failure message and cause construction.
+  const fakePm = join(dir, "pm");
+  writeFileSync(fakePm, "#!/bin/sh\nexit 1\n");
+  chmodSync(fakePm, 0o755);
+
+  const savedPath = process.env.PATH;
+  process.env.PATH = `${dir}:${savedPath}`;
+  try {
+    await assert.rejects(
+      () => harness.runCommand({ command: "ts-starter search-demo", options: { query: "test" }, args: [], pmRoot: "/tmp" }),
+      (err: unknown) => {
+        if (!isPmCliExpectedError(err)) return false;
+        const msg = (err as Error).message;
+        // detail is empty so the message ends with a period, not a colon.
+        return /demo failed \(pm exited \d+\)\.$/.test(msg);
+      },
+    );
+  } finally {
+    process.env.PATH = savedPath;
+  }
+});
+
+test("context-demo non-json failure with empty stderr yields undefined why", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "pm-ts-starter-ctx-silent-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+
+  const fakePm = join(dir, "pm");
+  writeFileSync(fakePm, "#!/bin/sh\nexit 1\n");
+  chmodSync(fakePm, 0o755);
+
+  const savedPath = process.env.PATH;
+  process.env.PATH = `${dir}:${savedPath}`;
+  try {
+    await assert.rejects(
+      () => harness.runCommand({ command: "ts-starter context-demo", options: { format: "markdown" }, args: [], pmRoot: "/tmp" }),
+      (err: unknown) => isPmCliExpectedError(err) && /context demo failed/.test((err as Error).message),
+    );
+  } finally {
+    process.env.PATH = savedPath;
+  }
+});
+
+test("onWrite hook handles a context with missing op and path", async () => {
+  const warnings = await harness.runHook({
+    kind: "on_write",
+    context: { scope: "project" } as OnWriteHookContext,
+  });
+  assert.deepEqual(warnings, []);
+});
+
+test("onWrite hook logs with missing op and path in verbose mode", async () => {
+  const savedVerbose = process.env.PM_TS_STARTER_VERBOSE;
+  process.env.PM_TS_STARTER_VERBOSE = "1";
+  try {
+    const warnings = await harness.runHook({
+      kind: "on_write",
+      context: { scope: "project" } as OnWriteHookContext,
+    });
+    assert.deepEqual(warnings, []);
+  } finally {
+    if (savedVerbose === undefined) delete process.env.PM_TS_STARTER_VERBOSE;
+    else process.env.PM_TS_STARTER_VERBOSE = savedVerbose;
+  }
+});
+
+test("onRead hook handles a context with missing path", async () => {
+  const warnings = await harness.runHook({
+    kind: "on_read",
+    context: { scope: "project" } as OnReadHookContext,
+  });
+  assert.deepEqual(warnings, []);
+});
+
+test("onRead hook logs with missing path in verbose mode", async () => {
+  const savedVerbose = process.env.PM_TS_STARTER_VERBOSE;
+  process.env.PM_TS_STARTER_VERBOSE = "1";
+  try {
+    const warnings = await harness.runHook({
+      kind: "on_read",
+      context: { scope: "project" } as OnReadHookContext,
+    });
+    assert.deepEqual(warnings, []);
+  } finally {
+    if (savedVerbose === undefined) delete process.env.PM_TS_STARTER_VERBOSE;
+    else process.env.PM_TS_STARTER_VERBOSE = savedVerbose;
+  }
+});
+
+test("onIndex hook handles a context with missing total_items", async () => {
+  const warnings = await harness.runHook({
+    kind: "on_index",
+    context: { mode: "full" } as OnIndexHookContext,
+  });
+  assert.deepEqual(warnings, []);
+});
+
+test("onIndex hook logs with missing total_items in verbose mode", async () => {
+  const savedVerbose = process.env.PM_TS_STARTER_VERBOSE;
+  process.env.PM_TS_STARTER_VERBOSE = "1";
+  try {
+    const warnings = await harness.runHook({
+      kind: "on_index",
+      context: { mode: "full" } as OnIndexHookContext,
+    });
+    assert.deepEqual(warnings, []);
+  } finally {
+    if (savedVerbose === undefined) delete process.env.PM_TS_STARTER_VERBOSE;
+    else process.env.PM_TS_STARTER_VERBOSE = savedVerbose;
+  }
+});
+
+test("search provider handles an undefined query", async () => {
+  const result = await harness.runSearchProvider({
+    provider: "ts-starter-prefix",
+    operation: "query",
+    context: {
+      query: undefined,
+      mode: "keyword",
+      tokens: [],
+      options: {},
+      settings: HOST_SETTINGS,
+      documents: [itemDocument("keep-1"), itemDocument("drop-1")],
+    } as unknown as SearchProviderQueryContext,
+  });
+  const hits = Array.isArray(result) ? result : (result as { hits?: unknown[] })?.hits ?? [];
+  // An undefined query falls back to "", and startsWith("") is true for every
+  // document, so both should match.
+  assert.strictEqual(hits.length, 2);
+});
+
+test("dotProduct handles dimension mismatch by treating missing components as zero", async () => {
+  // Upsert a 3D point, then query with a 2D vector. The stored vector is
+  // `left` in dotProduct, so its third component is iterated but the query
+  // vector's third component is undefined — `right[2] ?? 0` must return 0.
+  await harness.runVectorStoreAdapter({
+    adapter: "ts-starter-memory",
+    operation: "upsert",
+    context: {
+      points: [{ id: "dim-mismatch", vector: [1, 1, 1] }],
+      settings: HOST_SETTINGS,
+    },
+  });
+
+  const hits = await harness.runVectorStoreAdapter({
+    adapter: "ts-starter-memory",
+    operation: "query",
+    context: { vector: [3, 4], limit: 5, settings: HOST_SETTINGS },
+  });
+  // dotProduct([1,1,1], [3,4,undefined]) = 1*3 + 1*4 + 1*0 = 7
+  assert.strictEqual(hits[0]?.id, "dim-mismatch");
+  assert.strictEqual(hits[0]?.score, 7);
+});
+
+test("preflight override falls back to defaults when decision is absent", async () => {
+  const result = await harness.runPreflightOverride({
+    command: "list",
+    args: [],
+    options: {},
+    global: {},
+    pm_root: ".",
+  } as unknown as PreflightOverrideContext);
+  assert.ok(result.overridden, "preflight override should fire even without a decision");
+  const decision = result.decision;
+  assert.strictEqual(decision.enforce_item_format_gate, true);
+  assert.strictEqual(decision.run_preflight_item_format_sync, false);
+  assert.strictEqual(decision.run_extension_migrations, true);
+  assert.strictEqual(decision.enforce_mandatory_migration_gate, false);
+});
+
+test("preflight override logs with unknown workspace in verbose mode", async () => {
+  const savedVerbose = process.env.PM_TS_STARTER_VERBOSE;
+  process.env.PM_TS_STARTER_VERBOSE = "1";
+  try {
+    const result = await harness.runPreflightOverride({
+      command: "list",
+      args: [],
+      options: {},
+      global: {},
+      pm_root: undefined as unknown as string,
+      decision: {
+        enforce_item_format_gate: true,
+        run_preflight_item_format_sync: false,
+        run_extension_migrations: true,
+        enforce_mandatory_migration_gate: false,
+      },
+    } as unknown as PreflightOverrideContext);
+    assert.ok(result.overridden);
+  } finally {
+    if (savedVerbose === undefined) delete process.env.PM_TS_STARTER_VERBOSE;
+    else process.env.PM_TS_STARTER_VERBOSE = savedVerbose;
+  }
 });

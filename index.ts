@@ -89,6 +89,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import * as readline from "node:readline/promises";
 
 // ---------------------------------------------------------------------------
 // Root-file resolution — manifest.json and package.json both live at the
@@ -138,10 +139,23 @@ export function readRootJson(fileName: string, base = dirname(fileURLToPath(impo
 // auto-bump is reflected without a source literal that silently drifts.
 // ---------------------------------------------------------------------------
 
-const VERSION = (() => {
-  const manifest = readRootJson("manifest.json") as { version?: unknown } | undefined;
-  return typeof manifest?.version === "string" ? manifest.version : "0.0.0";
-})();
+/**
+ * Resolves the extension version from a parsed `manifest.json` value.
+ *
+ * Falls back to `"0.0.0"` when the manifest is missing or its `version` field
+ * is not a string, so a corrupt or partial manifest never crashes the host —
+ * the extension loads with a sentinel that surfaces in `ts-starter info`.
+ *
+ * @param manifest - The parsed contents of `manifest.json` (or `undefined`).
+ * @returns The version string, or `"0.0.0"` as a fallback.
+ */
+export function resolveVersion(manifest: unknown): string {
+  return typeof (manifest as { version?: unknown })?.version === "string"
+    ? (manifest as { version: string }).version
+    : "0.0.0";
+}
+
+const VERSION = resolveVersion(readRootJson("manifest.json"));
 
 /**
  * The pm-cli SDK release this reference is written against, reported by
@@ -153,13 +167,34 @@ const VERSION = (() => {
  * drifted 20 releases (`2026.7.6`) behind the declared peer range, so both
  * commands misreported the SDK contract this extension actually demonstrates.
  */
-const SDK_TARGET = (() => {
-  const pkg = readRootJson("package.json") as { peerDependencies?: { [k: string]: unknown } } | undefined;
-  const range = pkg?.peerDependencies?.["@unbrained/pm-cli"];
+/**
+ * Resolves the pm-cli SDK target from a parsed `package.json` value.
+ *
+ * Reads the `@unbrained/pm-cli` peer-dependency range and strips the leading
+ * comparator (`>=`, `^`, etc.) so the bare version is what `ts-starter info`
+ * reports. Falls back to `"unknown"` when the range is missing or not a string.
+ *
+ * @param pkg - The parsed contents of `package.json` (or `undefined`).
+ * @returns The SDK target version, or `"unknown"` as a fallback.
+ */
+export function resolveSdkTarget(pkg: unknown): string {
+  const range = (pkg as { peerDependencies?: { [k: string]: unknown } })?.peerDependencies?.["@unbrained/pm-cli"];
   return typeof range === "string" ? range.replace(/^[^0-9]*/, "") : "unknown";
-})();
+}
 
-const VERBOSE = !!process.env.PM_TS_STARTER_VERBOSE;
+const SDK_TARGET = resolveSdkTarget(readRootJson("package.json"));
+
+/**
+ * Whether verbose activation logging is on.
+ *
+ * Re-read from the environment at each call rather than captured once at module
+ * load, so a test (or a hot-reload) can toggle the flag without restarting the
+ * process. Every hook and override that logs conditionally calls this instead
+ * of reading a frozen constant.
+ */
+function isVerboseLogging(): boolean {
+  return !!process.env.PM_TS_STARTER_VERBOSE;
+}
 
 // ---------------------------------------------------------------------------
 // Expected-error helper — build a PmCliExpectedError-shaped error without a
@@ -522,7 +557,6 @@ const setupCommand = defineCommand({
     };
 
     if (runInteractive) {
-      const readline = await import("node:readline/promises");
       const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
       try {
         const name = (await rl.question("Extension name [pm-ts-starter]: ")).trim() || "pm-ts-starter";
@@ -552,7 +586,7 @@ const setupCommand = defineCommand({
 // wiring without altering behavior. Command overrides are a single-winner
 // surface — only one extension can override a given command path.
 const listCommandOverride = defineCommandOverride((ctx: CommandOverrideContext) => {
-  if (VERBOSE) console.error(`[ts-starter] command override for: ${ctx.command}`);
+  if (isVerboseLogging()) console.error(`[ts-starter] command override for: ${ctx.command}`);
   return ctx.result;
 });
 
@@ -641,26 +675,32 @@ const demoProfile = defineProjectProfile({
 // ===========================================================================
 
 const beforeCommandHook = defineBeforeCommandHook((ctx: BeforeCommandHookContext) => {
-  if (VERBOSE) console.error(`[ts-starter] beforeCommand: ${ctx.command}`);
+  if (isVerboseLogging()) console.error(`[ts-starter] beforeCommand: ${ctx.command}`);
 });
 
 const afterCommandHook = defineAfterCommandHook((ctx: AfterCommandHookContext) => {
-  if (VERBOSE) console.error(`[ts-starter] afterCommand: ${ctx.command} (ok=${ctx.ok})`);
-  if (VERBOSE && ctx.ok === false && ctx.error && isPmCliExpectedError(ctx.error)) {
-    console.error(`[ts-starter] hint: ${ctx.error.message}`);
+  if (isVerboseLogging()) {
+    console.error(`[ts-starter] afterCommand: ${ctx.command} (ok=${ctx.ok})`);
+    // `ctx.error` is the runtime's error *message string* (not an Error
+    // object), so a truthiness check is the correct guard — the earlier
+    // `isPmCliExpectedError(ctx.error)` could never return true on a string
+    // and left this branch permanently unreachable.
+    if (ctx.ok === false && ctx.error) {
+      console.error(`[ts-starter] hint: ${ctx.error}`);
+    }
   }
 });
 
 const onWriteHook = defineOnWriteHook((ctx: OnWriteHookContext) => {
-  if (VERBOSE) console.error(`[ts-starter] onWrite: ${ctx?.op ?? ""} ${ctx?.path ?? ""}`.trimEnd());
+  if (isVerboseLogging()) console.error(`[ts-starter] onWrite: ${ctx?.op ?? ""} ${ctx?.path ?? ""}`.trimEnd());
 });
 
 const onReadHook = defineOnReadHook((ctx: OnReadHookContext) => {
-  if (VERBOSE) console.error(`[ts-starter] onRead: ${ctx?.path ?? "(item)"}`);
+  if (isVerboseLogging()) console.error(`[ts-starter] onRead: ${ctx?.path ?? "(item)"}`);
 });
 
 const onIndexHook = defineOnIndexHook((ctx: OnIndexHookContext) => {
-  if (VERBOSE) console.error(`[ts-starter] onIndex: mode=${ctx.mode} total_items=${ctx.total_items ?? "(unreported)"}`);
+  if (isVerboseLogging()) console.error(`[ts-starter] onIndex: mode=${ctx.mode} total_items=${ctx.total_items ?? "(unreported)"}`);
 });
 
 // ===========================================================================
@@ -668,12 +708,12 @@ const onIndexHook = defineOnIndexHook((ctx: OnIndexHookContext) => {
 // ===========================================================================
 
 const demoImporter = defineImporter(async (ctx: ImportExportContext) => {
-  if (VERBOSE) console.error("[ts-starter] Demo importer invoked:", JSON.stringify(ctx.options));
+  if (isVerboseLogging()) console.error("[ts-starter] Demo importer invoked:", JSON.stringify(ctx.options));
   return { imported: 0 };
 });
 
 const demoExporter = defineExporter(async (ctx: ImportExportContext) => {
-  if (VERBOSE) console.error("[ts-starter] Demo exporter invoked:", JSON.stringify(ctx.options));
+  if (isVerboseLogging()) console.error("[ts-starter] Demo exporter invoked:", JSON.stringify(ctx.options));
   return { ts_starter: true, exported: 0 };
 });
 
@@ -801,7 +841,7 @@ const listParserOverride = defineParserOverride(() => {
 // ===========================================================================
 
 const preflightOverride = definePreflightOverride(async (ctx: PreflightOverrideContext) => {
-  if (VERBOSE) console.error(`[ts-starter] Preflight check for workspace: ${ctx.pm_root ?? "unknown"}`);
+  if (isVerboseLogging()) console.error(`[ts-starter] Preflight check for workspace: ${ctx.pm_root ?? "unknown"}`);
   return {
     enforce_item_format_gate: ctx.decision?.enforce_item_format_gate ?? true,
     run_preflight_item_format_sync: ctx.decision?.run_preflight_item_format_sync ?? false,
