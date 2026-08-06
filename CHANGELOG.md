@@ -4,12 +4,18 @@
 
 ### Fixed
 
+- Gate durable PM project health in CI on pm CLI 2026.8.6 ([pm-ts-starter-gddt](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-gddt.toon))
 - Fix review findings: POSIX-only gate tests, orphaned docstring, stale tsc references ([pm-ts-starter-f7z6](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/tasks/pm-ts-starter-f7z6.toon))
-- Scope the json renderer to the commands this extension owns so it stops colliding with sibling extensions ([pm-ts-starter-tezw](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-tezw.toon))
 
 ### Other
 
 - Raise the coverage gate to a measured 100/100/100 and bring scripts/coverage-gate.ts under it ([pm-ts-starter-kksc](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/tasks/pm-ts-starter-kksc.toon))
+
+## 2026.8.6 - 2026-08-06
+
+### Fixed
+
+- Scope the json renderer to the commands this extension owns so it stops colliding with sibling extensions ([pm-ts-starter-tezw](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-tezw.toon))
 
 ## 2026.8.5 - 2026-08-05
 
