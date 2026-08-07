@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Other
+
+- Adopt pm CLI and SDK 2026.8.7 with extension-asset merge safety ([pm-ts-starter-sirq](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-sirq.toon))
+
 ## 2026.8.7 - 2026-08-07
 
 ### Fixed
