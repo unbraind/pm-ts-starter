@@ -1,0 +1,26 @@
+id: pm-ts-starter-t5xx
+title: Rewrite reachable history identities and legacy absolute host paths before publication
+description: "The current tracked tree is clean, but all reachable refs contain five unique author/committer emails of which two are not GitHub noreply identities, and 69 reachable revisions contain absolute host-path shapes in legacy artifacts. Preserve this as an independent publication blocker; remediation requires maintainer-approved history rewriting, force-push coordination, fresh-clone rescans, and pm history privacy verification."
+type: Issue
+status: open
+priority: 0
+tags[5]: git-history,identities,maintainer-approval,privacy,release-blocker
+created_at: "2026-08-07T17:53:42.120Z"
+updated_at: "2026-08-07T18:03:31.444Z"
+author: codex
+estimated_minutes: 480
+acceptance_criteria: All reachable author and committer identities satisfy the approved noreply policy; all reachable revision content is free of absolute host paths and secret shapes; current tracked files remain clean; fresh clone and full-ref scans reproduce zero findings; npm publication remains blocked until maintainer explicitly approves and coordinates any history rewrite
+definition_of_ready: Maintainer selects approved identity mapping and authorizes destructive reachable-history rewrite plus force-push coordination
+reviewer: maintainer
+risk: critical
+confidence: high
+severity: critical
+environment: All reachable refs and full revision content
+repro_steps: Run git log --all --format='%ae%n%ce' to enumerate unique author and committer emails; run git rev-list --all and git grep each revision for absolute host-path and secret-shape patterns.
+expected_result: Public package history contains only approved identities and no host-specific paths or secrets
+actual_result: Current tree and all-history secret-shape scan are clean; two of five unique identities are not noreply addresses and 69 reachable revisions contain absolute host-path shapes
+component: release/privacy
+customer_impact: Publishing or advertising the repository as privacy-cleared could disclose personal identity or host-layout metadata
+docs[1]{path,scope,note}:
+  "https://github.com/unbraind/pm-cli-companion/blob/main/.agents/pm/issues/pm-cli-website-19ju.toon",global,fleet compatibility context
+body: ""

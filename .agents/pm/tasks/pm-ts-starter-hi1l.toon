@@ -1,0 +1,21 @@
+id: pm-ts-starter-hi1l
+title: Backfill legacy PM closure metadata and assign LICENSE ownership
+description: "Strict validation reports one closed item missing close_reason, 22 closed items missing one or more resolution fields, and LICENSE as an unowned current file. Backfill only evidence supported by existing history, link LICENSE to the correct ownership item, and preserve append-only history."
+type: Task
+status: open
+priority: 1
+tags[4]: documentation,files,metadata,pm-health
+created_at: "2026-08-07T17:53:42.835Z"
+updated_at: "2026-08-07T17:53:42.835Z"
+author: codex
+estimated_minutes: 180
+acceptance_criteria: "pm validate reports zero missing close_reason fields, zero missing resolution fields, and zero orphaned current files; every backfill is supported by existing item history or linked repository evidence; no history stream is manually edited; validation and strict health remain structurally sound"
+definition_of_ready: Review the 22 affected histories and identify evidence-backed values without fabricating outcomes
+reviewer: maintainer
+risk: medium
+confidence: high
+sprint: 2026-08-quality
+release: Unreleased
+files[1]{path,scope,note}:
+  LICENSE,project,unowned current artifact requiring evidence-backed ownership
+body: ""

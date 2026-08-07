@@ -1,6 +1,6 @@
 # pm-ts-starter
 
-TypeScript reference extension for [pm-cli](https://github.com/unbraind/pm-cli) covering **all 9 SDK capability types** in one fully-typed `index.ts`, aligned to the **pm-cli 2026.7.6 SDK**.
+TypeScript reference extension for [pm-cli](https://github.com/unbraind/pm-cli) covering **all 9 SDK capability types** in one fully-typed `index.ts`, aligned to the **pm-cli 2026.8.7 SDK**.
 
 Each capability is a small, SAFE, inert demo with teaching comments. Copy the
 ones you need into your own extension and delete the rest. The reference also
@@ -55,7 +55,7 @@ pm ts-starter-demo import
 pm ts-starter-demo export
 ```
 
-The 2026.7.6 SDK accepts an optional third `options` argument
+The current SDK accepts an optional third `options` argument
 (`ImportExportRegistrationOptions`) that adds a full command definition
 (description, flags, intent, examples, `failure_hints`, positional arguments)
 to the auto-created command path — surfaced in help exactly like
@@ -95,7 +95,7 @@ Every `registerCommand` definition now carries:
   (`ExtensionCommandArgumentDefinition`), so help output and runtime contracts
   describe positional args, not just flags.
 - **`value_type`** on every flag (`string` | `number` | `boolean`), the field
-  the 2026.7.6 SDK reads first (over the legacy `type`).
+  the current SDK reads first (over the legacy `type`).
 
 Command handlers throw **`PmCliExpectedError`-shaped errors** built locally
 (`pmExpectedError`) rather than importing the CLI's error class at runtime.
@@ -137,7 +137,7 @@ This package is release-ready for GitHub, npm, and Bun-compatible installs. CI r
 This repo tracks its project management in `.agents/pm/` and ships a committed `.gitattributes`
 that maps those tracker artifacts to pm-cli's field-aware Git merge drivers, so concurrent-branch
 tracker edits merge cleanly instead of hard-conflicting. The driver **definitions** live in
-per-clone Git config; `npm install` / `npm ci` wires them automatically via the `prepare` script (a portable Node guard, `scripts/prepare-merge-driver.mjs`: it runs
+per-clone Git config; `npm install` / `npm ci` wires them automatically via the `prepare` script (a portable TypeScript guard, `scripts/prepare-merge-driver.ts`: it runs
 `pm merge install` only when the `pm` CLI is on `PATH`, and no-ops cleanly otherwise so
 production / `--omit=dev` installs are not broken; being Node-based it behaves identically
 on POSIX shells and Windows `cmd.exe`). To (re)run manually: `npm run merge:install`.

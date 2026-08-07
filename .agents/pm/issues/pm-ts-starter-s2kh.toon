@@ -1,0 +1,26 @@
+id: pm-ts-starter-s2kh
+title: "Add fail-closed docstring, duplication, lint, and authored-TypeScript gates"
+description: "The package has exact fail-closed runtime coverage, but its release gate does not yet mechanically enforce repo-wide docstring coverage, authored-source TypeScript-only policy, duplication thresholds, or a strict lint rule set. The tracked dist/index.js is generated and required for git-URL consumers; the authored prepare hook is migrated to TypeScript in pm-ts-starter-sirq. Add gates that distinguish required generated output from authored source and cannot be bypassed by narrowing file lists."
+type: Issue
+status: open
+priority: 0
+tags[6]: code-quality,docstrings,duplication,lint,release-blocker,typescript
+created_at: "2026-08-07T17:53:42.469Z"
+updated_at: "2026-08-07T17:53:42.469Z"
+author: codex
+estimated_minutes: 480
+acceptance_criteria: A directory-discovered fail-closed gate proves 100% high-quality docstring coverage for all authored source declarations; authored JS/MJS/CJS/HTML files fail while required generated dist output is reproducibly build-verified; strict TypeScript/ESLint and duplication gates cover all authored source and tests without frozen allowlists; package and CI release checks run the gates on Node 22 and 26; real tests remain exact 100/100/100 with zero skips
+definition_of_ready: "Select maintained TypeScript-compatible lint, docstring, and duplication tooling after inspecting their real installed types/configuration; define generated-output exception narrowly for dist"
+reviewer: maintainer
+risk: high
+confidence: high
+severity: high
+environment: "Local release:check and GitHub Actions Node 22/26"
+repro_steps: "Inspect package scripts and CI: exact coverage is enforced, but no docstring, lint, duplication, or authored-language gate is invoked"
+expected_result: Every mandatory source-quality policy fails closed in local and CI release gates
+actual_result: "Exact source coverage passes, and the authored lifecycle hook is TypeScript, but the remaining source-quality policies are review conventions rather than executable gates"
+component: quality-gates
+customer_impact: "Undocumented, duplicated, or policy-incompatible authored code can regress without failing release checks"
+dependencies[1]{id,kind,created_at,author,source_kind,author_source}:
+  pm-ts-starter-sirq,related_to,"2026-08-07T17:53:42.469Z",codex,quality-audit,detected
+body: ""
