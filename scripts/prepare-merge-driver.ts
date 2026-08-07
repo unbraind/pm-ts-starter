@@ -22,7 +22,12 @@ interface CommandResult {
 type CommandRunner = (
   command: string,
   args: string[],
-  options: { readonly shell: boolean; readonly stdio: "inherit" },
+  options: {
+    readonly env?: NodeJS.ProcessEnv;
+    readonly shell: boolean;
+    readonly stdio: "inherit";
+    readonly windowsVerbatimArguments?: boolean;
+  },
 ) => CommandResult;
 
 /** Injectable Windows command lookup used to separate absence from failure. */
@@ -94,11 +99,21 @@ export function installMergeDrivers(
   if (!executable) {
     return 0;
   }
-  const command = windows ? `"${executable}"` : executable;
-  const result = runner(command, ["merge", "install"], {
-    shell: windows,
-    stdio: "inherit",
-  });
+  const result = windows
+    ? runner(
+      "cmd.exe",
+      ["/d", "/v:off", "/s", "/c", '""%PM_TS_STARTER_PM_SHIM%" merge install"'],
+      {
+        env: { ...process.env, PM_TS_STARTER_PM_SHIM: executable },
+        shell: false,
+        stdio: "inherit",
+        windowsVerbatimArguments: true,
+      },
+    )
+    : runner(executable, ["merge", "install"], {
+      shell: false,
+      stdio: "inherit",
+    });
   if ((result.error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") {
     return 0;
   }

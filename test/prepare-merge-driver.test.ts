@@ -32,18 +32,26 @@ test("installer runs the exact pm merge command", () => {
   ]]);
 });
 
-test("installer executes the Windows npm command shim through a shell", () => {
+test("installer protects Windows shim paths from shell expansion", () => {
   const calls: unknown[][] = [];
   const code = installMergeDrivers((...args) => {
     calls.push(args);
     return { status: 0 };
-  }, "win32", () => "C:\\Program Files\\npm-bin\\pm.CMD");
+  }, "win32", () => "C:\\Program Files\\npm-%USERNAME%\\pm.CMD");
 
   assert.strictEqual(code, 0);
   assert.deepStrictEqual(calls, [[
-    '"C:\\Program Files\\npm-bin\\pm.CMD"',
-    ["merge", "install"],
-    { shell: true, stdio: "inherit" },
+    "cmd.exe",
+    ["/d", "/v:off", "/s", "/c", '""%PM_TS_STARTER_PM_SHIM%" merge install"'],
+    {
+      env: {
+        ...process.env,
+        PM_TS_STARTER_PM_SHIM: "C:\\Program Files\\npm-%USERNAME%\\pm.CMD",
+      },
+      shell: false,
+      stdio: "inherit",
+      windowsVerbatimArguments: true,
+    },
   ]]);
 });
 
