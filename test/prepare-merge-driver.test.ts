@@ -37,11 +37,11 @@ test("installer executes the Windows npm command shim through a shell", () => {
   const code = installMergeDrivers((...args) => {
     calls.push(args);
     return { status: 0 };
-  }, "win32", () => "C:\\npm-bin\\pm.CMD");
+  }, "win32", () => "C:\\Program Files\\npm-bin\\pm.CMD");
 
   assert.strictEqual(code, 0);
   assert.deepStrictEqual(calls, [[
-    "C:\\npm-bin\\pm.CMD",
+    '"C:\\Program Files\\npm-bin\\pm.CMD"',
     ["merge", "install"],
     { shell: true, stdio: "inherit" },
   ]]);

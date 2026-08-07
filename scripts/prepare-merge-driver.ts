@@ -90,10 +90,11 @@ export function installMergeDrivers(
   resolveWindowsCommand: WindowsCommandResolver = resolveWindowsPmCommand,
 ): number {
   const windows = platform === "win32";
-  const command = windows ? resolveWindowsCommand() : "pm";
-  if (!command) {
+  const executable = windows ? resolveWindowsCommand() : "pm";
+  if (!executable) {
     return 0;
   }
+  const command = windows ? `"${executable}"` : executable;
   const result = runner(command, ["merge", "install"], {
     shell: windows,
     stdio: "inherit",
