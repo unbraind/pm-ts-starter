@@ -6,7 +6,7 @@ status: closed
 priority: 0
 tags[6]: merge-safety,multi-agent,pm-cli-2026.8.7,release-gate,sdk,tdd
 created_at: "2026-08-07T17:50:39.891Z"
-updated_at: "2026-08-07T17:55:58.619Z"
+updated_at: "2026-08-07T18:03:31.819Z"
 closed_at: "2026-08-07T17:55:58.602Z"
 completed_at: "2026-08-07T17:55:58.602Z"
 author: codex
@@ -29,9 +29,10 @@ dependencies[3]{id,kind,created_at,author,source_kind,author_source}:
   pm-ts-starter-hi1l,related_to,"2026-08-07T17:55:46.918Z",codex,tracker-audit,detected
   pm-ts-starter-s2kh,related_to,"2026-08-07T17:55:46.918Z",codex,quality-audit,detected
   pm-ts-starter-t5xx,related_to,"2026-08-07T17:55:46.918Z",codex,release-audit,detected
-notes[2]{created_at,author,text}:
+notes[3]{created_at,author,text}:
   "2026-08-07T17:55:46.918Z",codex,"Fresh packed-artifact acceptance used global pm 2026.8.7 in a newly initialized Git tracker. Installation activated the package in project scope with all nine declared capabilities and no blocking health findings; pm list returned exactly the fixture item,ts-starter info reported version and SDK target 2026.8.7,hello returned Hello,Agent,and pm validate had no warnings."
   "2026-08-07T17:55:46.918Z",codex,"Privacy audit: current tracked host-path and secret-shape scans returned zero. Reachable history has two non-noreply identities among five unique identities and 69 revisions with absolute host-path shapes; pm-ts-starter-t5xx blocks publication pending maintainer-approved rewrite. The all-history secret-shape scan returned zero."
+  "2026-08-07T18:03:31.800Z",codex,"Review round 1: Greptile correctly identified that npm's Windows executable is a pm.cmd shim requiring shell handling; the installer now selects pm.cmd with shell enabled only on win32 and has an exact command-shape regression test. CodeRabbit correctly required command-qualified history reproduction steps and found three stale README SDK references; both were corrected through append-only PM mutation and current/version-neutral documentation."
 files[7]{path,scope,note}:
   package.json,project,toolchain and gate declarations
   package-lock.json,project,exact dependency resolution

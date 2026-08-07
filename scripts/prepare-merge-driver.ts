@@ -22,7 +22,7 @@ interface CommandResult {
 type CommandRunner = (
   command: string,
   args: string[],
-  options: { readonly stdio: "inherit" },
+  options: { readonly shell: boolean; readonly stdio: "inherit" },
 ) => CommandResult;
 
 /**
@@ -30,11 +30,19 @@ type CommandRunner = (
  *
  * @param runner - Command boundary; tests inject exact success and failure
  *   results while production uses Node's synchronous process runner.
+ * @param platform - Runtime platform used to select npm's Windows command shim.
  * @returns Zero when pm is absent or installation succeeds, otherwise the
  *   command's non-zero status.
  */
-export function installMergeDrivers(runner: CommandRunner = spawnSync): number {
-  const result = runner("pm", ["merge", "install"], { stdio: "inherit" });
+export function installMergeDrivers(
+  runner: CommandRunner = spawnSync,
+  platform: NodeJS.Platform = process.platform,
+): number {
+  const windows = platform === "win32";
+  const result = runner(windows ? "pm.cmd" : "pm", ["merge", "install"], {
+    shell: windows,
+    stdio: "inherit",
+  });
   if ((result.error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") {
     return 0;
   }

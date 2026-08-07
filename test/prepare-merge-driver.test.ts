@@ -20,10 +20,29 @@ test("installer runs the exact pm merge command", () => {
   const code = installMergeDrivers((...args) => {
     calls.push(args);
     return { status: 0 };
-  });
+  }, "linux");
 
   assert.strictEqual(code, 0);
-  assert.deepStrictEqual(calls, [["pm", ["merge", "install"], { stdio: "inherit" }]]);
+  assert.deepStrictEqual(calls, [[
+    "pm",
+    ["merge", "install"],
+    { shell: false, stdio: "inherit" },
+  ]]);
+});
+
+test("installer executes the Windows npm command shim through a shell", () => {
+  const calls: unknown[][] = [];
+  const code = installMergeDrivers((...args) => {
+    calls.push(args);
+    return { status: 0 };
+  }, "win32");
+
+  assert.strictEqual(code, 0);
+  assert.deepStrictEqual(calls, [[
+    "pm.cmd",
+    ["merge", "install"],
+    { shell: true, stdio: "inherit" },
+  ]]);
 });
 
 test("installer silently skips a genuinely absent pm executable", () => {
