@@ -6,7 +6,7 @@ status: closed
 priority: 0
 tags[6]: merge-safety,multi-agent,pm-cli-2026.8.7,release-gate,sdk,tdd
 created_at: "2026-08-07T17:50:39.891Z"
-updated_at: "2026-08-07T18:03:31.819Z"
+updated_at: "2026-08-07T18:13:07.896Z"
 closed_at: "2026-08-07T17:55:58.602Z"
 completed_at: "2026-08-07T17:55:58.602Z"
 author: codex
@@ -24,15 +24,16 @@ sprint: 2026-08-compatibility
 release: Unreleased
 resolution: "Updated the current pm toolchain and peer floor, installed the 2026.8.7 merge fence, migrated the lifecycle guard from authored JavaScript to fully tested erasable TypeScript, and validated npm, Bun, coverage, packaging, privacy, and fresh-tracker activation."
 expected_result: "The TypeScript reference package consumes current pm contracts, protects generated extension state across concurrent branches, and passes reproducible package and installed-CLI verification without conflating merge readiness with publication readiness."
-actual_result: "Package and lock resolve pm CLI/SDK and pm-changelog 2026.8.7; peer floor is 2026.8.7; the canonical extension fence is installed; the authored prepare hook is now erasable TypeScript with fail-loud broken-CLI behavior; npm and Bun release gates pass with 126 tests, zero skips, exact 100/100/100 for three source files, zero production vulnerabilities, and deterministic packaging/changelog checks; a packed tarball activated all nine capabilities in a fresh pm 2026.8.7 tracker, preserved the one-item native list, reported the exact SDK target, and ran hello; current tracked files and all-history secret-shape scans are clean. Independent items preserve history privacy, missing quality gates, and legacy tracker cleanup. No publication occurred."
+actual_result: "Package and lock resolve pm CLI/SDK and pm-changelog 2026.8.7; peer floor is 2026.8.7; the canonical extension fence is installed; the authored prepare hook is erasable TypeScript with fail-loud broken-CLI behavior and Windows PATH/PATHEXT absence detection; npm and Bun release gates pass with 134 tests, zero skips, exact 100/100/100 for three source files, zero production vulnerabilities, and deterministic packaging/changelog checks; a packed tarball activated all nine capabilities in a fresh pm 2026.8.7 tracker, preserved the one-item native list, reported the exact SDK target, and ran hello; current tracked files and all-history secret-shape scans are clean. Independent items preserve history privacy, missing quality gates, and legacy tracker cleanup. No publication occurred."
 dependencies[3]{id,kind,created_at,author,source_kind,author_source}:
   pm-ts-starter-hi1l,related_to,"2026-08-07T17:55:46.918Z",codex,tracker-audit,detected
   pm-ts-starter-s2kh,related_to,"2026-08-07T17:55:46.918Z",codex,quality-audit,detected
   pm-ts-starter-t5xx,related_to,"2026-08-07T17:55:46.918Z",codex,release-audit,detected
-notes[3]{created_at,author,text}:
+notes[4]{created_at,author,text}:
   "2026-08-07T17:55:46.918Z",codex,"Fresh packed-artifact acceptance used global pm 2026.8.7 in a newly initialized Git tracker. Installation activated the package in project scope with all nine declared capabilities and no blocking health findings; pm list returned exactly the fixture item,ts-starter info reported version and SDK target 2026.8.7,hello returned Hello,Agent,and pm validate had no warnings."
   "2026-08-07T17:55:46.918Z",codex,"Privacy audit: current tracked host-path and secret-shape scans returned zero. Reachable history has two non-noreply identities among five unique identities and 69 revisions with absolute host-path shapes; pm-ts-starter-t5xx blocks publication pending maintainer-approved rewrite. The all-history secret-shape scan returned zero."
   "2026-08-07T18:03:31.800Z",codex,"Review round 1: Greptile correctly identified that npm's Windows executable is a pm.cmd shim requiring shell handling; the installer now selects pm.cmd with shell enabled only on win32 and has an exact command-shape regression test. CodeRabbit correctly required command-qualified history reproduction steps and found three stale README SDK references; both were corrected through append-only PM mutation and current/version-neutral documentation."
+  "2026-08-07T18:08:56.905Z",codex,"Review round 2: Greptile correctly identified that shell-mediated Windows absence returns a status rather than ENOENT. The lifecycle now resolves the npm shim against Windows PATH/PATHEXT before execution,treating no matching file as the intended consumer-install no-op while preserving fail-loud behavior for a located broken command; deterministic tests cover quoted paths,extension normalization,absence,and execution."
 files[7]{path,scope,note}:
   package.json,project,toolchain and gate declarations
   package-lock.json,project,exact dependency resolution

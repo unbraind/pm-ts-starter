@@ -8,8 +8,8 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { realpathSync } from "node:fs";
-import { resolve } from "node:path";
+import { realpathSync, statSync } from "node:fs";
+import { resolve, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /** The process result fields needed to distinguish absence from failure. */
@@ -25,21 +25,76 @@ type CommandRunner = (
   options: { readonly shell: boolean; readonly stdio: "inherit" },
 ) => CommandResult;
 
+/** Injectable Windows command lookup used to separate absence from failure. */
+type WindowsCommandResolver = () => string | undefined;
+
+/**
+ * Resolves the npm-provided `pm` command shim on a Windows PATH.
+ *
+ * Windows cannot report a missing `.cmd` through `spawnSync` once shell
+ * execution is enabled: `cmd.exe` converts absence into an ordinary non-zero
+ * status. Resolve the shim first so absence remains a clean consumer-install
+ * no-op while a located command that fails still fails the lifecycle.
+ *
+ * @param pathValue - Semicolon-delimited Windows PATH value.
+ * @param pathExtValue - Semicolon-delimited executable extensions.
+ * @param isFile - Filesystem boundary used to verify a candidate is a file.
+ * @returns The first matching absolute command path, or `undefined`.
+ */
+export function resolveWindowsPmCommand(
+  pathValue = process.env.PATH ?? "",
+  pathExtValue = process.env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD",
+  isFile: (candidate: string) => boolean = (candidate) => {
+    try {
+      return statSync(candidate).isFile();
+    } catch {
+      return false;
+    }
+  },
+): string | undefined {
+  const directories = pathValue
+    .split(";")
+    .map((directory) => directory.length >= 2 && directory.startsWith('"') && directory.endsWith('"')
+      ? directory.slice(1, -1)
+      : directory)
+    .filter((directory) => directory.length > 0);
+  const extensions = (pathExtValue || ".COM;.EXE;.BAT;.CMD")
+    .split(";")
+    .map((extension) => extension.startsWith(".") ? extension : `.${extension}`)
+    .filter((extension) => extension.length > 1);
+
+  for (const directory of directories) {
+    for (const extension of extensions) {
+      const candidate = win32.join(directory, `pm${extension}`);
+      if (isFile(candidate)) {
+        return candidate;
+      }
+    }
+  }
+  return undefined;
+}
+
 /**
  * Runs `pm merge install` and returns the lifecycle exit code.
  *
  * @param runner - Command boundary; tests inject exact success and failure
  *   results while production uses Node's synchronous process runner.
  * @param platform - Runtime platform used to select npm's Windows command shim.
+ * @param resolveWindowsCommand - Windows PATH lookup boundary.
  * @returns Zero when pm is absent or installation succeeds, otherwise the
  *   command's non-zero status.
  */
 export function installMergeDrivers(
   runner: CommandRunner = spawnSync,
   platform: NodeJS.Platform = process.platform,
+  resolveWindowsCommand: WindowsCommandResolver = resolveWindowsPmCommand,
 ): number {
   const windows = platform === "win32";
-  const result = runner(windows ? "pm.cmd" : "pm", ["merge", "install"], {
+  const command = windows ? resolveWindowsCommand() : "pm";
+  if (!command) {
+    return 0;
+  }
+  const result = runner(command, ["merge", "install"], {
     shell: windows,
     stdio: "inherit",
   });

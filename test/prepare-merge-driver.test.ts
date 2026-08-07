@@ -1,12 +1,14 @@
 /** Tests the TypeScript-only, fail-loud merge-driver lifecycle guard. */
 
 import assert from "node:assert/strict";
-import { realpathSync } from "node:fs";
+import { realpathSync, rmSync, writeFileSync } from "node:fs";
+import { win32 } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
   installMergeDrivers,
+  resolveWindowsPmCommand,
   runScriptEntry,
 } from "../scripts/prepare-merge-driver.ts";
 
@@ -20,7 +22,7 @@ test("installer runs the exact pm merge command", () => {
   const code = installMergeDrivers((...args) => {
     calls.push(args);
     return { status: 0 };
-  }, "linux");
+  }, "linux", () => { throw new Error("Windows lookup must not run"); });
 
   assert.strictEqual(code, 0);
   assert.deepStrictEqual(calls, [[
@@ -35,14 +37,84 @@ test("installer executes the Windows npm command shim through a shell", () => {
   const code = installMergeDrivers((...args) => {
     calls.push(args);
     return { status: 0 };
-  }, "win32");
+  }, "win32", () => "C:\\npm-bin\\pm.CMD");
 
   assert.strictEqual(code, 0);
   assert.deepStrictEqual(calls, [[
-    "pm.cmd",
+    "C:\\npm-bin\\pm.CMD",
     ["merge", "install"],
     { shell: true, stdio: "inherit" },
   ]]);
+});
+
+test("installer skips Windows setup when the npm command shim is absent", () => {
+  let ran = false;
+  const code = installMergeDrivers(() => {
+    ran = true;
+    return { status: 0 };
+  }, "win32", () => undefined);
+
+  assert.strictEqual(code, 0);
+  assert.strictEqual(ran, false);
+});
+
+test("Windows resolver handles quoted PATH entries and extension normalization", () => {
+  const inspected: string[] = [];
+  const command = resolveWindowsPmCommand(
+    '"C:\\Program Files\\pm";C:\\fallback;',
+    "EXE;.CMD",
+    (candidate) => {
+      inspected.push(candidate);
+      return candidate === "C:\\Program Files\\pm\\pm.CMD";
+    },
+  );
+
+  assert.strictEqual(command, "C:\\Program Files\\pm\\pm.CMD");
+  assert.deepStrictEqual(inspected, [
+    "C:\\Program Files\\pm\\pm.EXE",
+    "C:\\Program Files\\pm\\pm.CMD",
+  ]);
+});
+
+test("Windows resolver returns undefined when no candidate is a file", () => {
+  assert.strictEqual(
+    resolveWindowsPmCommand("C:\\bin", "", () => false),
+    undefined,
+  );
+});
+
+test("Windows resolver verifies a real command shim with its default filesystem boundary", (t) => {
+  const directory = `pm-windows-resolver-${process.pid}-${Date.now()}`;
+  const candidate = win32.join(directory, "pm.CMD");
+  writeFileSync(candidate, "");
+  t.after(() => rmSync(candidate, { force: true }));
+
+  assert.strictEqual(resolveWindowsPmCommand(directory, ".CMD"), candidate);
+});
+
+test("Windows resolver treats a missing real command shim as absent", () => {
+  assert.strictEqual(
+    resolveWindowsPmCommand(`pm-windows-missing-${process.pid}-${Date.now()}`, ".CMD"),
+    undefined,
+  );
+});
+
+test("Windows resolver reads process defaults when PATH inputs are omitted", () => {
+  assert.strictEqual(resolveWindowsPmCommand(undefined, undefined, () => false), undefined);
+});
+
+test("Windows resolver tolerates a missing process PATH", (t) => {
+  const pathValue = process.env.PATH;
+  delete process.env.PATH;
+  t.after(() => {
+    if (pathValue === undefined) {
+      delete process.env.PATH;
+    } else {
+      process.env.PATH = pathValue;
+    }
+  });
+
+  assert.strictEqual(resolveWindowsPmCommand(undefined, ".CMD", () => false), undefined);
 });
 
 test("installer silently skips a genuinely absent pm executable", () => {
