@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Other
+
+- Adopt the mandatory docstring gate ([pm-ts-starter-ejsd](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/tasks/pm-ts-starter-ejsd.toon))
+
 ## 2026.8.8 - 2026-08-08
 
 ### Other
