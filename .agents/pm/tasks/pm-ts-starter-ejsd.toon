@@ -1,0 +1,11 @@
+id: pm-ts-starter-ejsd
+title: Adopt the mandatory docstring gate
+description: "Wire the canonical pm-ops/docstrings analyzer into release:check and CI, and document every declaration it reports."
+type: Task
+status: open
+priority: 2
+tags: []
+created_at: "2026-08-09T14:36:07.899Z"
+updated_at: "2026-08-09T14:36:07.899Z"
+author: pi-agent
+body: ""
