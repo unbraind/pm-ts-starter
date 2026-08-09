@@ -71,7 +71,37 @@ interface TsStarterErrorOptions {
     context?: TsStarterErrorContextInput;
     cause?: unknown;
 }
+/**
+ * Construct a {@link PmCliExpectedError}-shaped error without importing the
+ * CLI's runtime class.
+ *
+ * The CLI's top-level handler matches expected errors by `name === "PmCliError"`
+ * rather than `instanceof`, so a locally built Error with that name is treated
+ * like one the CLI itself threw. The exit code falls back to
+ * {@link DEFAULT_USAGE_EXIT_CODE} when the caller omits it or passes a value
+ * that is not a positive finite number, so a malformed option can never select
+ * exit code 0. The loose `context` input is reshaped into a structured recovery
+ * record (promoting the first present command/feature name, folding a bare
+ * `hint` into `nextSteps`), and `cause` is attached non-enumerably so it does
+ * not leak into serialized error output.
+ *
+ * @param message - Human-readable summary shown to the operator.
+ * @param options - Optional exit code, recovery context, and cause.
+ * @returns An Error carrying the expected-error name, exit code, and context.
+ */
 declare function pmExpectedError(message: string, options?: TsStarterErrorOptions): PmCliExpectedError;
+/**
+ * Type guard identifying an error the CLI treats as expected.
+ *
+ * Matches on the `name` tag rather than `instanceof`, mirroring exactly how the
+ * CLI's own handler recognizes these errors, so a locally constructed error is
+ * indistinguishable from one thrown inside the CLI. The `instanceof Error`
+ * precondition keeps a plain object that merely sets `name` from narrowing the
+ * type.
+ *
+ * @param error - Any caught value, typically from a `try`/`catch` boundary.
+ * @returns True when `error` is an Error whose name is the expected-error tag.
+ */
 declare function isPmCliExpectedError(error: unknown): error is PmCliExpectedError;
 interface PmRunResult {
     ok: boolean;
@@ -79,6 +109,21 @@ interface PmRunResult {
     stderr: string;
     status: number | null;
 }
+/**
+ * Run the live `pm` binary against a workspace and capture its result.
+ *
+ * Spawns `pm --path <pmRoot> <args>` synchronously with a JSON-sized read buffer
+ * (see {@link pmJsonMaxBuffer}), then normalizes the outcome into the
+ * {@link PmRunResult} shape every caller shares. `ok` is true only when the
+ * process exited zero AND Node reported no spawn error, so a crash and a clean
+ * failure are both reported as not-ok. `stderr` falls back to a translated
+ * read-failure message when the spawn itself errored before producing output,
+ * so the field is never empty on a failure.
+ *
+ * @param pmRoot - Workspace root forwarded to pm as `--path`.
+ * @param args - Additional pm arguments after the path flag.
+ * @returns The captured exit status, streams, and derived `ok` flag.
+ */
 export declare function runPm(pmRoot: string, args: string[]): PmRunResult;
 declare const demoProfile: {
     name: string;

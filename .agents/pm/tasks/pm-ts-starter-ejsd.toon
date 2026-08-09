@@ -1,0 +1,14 @@
+id: pm-ts-starter-ejsd
+title: Adopt the mandatory docstring gate
+description: "Wire the canonical pm-ops/docstrings analyzer into release:check and CI, and document every declaration it reports."
+type: Task
+status: closed
+priority: 2
+tags: []
+created_at: "2026-08-09T14:36:07.899Z"
+updated_at: "2026-08-09T14:59:13.932Z"
+closed_at: "2026-08-09T14:59:13.921Z"
+completed_at: "2026-08-09T14:59:13.921Z"
+author: pi-agent
+close_reason: "Adopted the canonical pm-ops/docstrings gate: exact-pinned pm-ops@2026.8.8 devDep, launcher + ported test, wired into release:check and CI. Documented all 5 index.ts violations. Added scripts/docstring-gate.ts to coverageGate.sources so the 100% bar covers the launcher. All gates green: typecheck/build/docstring/coverage(100/100/100)/tests(143)/release:check."
+body: ""

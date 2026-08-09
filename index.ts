@@ -226,6 +226,24 @@ interface TsStarterErrorOptions {
   cause?: unknown;
 }
 
+/**
+ * Construct a {@link PmCliExpectedError}-shaped error without importing the
+ * CLI's runtime class.
+ *
+ * The CLI's top-level handler matches expected errors by `name === "PmCliError"`
+ * rather than `instanceof`, so a locally built Error with that name is treated
+ * like one the CLI itself threw. The exit code falls back to
+ * {@link DEFAULT_USAGE_EXIT_CODE} when the caller omits it or passes a value
+ * that is not a positive finite number, so a malformed option can never select
+ * exit code 0. The loose `context` input is reshaped into a structured recovery
+ * record (promoting the first present command/feature name, folding a bare
+ * `hint` into `nextSteps`), and `cause` is attached non-enumerably so it does
+ * not leak into serialized error output.
+ *
+ * @param message - Human-readable summary shown to the operator.
+ * @param options - Optional exit code, recovery context, and cause.
+ * @returns An Error carrying the expected-error name, exit code, and context.
+ */
 function pmExpectedError(
   message: string,
   options?: TsStarterErrorOptions,
@@ -260,6 +278,18 @@ function pmExpectedError(
   return err;
 }
 
+/**
+ * Type guard identifying an error the CLI treats as expected.
+ *
+ * Matches on the `name` tag rather than `instanceof`, mirroring exactly how the
+ * CLI's own handler recognizes these errors, so a locally constructed error is
+ * indistinguishable from one thrown inside the CLI. The `instanceof Error`
+ * precondition keeps a plain object that merely sets `name` from narrowing the
+ * type.
+ *
+ * @param error - Any caught value, typically from a `try`/`catch` boundary.
+ * @returns True when `error` is an Error whose name is the expected-error tag.
+ */
 function isPmCliExpectedError(error: unknown): error is PmCliExpectedError {
   return (
     error instanceof Error &&
@@ -284,6 +314,19 @@ function pmJsonMaxBuffer(): number {
   return Number.isSafeInteger(raw) && raw > 0 ? raw : 64 * 1024 * 1024;
 }
 
+/**
+ * Render a pm spawn read error as an actionable operator message.
+ *
+ * Distinguishes the one errno the buffer cap can produce (`ENOBUFS`) from every
+ * other failure, because only that case has a remedy the operator can apply
+ * (raise `PM_JSON_MAX_BUFFER`); the rest are surfaced verbatim so the original
+ * message is not buried behind a generic label.
+ *
+ * @param error - The `error` field Node attached to a failed `spawnSync`.
+ * @param limitBytes - The maxBuffer in force when the read failed, echoed back
+ *   so the operator knows the value to raise.
+ * @returns A single-line message naming the cause and, for `ENOBUFS`, the fix.
+ */
 function describePmReadFailure(error: Error, limitBytes: number): string {
   const code = (error as NodeJS.ErrnoException).code;
   if (code === "ENOBUFS") {
@@ -293,6 +336,21 @@ function describePmReadFailure(error: Error, limitBytes: number): string {
   return `pm read failed: ${error.message}`;
 }
 
+/**
+ * Run the live `pm` binary against a workspace and capture its result.
+ *
+ * Spawns `pm --path <pmRoot> <args>` synchronously with a JSON-sized read buffer
+ * (see {@link pmJsonMaxBuffer}), then normalizes the outcome into the
+ * {@link PmRunResult} shape every caller shares. `ok` is true only when the
+ * process exited zero AND Node reported no spawn error, so a crash and a clean
+ * failure are both reported as not-ok. `stderr` falls back to a translated
+ * read-failure message when the spawn itself errored before producing output,
+ * so the field is never empty on a failure.
+ *
+ * @param pmRoot - Workspace root forwarded to pm as `--path`.
+ * @param args - Additional pm arguments after the path flag.
+ * @returns The captured exit status, streams, and derived `ok` flag.
+ */
 export function runPm(pmRoot: string, args: string[]): PmRunResult {
   const maxBuffer = pmJsonMaxBuffer();
   const result = spawnSync("pm", ["--path", pmRoot, ...args], {
@@ -309,6 +367,21 @@ export function runPm(pmRoot: string, args: string[]): PmRunResult {
   };
 }
 
+/**
+ * Run pm expecting JSON on stdout, throwing an expected error otherwise.
+ *
+ * Wraps {@link runPm}: a non-zero exit (or spawn error) becomes a
+ * {@link pmExpectedError} whose message names the feature and the failing exit
+ * status, and stdout that does not parse as JSON becomes one quoting the output
+ * head. On success the parsed value is returned unchecked, so the caller is
+ * responsible for validating the shape against its expectation of `T`.
+ *
+ * @param pmRoot - Workspace root forwarded to pm as `--path`.
+ * @param args - pm arguments that select the JSON-producing command.
+ * @param feature - Short label interpolated into failure messages for context.
+ * @returns The parsed JSON value; its runtime shape is not validated here.
+ * @throws {PmCliExpectedError} When pm exits non-zero or returns non-JSON.
+ */
 function pmJson<T = unknown>(pmRoot: string, args: string[], feature: string): T {
   const run = runPm(pmRoot, args);
   if (!run.ok) {
