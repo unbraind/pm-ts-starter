@@ -1,8 +1,9 @@
 /** Tests the TypeScript-only, fail-loud merge-driver lifecycle guard. */
 
 import assert from "node:assert/strict";
-import { realpathSync, rmSync, writeFileSync } from "node:fs";
-import { win32 } from "node:path";
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, win32 } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -92,10 +93,29 @@ test("Windows resolver returns undefined when no candidate is a file", () => {
 });
 
 test("Windows resolver verifies a real command shim with its default filesystem boundary", (t) => {
-  const directory = `pm-windows-resolver-${process.pid}-${Date.now()}`;
+  // This case deliberately uses the real `statSync` boundary, so the shim has to
+  // exist on disk at exactly the path `win32.join` produces. On POSIX that path
+  // is unavoidably cwd-relative: `win32.join` emits a backslash, which POSIX
+  // treats as an ordinary filename character, so even an absolute `/tmp/x`
+  // becomes the *relative* name `\tmp\x\pm.CMD`. Passing an absolute directory
+  // therefore does not move the file out of the repository - it only renames it.
+  //
+  // So scope the cwd instead. Left at the repository root, the shim is created
+  // where the docstring gate's directory walk runs, and `t.after` deletes it
+  // mid-walk, failing the gate with ENOENT between its readdir and its stat.
+  // That surfaced as `test (26)` failing while `test (22)` passed, which reads
+  // as flake rather than as one test writing into another's scan path.
+  const scratch = mkdtempSync(join(tmpdir(), "pm-windows-resolver-"));
+  const previousCwd = process.cwd();
+  process.chdir(scratch);
+  t.after(() => {
+    process.chdir(previousCwd);
+    rmSync(scratch, { recursive: true, force: true });
+  });
+
+  const directory = "shim";
   const candidate = win32.join(directory, "pm.CMD");
   writeFileSync(candidate, "");
-  t.after(() => rmSync(candidate, { force: true }));
 
   assert.strictEqual(resolveWindowsPmCommand(directory, ".CMD"), candidate);
 });
