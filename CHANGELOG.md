@@ -4,7 +4,7 @@
 
 ### Fixed
 
-- The pm CLI compatibility floor is declared where npm enforces it and absent from the field the CLI actually reads ([pm-ts-starter-qdwo](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-qdwo.toon))
+- The pm CLI compatibility floor was declared only where npm enforces it, and absent from the field the CLI actually reads ([pm-ts-starter-qdwo](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-qdwo.toon))
 
 ## 2026.8.10 - 2026-08-10
 
