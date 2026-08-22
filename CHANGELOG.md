@@ -6,6 +6,10 @@
 
 - changelog scripts read the pm workspace with default budgets instead of canonical complete reads ([pm-ts-starter-gw39](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-gw39.toon))
 
+### Other
+
+- Drop inert pm manifest key and guard the closed manifest vocabulary ([pm-ts-starter-48t1](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-48t1.toon))
+
 ## 2026.8.17 - 2026-08-17
 
 ### Fixed
