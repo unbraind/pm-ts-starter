@@ -655,7 +655,11 @@ test("runPm names a read-buffer overrun instead of failing silently", async (t) 
   const originalCap = process.env.PM_JSON_MAX_BUFFER;
   process.env.PM_JSON_MAX_BUFFER = "64";
   try {
-    const run = runPm(pmRoot, ["list-all", "--json"]);
+    // `list --all` rather than the deprecated `list-all` alias: newer pm CLI
+    // releases print a deprecation warning on stderr for the alias, and runPm
+    // surfaces non-empty stderr verbatim, which would mask the read-buffer
+    // overrun this test exists to observe.
+    const run = runPm(pmRoot, ["list", "--all", "--json"]);
     assert.strictEqual(run.ok, false, "an overrun must not report success");
     assert.match(
       run.stderr,
