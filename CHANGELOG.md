@@ -6,6 +6,10 @@
 
 - changelog scripts read the pm workspace with default budgets instead of canonical complete reads ([pm-ts-starter-gw39](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-gw39.toon))
 
+### Security
+
+- The identity gate deadlocks the one remediation its own failure message prescribes ([pm-ts-starter-kaek](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-kaek.toon))
+
 ### Other
 
 - Drop inert pm manifest key and guard the closed manifest vocabulary ([pm-ts-starter-48t1](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-48t1.toon))
