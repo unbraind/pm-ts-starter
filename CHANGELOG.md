@@ -4,8 +4,6 @@
 
 ### Fixed
 
-- A failed provenance publish silently falls back to an unattested one ([pm-ts-starter-ilgv](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-ilgv.toon))
-- A failed provenance publish silently falls back to an unattested one ([pm-ts-starter-16ya](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-16ya.toon))
 - A failed provenance publish silently falls back to an unattested one ([pm-ts-starter-d3ry](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-d3ry.toon))
 - changelog scripts read the pm workspace with default budgets instead of canonical complete reads ([pm-ts-starter-gw39](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-gw39.toon))
 
