@@ -156,6 +156,15 @@ test("a publish hidden in an npm script is found, because a manifest is JSON and
   assert.deepEqual(auditPublishAttestation([{ file: "package.json", text: attested }]).failures, []);
 });
 
+test("manifest scripts do not share shell assignments", () => {
+  const manifest = JSON.stringify({ scripts: {
+    prepare: "FLAG=--provenance",
+    release: "npm publish --access public $FLAG",
+    attested: ATTESTED,
+  } });
+  assert.equal(auditPublishAttestation([{ file: "package.json", text: manifest }]).failures.length, 1);
+});
+
 test("manifestCommandLines survives a manifest that is malformed, empty, or has no scripts", () => {
   // A malformed sibling manifest must not take the gate down; its own tooling
   // reports that far better than a publish audit can.
@@ -190,6 +199,7 @@ test("npm run publish is a script runner, not a publish", () => {
   assert.equal(isPublishCommand(onlyCommand("npm ci")), false);
   assert.equal(isPublishCommand(onlyCommand("npm exec publish")), false, "exec runs a binary, it does not publish");
   assert.equal(isPublishCommand(onlyCommand("npm --access public publish")), true, "a flag value is not the subcommand");
+  assert.equal(isPublishCommand(onlyCommand("npm --tag run publish")), true, "an option value named run is not a runner subcommand");
   assert.equal(isPublishCommand(onlyCommand("npm --ignore-scripts publish")), true);
 });
 
@@ -242,6 +252,7 @@ test("an unattested publish smuggled through an interpreter or a substitution is
     `output=$(${UNATTESTED})`,
     "output=`npm publish --access public`",
     `echo hi && eval "${UNATTESTED}"`,
+    "eval \"$(printf '%s' 'npm publish')\"",
   ]) {
     const failures = auditPublishAttestation([
       { file: "release.yml", text: `          ${ATTESTED}\n          ${smuggled}` },
@@ -466,7 +477,7 @@ test("committed build output is not audited, because it is generated from source
 });
 
 test("isExecutableSource recognises the shapes that can run a command", () => {
-  for (const path of [".github/workflows/ci.yml", ".github/workflows/ci.yaml", "package.json", "web/package.json", "x.sh", "Makefile", "build/rules.mk", "Dockerfile", "Dockerfile.ci", "docker-compose.yml", "docker-compose.prod.yaml"]) {
+  for (const path of [".github/workflows/ci.yml", ".github/workflows/ci.yaml", "action.yml", ".github/actions/release/action.yaml", "package.json", "web/package.json", "x.sh", "Makefile", "build/rules.mk", "Dockerfile", "Dockerfile.ci", "docker-compose.yml", "docker-compose.prod.yaml"]) {
     assert.equal(isExecutableSource(path, ""), true, path);
   }
   for (const path of ["README.md", "src/index.ts", ".github/dependabot.yml", "package.json.bak"]) {

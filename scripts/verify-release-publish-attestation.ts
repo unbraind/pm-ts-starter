@@ -59,6 +59,7 @@ const GENERATED_PREFIXES = ["dist/", "coverage/", "node_modules/", ".agents/pm/r
 /** Tracked paths that can execute a command, matched against the repository-relative path. */
 const EXECUTABLE_PATHS = [
   /^\.github\/workflows\/[^/]+\.ya?ml$/,
+  /(^|\/)action\.ya?ml$/,
   /(^|\/)package\.json$/,
   /\.(sh|bash|zsh|ksh)$/,
   /(^|\/)(Makefile|makefile|GNUmakefile)$/,
@@ -84,25 +85,29 @@ const EXECUTABLE_PATHS = [
  * @param text - The manifest's contents.
  * @returns One line per script body, newline joined.
  */
-export function manifestCommandLines(text: string): string {
+function manifestScriptBodies(text: string): string[] {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
   } catch {
-    return "";
+    return [];
   }
-  if (typeof parsed !== "object" || parsed === null) return "";
+  if (typeof parsed !== "object" || parsed === null) return [];
   const scripts = (parsed as { scripts?: unknown }).scripts;
-  if (typeof scripts !== "object" || scripts === null) return "";
-  // Each script is its own command list, so one cannot continue into the next.
-  // A body ending in a backslash would otherwise be joined to the following
-  // script by continuation collapsing, and a script beginning `--provenance`
-  // would lend its flag to the unattested publish that ended the script before
-  // it -- turning two commands into one attested-looking command.
+  if (typeof scripts !== "object" || scripts === null) return [];
   return Object.values(scripts as Record<string, unknown>)
     .filter((value): value is string => typeof value === "string")
-    .map((value) => value.replace(/\\+$/, ""))
-    .join("\n");
+    .map((value) => value.replace(/\\+$/, ""));
+}
+
+/**
+ * Join manifest script bodies for callers that need a readable projection.
+ *
+ * @param text - The manifest's contents.
+ * @returns One line per script body, newline joined.
+ */
+export function manifestCommandLines(text: string): string {
+  return manifestScriptBodies(text).join("\n");
 }
 
 /** Subcommands that run something else, so a later `publish` word is its argument. */
@@ -111,6 +116,11 @@ export function manifestCommandLines(text: string): string {
 // -- npm selects a workspace with the `-w`/`--workspace` FLAG -- and listing it
 // here only meant that a `publish` written after the word was never audited.
 const RUNNER_SUBCOMMANDS = new Set(["run", "run-script", "exec", "explore", "x"]);
+
+/** npm options whose following word is a value, not a subcommand. */
+const NPM_OPTIONS_WITH_VALUES = new Set([
+  "--access", "--tag", "--workspace", "-w", "--registry", "--otp", "--userconfig",
+]);
 
 /**
  * Decide whether one command is a direct `npm publish`.
@@ -140,9 +150,15 @@ const RUNNER_SUBCOMMANDS = new Set(["run", "run-script", "exec", "explore", "x"]
  * @returns True when the command publishes.
  */
 export function isPublishCommand(command: ShellCommand): boolean {
-  for (const token of commandArguments(command)) {
-    if (RUNNER_SUBCOMMANDS.has(token.value)) return false;
-    if (token.value === "publish") return true;
+  const args = commandArguments(command);
+  for (let index = 0; index < args.length; index += 1) {
+    const value = args[index]!.value;
+    if (NPM_OPTIONS_WITH_VALUES.has(value)) {
+      index += 1;
+      continue;
+    }
+    if (RUNNER_SUBCOMMANDS.has(value)) return false;
+    if (value === "publish") return true;
   }
   return false;
 }
@@ -193,38 +209,53 @@ export function attestationEnabled(command: ShellCommand): boolean {
 }
 
 /**
+ * Prepare independently executable command bodies for tokenisation.
+ *
+ * Manifest scripts remain separate because npm starts each in a fresh shell;
+ * sharing assignment maps across bodies would invent bindings that never exist.
+ *
+ * @param source - The file's path and contents.
+ * @returns Expanded command bodies that retain their execution boundaries.
+ */
+function preparedCommandTexts(source: SourceFile): string[] {
+  const rawTexts = source.file.endsWith("package.json") ? manifestScriptBodies(source.text) : [source.text];
+  return rawTexts.map((raw) => {
+    const text = joinContinuations(raw);
+    const arrays = bashArrays(text);
+    const scalars = shellScalars(text);
+    return text
+      .split("\n")
+      .map((line) => expandScalars(expandArrays(line, arrays), scalars))
+      .join("\n");
+  });
+}
+
+/**
  * Find every publish invocation in one file's contents.
  *
- * Continuations are joined and shared arrays expanded before tokenising, for
- * the same reason the changelog-date scan does it: a multi-line invocation
- * otherwise looks like fragments, none of which carries the flag.
+ * Continuations are joined and shared values expanded before tokenising. Each
+ * manifest script is scanned in isolation because npm executes it separately.
  *
  * @param source - The file's path and contents.
  * @returns The publish invocations found, in file order.
  */
 export function publishInvocationsIn(source: SourceFile): PublishInvocation[] {
-  const raw = source.file.endsWith("package.json") ? manifestCommandLines(source.text) : source.text;
-  const text = joinContinuations(raw);
-  const arrays = bashArrays(text);
-  const scalars = shellScalars(text);
-  const expanded = text
-    .split("\n")
-    .map((line) => expandScalars(expandArrays(line, arrays), scalars))
-    .join("\n");
   const found: PublishInvocation[] = [];
-  for (const command of tokenizeCommands(expanded)) {
-    // Every reading, not just the command's own: a wrapper option that takes a
-    // value (`sudo -u root npm publish`) moves the program past where naming it
-    // once would look. Missing a publish is a failed audit; offering one that no
-    // shell would run is noise an operator dismisses.
-    for (const candidate of commandCandidates(command)) {
-      const program = commandName(candidate);
-      if (program === undefined) continue;
-      if (program !== "npm" && !FOREIGN_PUBLISHERS.has(program)) continue;
-      if (!isPublishCommand(candidate)) continue;
-      // Not de-duplicated: two identical publish lines are two invocations, and
-      // collapsing them would report one of them as if the other did not exist.
-      found.push({ file: source.file, program, command: candidate });
+  for (const expanded of preparedCommandTexts(source)) {
+    for (const command of tokenizeCommands(expanded)) {
+      // Every reading, not just the command's own: a wrapper option that takes a
+      // value (`sudo -u root npm publish`) moves the program past where naming it
+      // once would look. Missing a publish is a failed audit; offering one that no
+      // shell would run is noise an operator dismisses.
+      for (const candidate of commandCandidates(command)) {
+        const program = commandName(candidate);
+        if (program === undefined) continue;
+        if (program !== "npm" && !FOREIGN_PUBLISHERS.has(program)) continue;
+        if (!isPublishCommand(candidate)) continue;
+        // Not de-duplicated: two identical publish lines are two invocations, and
+        // collapsing them would report one of them as if the other did not exist.
+        found.push({ file: source.file, program, command: candidate });
+      }
     }
   }
   return found;
@@ -259,6 +290,18 @@ export function renderCommand(command: ShellCommand): string {
 export function auditPublishAttestation(sources: SourceFile[]): VerifierResult {
   const invocations = sources.flatMap(publishInvocationsIn);
   const failures: string[] = [];
+  const evaluators = new Set(["eval", "bash", "sh", "dash", "zsh", "ksh"]);
+  for (const source of sources) {
+    for (const text of preparedCommandTexts(source)) {
+      for (const command of tokenizeCommands(text)) {
+        const name = commandName(command);
+        if (name !== undefined && evaluators.has(name)
+          && commandArguments(command).some((token) => token.unresolvedSubstitution === true)) {
+          failures.push(`${source.file}: evaluator payload contains unresolved command-substitution output; refusing to assume it is attested`);
+        }
+      }
+    }
+  }
   const counted = new Map<string, { total: number; unflagged: number }>();
   for (const invocation of invocations) {
     const tally = counted.get(invocation.file) ?? { total: 0, unflagged: 0 };

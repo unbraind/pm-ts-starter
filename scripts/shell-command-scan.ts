@@ -40,6 +40,8 @@ export interface ShellToken {
   value: string;
   /** True when any part of the word came from inside quotes. */
   quoted: boolean;
+  /** True when unresolved command-substitution output contributes to this word. */
+  unresolvedSubstitution?: boolean;
   /**
    * True when the word's FIRST character came from inside quotes.
    *
@@ -217,14 +219,16 @@ export function tokenizeCommands(text: string, depth = 0): ShellCommand[] {
   let value = "";
   let quoted = false;
   let startsQuoted = false;
+  let unresolvedSubstitution = false;
   let started = false;
 
   const endWord = (): void => {
     if (!started) return;
-    command.push({ value, quoted, startsQuoted });
+    command.push({ value, quoted, startsQuoted, ...(unresolvedSubstitution ? { unresolvedSubstitution: true } : {}) });
     value = "";
     quoted = false;
     startsQuoted = false;
+    unresolvedSubstitution = false;
     started = false;
   };
   const endCommand = (): void => {
@@ -278,6 +282,7 @@ export function tokenizeCommands(text: string, depth = 0): ShellCommand[] {
         if (inner === "`" || (inner === "$" && text[index + 1] === "(")) {
           const { inner: body, end } = readSubstitution(text, index);
           nested.push(body);
+          unresolvedSubstitution = true;
           index = end;
           continue;
         }
@@ -292,6 +297,7 @@ export function tokenizeCommands(text: string, depth = 0): ShellCommand[] {
     if (character === "`" || (character === "$" && text[index + 1] === "(")) {
       const { inner, end } = readSubstitution(text, index);
       nested.push(inner);
+      unresolvedSubstitution = true;
       index = end - 1;
       if (!started) startsQuoted = false;
       started = true;
