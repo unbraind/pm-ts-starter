@@ -1,0 +1,16 @@
+id: pm-ts-starter-hb7v
+title: Address PR 78 publish-attestation review findings
+description: "Fix evaluator substitution fail-closed behavior, composite-action scanning, manifest script isolation, npm option parsing, and PM audit-record preservation."
+type: Issue
+status: closed
+priority: 2
+tags: []
+created_at: "2026-08-29T04:12:39.959Z"
+updated_at: "2026-08-29T04:12:55.336Z"
+closed_at: "2026-08-29T04:12:55.316Z"
+completed_at: "2026-08-29T04:12:55.316Z"
+author: pi-agent
+comments[1]{created_at,author,text}:
+  "2026-08-29T04:12:54.702Z",pi-agent,"Implemented fail-closed evaluator substitution detection, isolated manifest script environments, added composite-action metadata scanning, parsed npm option values before runner subcommands, restored append-only PM history, and appended closure evidence."
+close_reason: All assigned review findings were addressed with regression coverage and PM audit corrections.
+body: ""

@@ -6,7 +6,7 @@ status: closed
 priority: 2
 tags[3]: "area:release",dependencies,pm-changelog
 created_at: "2026-08-03T07:13:35.274Z"
-updated_at: "2026-08-03T08:36:10.968Z"
+updated_at: "2026-08-29T04:12:36.163Z"
 closed_at: "2026-08-03T07:32:54.605Z"
 completed_at: "2026-08-03T07:32:54.605Z"
 author: "harness:claude-code"
@@ -14,6 +14,8 @@ acceptance_criteria: "The lockfile resolves pm-changelog to 2026.8.2 or newer; g
 resolution: "Refreshed the lockfile so pm-changelog resolves to 2026.8.3, which derives the release-heading date in UTC."
 expected_result: "Changelog generation is independent of the generating host's timezone, so the committed file and changelog:check agree regardless of where either runs."
 actual_result: "Byte-identical across all three zones, verified at 2026-08-03T08:34:10Z. The whole generated document was hashed, not just the heading line: sha256 prefix 773c32909729db6f under each of TZ=UTC, TZ=Etc/GMT+12 and TZ=Etc/GMT-14, using the untagged release version 2099.1.1 which is what forces the today-fallback path where the defect lives. changelog:check passes against the committed CHANGELOG.md."
+comments[1]{created_at,author,text}:
+  "2026-08-29T04:12:36.163Z",pi-agent,"Correction: restored the original append-only history events, including their per-event provenance observations, after review identified that provenance normalization had rewritten prior records. The original audit evidence is preserved; this appended note documents the restoration."
 notes[3]{created_at,author,text}:
   "2026-08-03T07:55:54.189Z","harness:claude-code","Verification record. Resolved pm-changelog version in the lockfile: 2026.8.3. Both generations used --release-version 2099.1.1, a version with no tag, which is what forces the today-fallback path where the defect lives; a tagged version takes its date from the tag and cannot show the drift. Run at a UTC time of day before 12:00, so TZ=Etc/GMT+12 was on the previous calendar day and the two runs straddled a date boundary. Both emitted the same heading. Against the previous pinned version the same comparison produced headings one day apart, which is the defect. changelog:check passes against the committed CHANGELOG.md."
   "2026-08-03T08:20:26.203Z","harness:claude-code","Three-zone verification evidence, recorded after review pointed out the criteria required a GMT-14 run that the completion record did not document. Observed headings: TZ=UTC:[## 2099.1.1 - 2026-08-03] TZ=Etc/GMT+12:[## 2099.1.1 - 2026-08-03] TZ=Etc/GMT-14:[## 2099.1.1 - 2026-08-03]. Distinct heading values across the three zones: 1 (1 means they agree)."

@@ -1,9 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Address PR 78 publish-attestation review findings ([pm-ts-starter-hb7v](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-hb7v.toon))
+- The publish-attestation gate misses a publish routed through an unquoted shell variable ([pm-ts-starter-1ey8](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-1ey8.toon))
+
 ## 2026.8.28 - 2026-08-28
 
 ### Fixed
 
+- A failed provenance publish silently falls back to an unattested one ([pm-ts-starter-d3ry](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-d3ry.toon))
 - changelog scripts read the pm workspace with default budgets instead of canonical complete reads ([pm-ts-starter-gw39](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-gw39.toon))
 
 ### Security
