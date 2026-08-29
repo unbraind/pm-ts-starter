@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Rebase PR 73 after publish-attestation merge ([pm-ts-starter-8tfm](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-8tfm.toon))
 - Address PR 78 publish-attestation review findings ([pm-ts-starter-hb7v](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-hb7v.toon))
 - The publish-attestation gate misses a publish routed through an unquoted shell variable ([pm-ts-starter-1ey8](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-1ey8.toon))
 

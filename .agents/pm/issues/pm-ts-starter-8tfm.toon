@@ -1,0 +1,16 @@
+id: pm-ts-starter-8tfm
+title: Rebase PR 73 after publish-attestation merge
+description: Resolve stacked release workflow conflicts while preserving both publish-attestation and changelog-date gates.
+type: Issue
+status: closed
+priority: 2
+tags: []
+created_at: "2026-08-29T04:23:37.387Z"
+updated_at: "2026-08-29T04:23:40.947Z"
+closed_at: "2026-08-29T04:23:40.926Z"
+completed_at: "2026-08-29T04:23:40.926Z"
+author: pi-agent
+comments[1]{created_at,author,text}:
+  "2026-08-29T04:23:39.788Z",pi-agent,"Rebased onto origin/main, preserved both CI and release:check gates, retained the new TypeScript changelog verifier, and regenerated the full changelog."
+close_reason: Stacked PR rebased with conflicts resolved and both security/release gates preserved.
+body: ""
