@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Pin pm-changelog 2026.8.30 before the next release ([pm-ts-starter-uciv](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-uciv.toon))
 - Regenerate the changelog after the release tag exists ([pm-ts-starter-hwu0](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-hwu0.toon))
 
 ## 2026.8.29 - 2026-08-29
