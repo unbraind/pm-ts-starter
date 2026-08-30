@@ -4,6 +4,12 @@
 
 ### Fixed
 
+- Regenerate the changelog after the release tag exists ([pm-ts-starter-hwu0](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-hwu0.toon))
+
+## 2026.8.29 - 2026-08-29
+
+### Fixed
+
 - Rebase PR 73 after publish-attestation merge ([pm-ts-starter-8tfm](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-8tfm.toon))
 - Address PR 78 publish-attestation review findings ([pm-ts-starter-hb7v](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-hb7v.toon))
 - The publish-attestation gate misses a publish routed through an unquoted shell variable ([pm-ts-starter-1ey8](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-1ey8.toon))
