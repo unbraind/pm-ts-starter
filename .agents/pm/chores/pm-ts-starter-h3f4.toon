@@ -1,0 +1,17 @@
+id: pm-ts-starter-h3f4
+title: Converge the pinned pm-cli on 2026.8.31 and repair history hashes
+description: "Bump the @unbrained/pm-cli devDependency pin from 2026.8.22 to 2026.8.31 (exact). pm-cli changed its history-hash computation between 2026.8.22 and 2026.8.24, causing history_drift_chain_mismatch on the pinned binary bump. Run pm history-repair --all with the exact pinned binary to recompute hash fields. Verified: item .toon files unchanged, only .agents/pm/history/*.jsonl modified. Upstream: pm-cli#1168."
+type: Chore
+status: closed
+priority: 2
+tags: []
+created_at: "2026-08-31T16:20:12.427Z"
+updated_at: "2026-08-31T16:21:28.918Z"
+closed_at: "2026-08-31T16:21:28.907Z"
+completed_at: "2026-08-31T16:21:28.907Z"
+claim_principal: pi-agent
+author: pi-agent
+comments[1]{created_at,author,text}:
+  "2026-08-31T16:20:52.662Z",pi-agent,"Pre-repair health: history_drift_chain_mismatch + history_drift_hash_mismatch on pm-ts-starter-hwu0, EXIT=1. Ran pm history-repair --all: repaired 1 stream (5 entries rehashed). Post-repair health: EXIT=0, all gate-failing warnings cleared. git status shows only .agents/pm/history/pm-ts-starter-hwu0.jsonl, package.json, package-lock.json — no .toon files modified."
+close_reason: "Done: Bumped @unbrained/pm-cli devDependency pin to 2026.8.31 exact, ran pm history-repair --all to recompute drifted hashes on pm-ts-starter-hwu0, post-repair health EXIT=0"
+body: ""
