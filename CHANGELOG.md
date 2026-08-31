@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Group codeql-action bumps into one pull request to end the split-PR deadlock ([pm-ts-starter-tbtu](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-tbtu.toon))
+
 ## 2026.8.31 - 2026-08-31
 
 ### Fixed
