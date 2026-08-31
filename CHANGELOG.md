@@ -7,6 +7,10 @@
 - This repository has never produced a static analysis, because it runs no CodeQL workflow ([pm-ts-starter-5m6l](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-5m6l.toon))
 - Group codeql-action bumps into one pull request to end the split-PR deadlock ([pm-ts-starter-tbtu](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-tbtu.toon))
 
+### Other
+
+- Converge the pinned pm-cli on 2026.8.31 and repair history hashes ([pm-ts-starter-h3f4](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-h3f4.toon))
+
 ## 2026.8.31 - 2026-08-31
 
 ### Fixed
