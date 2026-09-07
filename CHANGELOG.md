@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Security
+
+- Consume the canonical attestation gate instead of carrying a copy of it ([pm-ts-starter-ptzs](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-ptzs.toon))
+
 ## 2026.9.1 - 2026-09-01
 
 ### Fixed
