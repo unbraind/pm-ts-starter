@@ -365,7 +365,7 @@ const planDemoCommand = defineCommand({
         "--depth is one of: brief | standard | deep.",
     ],
     arguments: [
-        { name: "id", required: false, description: "Plan item id to show (overridden by --id)." },
+        { name: "id", required: false, description: "Plan item id to show (required unless --id is used; overridden by --id)." },
     ],
     flags: [
         { long: "--id", value_name: "id", value_type: "string", description: "Plan item id to show." },
