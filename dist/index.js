@@ -358,14 +358,14 @@ const planDemoCommand = defineCommand({
     name: "ts-starter plan-demo",
     description: "Demonstrate integration with the pm plan workflow (shells out to `pm plan show`).",
     intent: "show how an extension can read plan workflow state",
-    examples: ["pm ts-starter plan-demo", "pm ts-starter plan-demo --id my-plan --depth standard"],
+    examples: ["pm ts-starter plan-demo my-plan", "pm ts-starter plan-demo --id my-plan --depth standard"],
     failure_hints: [
         "Requires a pm workspace with a plan item; create one with `pm plan create`.",
-        "Pass --id <plan-id> to select a plan other than the active one.",
+        "Pass --id <plan-id> or a positional plan id to select a plan.",
         "--depth is one of: brief | standard | deep.",
     ],
     arguments: [
-        { name: "id", required: false, description: "Plan item id to show (optional; defaults to active)." },
+        { name: "id", required: false, description: "Plan item id to show (overridden by --id)." },
     ],
     flags: [
         { long: "--id", value_name: "id", value_type: "string", description: "Plan item id to show." },
@@ -373,13 +373,13 @@ const planDemoCommand = defineCommand({
     ],
     async run(ctx) {
         const pmRoot = ctx.pm_root ?? ".";
-        const id = ctx.options["id"] ??
-            (Array.isArray(ctx.args) && ctx.args.length > 0 ? String(ctx.args[0]) : undefined);
+        const id = (ctx.options["id"] ??
+            (Array.isArray(ctx.args) && ctx.args.length > 0 ? String(ctx.args[0]) : "")).trim();
+        if (!id) {
+            throw pmExpectedError("pm-ts-starter: plan-demo requires an --id (or positional plan id) argument.", { context: { command: "ts-starter plan-demo", why: "Pass --id <plan-id> or a positional plan id." } });
+        }
         const depth = ctx.options["depth"] ?? "standard";
-        const args = ["plan", "show"];
-        if (id)
-            args.push(id);
-        args.push("--depth", depth, "--json");
+        const args = ["plan", "show", id, "--depth", depth, "--json"];
         return pmJson(pmRoot, args, "plan");
     },
 });
