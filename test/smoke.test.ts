@@ -768,11 +768,13 @@ test("info command returns extension metadata", async () => {
   assert.ok(Array.isArray(info.capabilities));
 });
 
-test("plan-demo throws a typed expected error when pm exits non-zero (no id)", async () => {
+test("plan-demo requires an id before attempting a workspace read", async () => {
+  for (const [options, args] of [[{}, []], [{ id: "   " }, []], [{}, ["\t"]]] as const) {
   await assert.rejects(
-    () => harness.runCommand({ command: "ts-starter plan-demo", options: {}, args: [], pmRoot: "/nonexistent-pm-root" }),
-    (err: unknown) => isPmCliExpectedError(err) && /plan.*demo failed/.test((err as Error).message),
+    () => harness.runCommand({ command: "ts-starter plan-demo", options, args: [...args], pmRoot: "/nonexistent-pm-root" }),
+    (err: unknown) => isPmCliExpectedError(err) && (err as Error).message === "pm-ts-starter: plan-demo requires an --id (or positional plan id) argument.",
   );
+  }
 });
 
 test("plan-demo with --id throws a typed expected error when pm exits non-zero", async () => {
@@ -1116,7 +1118,7 @@ test("demo commands fall back to '.' for pm_root when it is undefined", async ()
   // The harness always sets pm_root to "", never undefined. Call the handler
   // directly to exercise the `ctx.pm_root ?? "."` defensive default.
   const specs = [
-    { command: "ts-starter plan-demo", options: {}, args: [] },
+    { command: "ts-starter plan-demo", options: { id: "test" }, args: [] },
     { command: "ts-starter context-demo", options: { format: "json" }, args: [] },
     { command: "ts-starter search-demo", options: { query: "test" }, args: [] },
     { command: "ts-starter history-compact-demo", options: { id: "test" }, args: [] },
