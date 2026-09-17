@@ -40,6 +40,7 @@
 
 ### Fixed
 
+- A failed provenance publish silently falls back to an unattested one ([pm-ts-starter-d3ry](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-d3ry.toon))
 - Rebase PR 73 after publish-attestation merge ([pm-ts-starter-8tfm](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-8tfm.toon))
 - Address PR 78 publish-attestation review findings ([pm-ts-starter-hb7v](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-hb7v.toon))
 - The publish-attestation gate misses a publish routed through an unquoted shell variable ([pm-ts-starter-1ey8](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-1ey8.toon))
@@ -48,7 +49,6 @@
 
 ### Fixed
 
-- A failed provenance publish silently falls back to an unattested one ([pm-ts-starter-d3ry](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-d3ry.toon))
 - changelog scripts read the pm workspace with default budgets instead of canonical complete reads ([pm-ts-starter-gw39](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-gw39.toon))
 
 ### Security
@@ -108,7 +108,7 @@
 
 - Resolve pm-changelog to the release that derives release dates in UTC ([pm-ts-starter-px9p](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-px9p.toon))
 
-## 2026.7.31 - 2026-07-31
+## 2026.8.1 - 2026-08-01
 
 ### Fixed
 
