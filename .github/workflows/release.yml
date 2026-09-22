@@ -88,6 +88,10 @@ jobs:
       # on purpose: a backfill failure is reported but must never block
       # today's release, or one gap would be traded for a new one.
       - name: Backfill missing GitHub releases
+        # Best-effort by construction, not only by intent: an unexpected
+        # failure here (a git or gh outage) is shown on the step but must not
+        # cancel today's release, or one gap would be traded for another.
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -156,7 +160,15 @@ jobs:
               echo "::warning::Could not create the GitHub Release for ${release_tag}; leaving the gap for a maintainer and continuing today's release."
             fi
             rm -f "${notes}"
-          done < <(git tag -l 'v[0-9][0-9][0-9][0-9].[0-9][0-9].[0-9][0-9]*' --sort=-creatordate)
+          # Only the fleet's release tag shapes: vYYYY.MM.DD and its numeric
+          # same-day suffix (-2, -3, ...). A glob would also admit
+          # v2026.09.18-rc.1 (an unintended prerelease backfill) or
+          # v2026.09.18foo, whose day part breaks the 10# arithmetic.
+          done < <(
+            git tag -l 'v*' --sort=-creatordate |
+              grep -E '^v[0-9]{4}\.[0-9]{2}\.[0-9]{2}(-[0-9]+)?$' ||
+              true
+          )
 
       - name: Decide release
         id: decide
@@ -876,15 +888,20 @@ jobs:
           bun init -y > /dev/null
           # Smoke-test that the just-published version installs via bun.
           # Retry to absorb npm registry propagation (~60s typical).
-          # 20 attempts, 30 s apart: the same 10-minute window the npm
-          # reconcile uses, so ordinary mirror lag cannot fail the job.
-          for attempt in $(seq 1 20); do
+          # 21 attempts with a 30 s pause BETWEEN them: the same 10-minute
+          # window the npm reconcile uses. The last attempt runs after the
+          # final pause, so a version that becomes installable at the very end
+          # of the window still passes instead of failing on a trailing sleep.
+          bun_attempts=21
+          for attempt in $(seq 1 "${bun_attempts}"); do
             if bun add "${pkg_name}@${pkg_version}"; then
               echo "bun add succeeded on attempt $attempt"
               exit 0
             fi
-            echo "bun add failed on attempt $attempt, sleeping 30s..."
-            sleep 30
+            if (( attempt < bun_attempts )); then
+              echo "bun add failed on attempt $attempt, sleeping 30s..."
+              sleep 30
+            fi
           done
           # The GitHub release below is now created whenever the publish and
           # the tag push succeeded, regardless of this step, so a bun failure
@@ -896,7 +913,7 @@ jobs:
           # already proven by the publish step above; this step verifies bun
           # alone, so a failure here is reported as a failure and the gate
           # step below fails the job visibly.
-          echo "::error::bun could not resolve ${pkg_name}@${pkg_version} after 20 attempts (a 10-minute window). npm accepted the publish and the GitHub release is created regardless of this step; this failure keeps the bun mirror problem visible instead of silent."
+          echo "::error::bun could not resolve ${pkg_name}@${pkg_version} after ${bun_attempts} attempts across a 10-minute window. npm accepted the publish and the GitHub release is created regardless of this step; this failure keeps the bun mirror problem visible instead of silent."
           exit 1
       - name: Create GitHub release
         # Created even when bun verification failed: this Release used to be
