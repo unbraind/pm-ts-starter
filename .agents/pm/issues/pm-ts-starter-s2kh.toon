@@ -2,11 +2,13 @@ id: pm-ts-starter-s2kh
 title: "Add fail-closed docstring, duplication, lint, and authored-TypeScript gates"
 description: "The package has exact fail-closed runtime coverage, but its release gate does not yet mechanically enforce repo-wide docstring coverage, authored-source TypeScript-only policy, duplication thresholds, or a strict lint rule set. The tracked dist/index.js is generated and required for git-URL consumers; the authored prepare hook is migrated to TypeScript in pm-ts-starter-sirq. Add gates that distinguish required generated output from authored source and cannot be bypassed by narrowing file lists."
 type: Issue
-status: open
+status: closed
 priority: 0
 tags[6]: code-quality,docstrings,duplication,lint,release-blocker,typescript
 created_at: "2026-08-07T17:53:42.469Z"
-updated_at: "2026-08-07T17:53:42.469Z"
+updated_at: "2026-09-22T05:00:44.331Z"
+closed_at: "2026-09-22T05:00:40.496Z"
+completed_at: "2026-09-22T05:00:40.496Z"
 author: codex
 estimated_minutes: 480
 acceptance_criteria: A directory-discovered fail-closed gate proves 100% high-quality docstring coverage for all authored source declarations; authored JS/MJS/CJS/HTML files fail while required generated dist output is reproducibly build-verified; strict TypeScript/ESLint and duplication gates cover all authored source and tests without frozen allowlists; package and CI release checks run the gates on Node 22 and 26; real tests remain exact 100/100/100 with zero skips
@@ -17,10 +19,14 @@ confidence: high
 severity: high
 environment: "Local release:check and GitHub Actions Node 22/26"
 repro_steps: "Inspect package scripts and CI: exact coverage is enforced, but no docstring, lint, duplication, or authored-language gate is invoked"
-expected_result: Every mandatory source-quality policy fails closed in local and CI release gates
-actual_result: "Exact source coverage passes, and the authored lifecycle hook is TypeScript, but the remaining source-quality policies are review conventions rather than executable gates"
+resolution: "The docstring, duplication, lint and authored-TypeScript gates all exist and run fail-closed in release:check and CI."
+expected_result: Mandatory source-quality policies fail closed in local and CI release gates.
+actual_result: "docstring-gate EXIT=0 (9 files, 20 declarations), lint EXIT=0 (0 findings), duplication EXIT=0 (0 clone pairs), coverage 100/100/100, release:check green."
 component: quality-gates
 customer_impact: "Undocumented, duplicated, or policy-incompatible authored code can regress without failing release checks"
 dependencies[1]{id,kind,created_at,author,source_kind,author_source}:
   pm-ts-starter-sirq,related_to,"2026-08-07T17:53:42.469Z",codex,quality-audit,detected
+comments[1]{created_at,author,text}:
+  "2026-09-22T04:54:17.343Z",pi-agent,"Delivered by pm-ts-starter-jwgz (certify pm CLI 2026.9.21 + canonical pm-ops gates): the lint and duplication halves of this issue land as thin launchers over the canonical pm-ops/eslint and pm-ops/duplication exports wired into release:check and CI. The docstring gate half was already delivered as the pm-ops/docstrings launcher in scripts/docstring-gate.ts, and CI already runs the docstring gate and the Node 22/26 matrix. Closing this issue with that work rather than tracking a duplicate."
+close_reason: "Delivered across two passes. Docstring half: scripts/docstring-gate.ts is the thin pm-ops/docstrings launcher, wired into release:check and CI (docstring-gate: 9 file(s), 20 declaration(s) documented, EXIT=0), and CI runs the Node 22/26 matrix the issue asked for. Lint and duplication halves: delivered by pm-ts-starter-jwgz as thin pm-ops/eslint and pm-ops/duplication launchers (scripts/lint.ts, scripts/duplication-gate.ts) wired into release:check and CI, with the one pre-existing lint error and all 23 jscpd clone pairs fixed in code rather than suppressed (npm run lint EXIT=0; npm run duplication 0.00%, 0 clone pairs, EXIT=0). The generated-dist build verification the issue also names is CI's 'Build and verify committed output is current' step."
 body: ""

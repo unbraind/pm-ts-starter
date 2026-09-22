@@ -1,0 +1,31 @@
+id: pm-ts-starter-jwgz
+title: "Certify pm CLI 2026.9.21 and move onto the canonical pm-ops merge-driver, lint and duplication gates"
+description: "Fleet wave of 2026-09-22 (companion epic pm-cli-website-5s6z): this repo is pinned to @unbrained/pm-cli 2026.9.17, pm-ops 2026.9.13 and pm-changelog 2026.9.16 while 2026.9.21, 2026.9.18 and 2026.9.18 are published. Repin all three exactly, absorb Dependabot PR #107 (@types/node 26.6.1), replace the vendored scripts/prepare-merge-driver.ts with the thin pm-ops/merge-driver launcher and add the pm merge install step before pm health --strict-exit --require-merge-drivers in CI, and adopt the canonical pm-ops/eslint and pm-ops/duplication gates with a thin scripts/lint.ts and scripts/duplication-gate.ts launcher, wiring both into release:check and CI and fixing every finding in code. Delivers the remaining lint and duplication halves of pm-ts-starter-s2kh."
+type: Task
+status: closed
+priority: 1
+tags[4]: certify,multi-agent,pm-cli-2026.9.21,quality
+created_at: "2026-09-22T04:54:13.423Z"
+updated_at: "2026-09-22T05:00:43.791Z"
+closed_at: "2026-09-22T05:00:28.750Z"
+completed_at: "2026-09-22T05:00:28.750Z"
+author: pi-agent
+acceptance_criteria: "package.json and package-lock.json pin @unbrained/pm-cli 2026.9.21, pm-changelog 2026.9.18 and pm-ops 2026.9.18 exactly, with Dependabot PR #107's @types/node 26.6.1 bump absorbed; scripts/prepare-merge-driver.ts is the thin pm-ops/merge-driver launcher; npm ci registers the merge drivers and CI runs ./node_modules/.bin/pm merge install before ./node_modules/.bin/pm health --strict-exit --require-merge-drivers; scripts/lint.ts and scripts/duplication-gate.ts are thin launchers over pm-ops/eslint and pm-ops/duplication; release:check and CI run npm run lint and npm run duplication; every lint and duplication finding is fixed in code, not suppressed; Coverage thresholds stay at 100/100/100 and the measured numbers do not drop; npm run release:check exits 0"
+resolution: "All three pins certified, the vendored merge-driver hook replaced by the canonical pm-ops/merge-driver launcher with CI merge-driver install + require-merge-drivers health, and the canonical lint and duplication gates adopted and green."
+expected_result: "package.json and package-lock.json pin pm CLI 2026.9.21 / pm-changelog 2026.9.18 / pm-ops 2026.9.18; npm run lint and npm run duplication exit 0 with every finding fixed in code; coverage stays 100/100/100 and npm run release:check exits 0."
+actual_result: Pins verified by reading both files back; lint measured 1 error -> 0 (EXIT=0); duplication measured 3.09% / 23 clone pairs -> 0.00% / 0 pairs (EXIT=0); coverage 100/100/100 (EXIT=0); pm health --strict-exit --require-merge-drivers EXIT=0; 178/178 tests pass.
+files[10]{path,scope}:
+  .github/workflows/ci.yml,project
+  package-lock.json,project
+  package.json,project
+  README.md,project
+  scripts/duplication-gate.ts,project
+  scripts/lint.ts,project
+  scripts/prepare-merge-driver.ts,project
+  test/coverage-gate.test.ts,project
+  test/prepare-merge-driver.test.ts,project
+  test/smoke.test.ts,project
+tests[1]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
+  "npm run release:check",project,pi-agent,"2026-09-22T05:00:14.034Z",local_mutation,pm-cli-2026-9-21-canonical-pm-ops-gates
+close_reason: "Delivered on branch pm-cli-2026-9-21-canonical-pm-ops-gates. Pins: package.json + package-lock.json now carry @unbrained/pm-cli 2026.9.21, pm-changelog 2026.9.18, pm-ops 2026.9.18 exactly (read back from both files), plus the canonical gate devDependencies @babel/eslint-parser ^8.0.5, @babel/plugin-syntax-typescript ^8.0.3, eslint ^10.10.0, fast-glob ^3.3.3, jscpd ^4.3.0. Dependabot #107 absorbed: lockfile @types/node bumped to 26.6.1 within the unchanged ^26.2.0 range (verified in package-lock.json; npm update first overshot to 26.6.2, forced back to the proposed 26.6.1). Merge driver: scripts/prepare-merge-driver.ts replaced by the thin pm-ops/merge-driver launcher (git config --get-regexp '^merge.pm' lists all five drivers after npm ci); CI now runs ./node_modules/.bin/pm merge install before ./node_modules/.bin/pm health --strict-exit --require-merge-drivers (measured EXIT=0). Lint + duplication: thin launchers scripts/lint.ts and scripts/duplication-gate.ts over pm-ops/eslint and pm-ops/duplication, wired into release:check (right after typecheck) and CI. Measured before the fix: lint 1 error (no-duplicate-imports in test/smoke.test.ts), duplication 3.09% / 23 clone pairs (199/6440 lines). Measured after: npm run lint EXIT=0 (0 findings), npm run duplication EXIT=0 (0.00% / 0 clone pairs, 0/6022 lines); every finding fixed in code via shared helpers (setUpPmWorkspace, withFakePmOnPath, runSetupWizard, assertAllHooksQuiet, runPassThroughPreflightOverride in smoke; createGateFixture and friends in coverage-gate.test.ts), no eslint-disable, no ignores added, threshold 0 / minTokens 50 unchanged. Suite: 178 tests pass (old vendored merge-driver tests deleted per the canonical-export policy; 193 -> 178). Coverage gate: 100/100/100 lines/branches/functions across index.ts + scripts/coverage-gate.ts + scripts/docstring-gate.ts + scripts/prepare-merge-driver.ts, EXIT=0. Docstring gate EXIT=0 (9 files, 20 declarations). pm health --strict-exit --require-merge-drivers EXIT=0."
+body: ""
