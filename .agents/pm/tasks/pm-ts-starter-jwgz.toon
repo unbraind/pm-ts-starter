@@ -6,7 +6,7 @@ status: closed
 priority: 1
 tags[4]: certify,multi-agent,pm-cli-2026.9.21,quality
 created_at: "2026-09-22T04:54:13.423Z"
-updated_at: "2026-09-22T05:59:45.980Z"
+updated_at: "2026-09-22T06:09:37.641Z"
 closed_at: "2026-09-22T05:00:28.750Z"
 completed_at: "2026-09-22T05:00:28.750Z"
 author: pi-agent
@@ -14,8 +14,9 @@ acceptance_criteria: "package.json and package-lock.json pin @unbrained/pm-cli 2
 resolution: "All three pins certified, the vendored merge-driver hook replaced by the canonical pm-ops/merge-driver launcher with CI merge-driver install + require-merge-drivers health, and the canonical lint and duplication gates adopted and green."
 expected_result: "package.json and package-lock.json pin pm CLI 2026.9.21 / pm-changelog 2026.9.18 / pm-ops 2026.9.18; npm run lint and npm run duplication exit 0 with every finding fixed in code; coverage stays 100/100/100 and npm run release:check exits 0."
 actual_result: Pins verified by reading both files back; lint measured 1 error -> 0 (EXIT=0); duplication measured 3.09% / 23 clone pairs -> 0.00% / 0 pairs (EXIT=0); coverage 100/100/100 (EXIT=0); pm health --strict-exit --require-merge-drivers EXIT=0; 178/178 tests pass.
-comments[1]{created_at,author,text}:
+comments[2]{created_at,author,text}:
   "2026-09-22T05:59:45.980Z",fleet-wave-script,"Review follow-up (Greptile P1 + Sourcery on pm-starter#113): the launcher statically imports the devDependency pm-ops, so the README's promise that production / --omit=dev installs cannot break held only for registry installs, which never run prepare. README now states the real contract: a production install of a clone must pass --ignore-scripts. Canonical guarded launcher tracked as companion item pm-cli-website-xy19."
+  "2026-09-22T06:09:37.641Z",fleet-wave-script,"Review follow-up (Greptile P2 on pm-github#93, 'driver check is tautological'): CI no longer runs an explicit pm merge install before pm health --require-merge-drivers, because that made the gate verify only the step before it and would have masked a broken prepare hook. Proven on a fresh git clone of a wave branch: 0 merge.pm* keys before npm ci, 10 after (the prepare launcher installs them), health exits 0; with every merge.pm* key removed, pm health --strict-exit --require-merge-drivers exits 1. So the CI gate now proves the mechanism a fresh clone actually relies on."
 files[10]{path,scope}:
   .github/workflows/ci.yml,project
   package-lock.json,project
