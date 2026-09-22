@@ -139,8 +139,7 @@ that maps those tracker artifacts to pm-cli's field-aware Git merge drivers, so 
 tracker edits merge cleanly instead of hard-conflicting. The driver **definitions** live in
 per-clone Git config; `npm install` / `npm ci` wires them automatically via the `prepare` script (a thin
 launcher, `scripts/prepare-merge-driver.ts`, over the canonical `pm-ops/merge-driver` export: it runs
-`pm merge install` only when the `pm` CLI is on `PATH`, and no-ops cleanly otherwise so
-production / `--omit=dev` installs are not broken; being Node-based it behaves identically
+`pm merge install` only when the `pm` CLI is on `PATH`, and no-ops cleanly when `pm` is absent. Registry installs of this package never run `prepare`; a production install of a clone (`npm ci --omit=dev`) omits `pm-ops` too, so it must pass `--ignore-scripts`; being Node-based it behaves identically
 on POSIX shells and Windows `cmd.exe`). To (re)run manually: `npm run merge:install`.
 
 After merging a branch that touched `.agents/pm/`, reconcile any residual history-hash drift with
