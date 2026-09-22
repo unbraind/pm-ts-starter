@@ -4,9 +4,10 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 import { Readable, Writable } from "node:stream";
-import test, { before } from "node:test";
+import test, { before, type TestContext } from "node:test";
 
 import extension, {
+  demoProfile,
   pmExpectedError,
   isPmCliExpectedError,
   resolveSdkTarget,
@@ -35,8 +36,6 @@ import {
   describeProjectProfile,
   lintProjectProfile,
 } from "@unbrained/pm-cli/sdk/authoring";
-
-import { demoProfile } from "../index.ts";
 
 import type {
   AfterCommandHookContext,
@@ -530,7 +529,14 @@ test("parser override for 'list' returns empty delta (pass-through)", async () =
   assert.ok(result.overridden, "parser override should fire");
 });
 
-test("preflight override returns pass-through decision", async () => {
+/**
+ * Runs the pass-through preflight override with a fully-formed decision and
+ * returns whether the override fired, so the plain and verbose suites assert
+ * the identical contract.
+ *
+ * @returns Whether the preflight override reported itself as handled.
+ */
+async function runPassThroughPreflightOverride(): Promise<boolean> {
   // PreflightOverrideContext extends CommandHandlerContext, so `command`,
   // `args`, `options`, `global` and `pm_root` are all required — omitting
   // `command` fails deep inside the runner with an opaque "Cannot read
@@ -549,7 +555,11 @@ test("preflight override returns pass-through decision", async () => {
       enforce_mandatory_migration_gate: false,
     },
   });
-  assert.ok(result.overridden, "preflight override should fire");
+  return result.overridden;
+}
+
+test("preflight override returns pass-through decision", async () => {
+  assert.ok(await runPassThroughPreflightOverride(), "preflight override should fire");
 });
 
 test("service override for 'output_format' declines and leaves the host envelope untouched", async () => {
@@ -840,10 +850,46 @@ function createPmWorkspace(dir: string): string | null {
   return pmRoot;
 }
 
-test("context-demo json returns parsed JSON when pm succeeds", async (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "pm-ts-starter-ctx-ok-"));
+/**
+ * Creates a throwaway directory with cleanup registered on the test context
+ * and initializes a minimal pm workspace inside it, for integration tests
+ * that need pm to succeed.
+ *
+ * @param t - The test context whose `after` hook removes the directory.
+ * @param prefix - The `mkdtemp` prefix for the temp directory.
+ * @returns The workspace directory and its pm root, with a null pm root when
+ *          the pm CLI is unavailable so the caller can skip.
+ */
+function setUpPmWorkspace(t: TestContext, prefix: string): { dir: string; pmRoot: string | null } {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const pmRoot = createPmWorkspace(dir);
+  return { dir, pmRoot: createPmWorkspace(dir) };
+}
+
+/**
+ * Installs a fake `pm` executable as the first `PATH` entry for the duration
+ * of the callback, restoring `PATH` afterwards, so pmJson failure arms can be
+ * exercised without a real pm.
+ *
+ * @param dir - Directory receiving the fake executable.
+ * @param script - The shell script the fake `pm` runs.
+ * @param body - The assertions to run while the fake `pm` shadows the real one.
+ */
+async function withFakePmOnPath(dir: string, script: string, body: () => Promise<void>): Promise<void> {
+  const fakePm = join(dir, "pm");
+  writeFileSync(fakePm, script);
+  chmodSync(fakePm, 0o755);
+  const savedPath = process.env.PATH;
+  process.env.PATH = `${dir}:${savedPath}`;
+  try {
+    await body();
+  } finally {
+    process.env.PATH = savedPath;
+  }
+}
+
+test("context-demo json returns parsed JSON when pm succeeds", async (t) => {
+  const { dir, pmRoot } = setUpPmWorkspace(t, "pm-ts-starter-ctx-ok-");
   if (!pmRoot) { t.skip("pm CLI unavailable"); return; }
 
   const result = await harness.runCommand({ command: "ts-starter context-demo", options: { format: "json" }, args: [], pmRoot: dir });
@@ -851,9 +897,7 @@ test("context-demo json returns parsed JSON when pm succeeds", async (t) => {
 });
 
 test("context-demo non-json returns stdout when pm succeeds", async (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "pm-ts-starter-ctx-md-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const pmRoot = createPmWorkspace(dir);
+  const { dir, pmRoot } = setUpPmWorkspace(t, "pm-ts-starter-ctx-md-");
   if (!pmRoot) { t.skip("pm CLI unavailable"); return; }
 
   const result = await harness.runCommand({ command: "ts-starter context-demo", options: { format: "markdown" }, args: [], pmRoot: dir });
@@ -866,21 +910,12 @@ test("pmJson throws on non-JSON pm output (exercised via search-demo)", async (t
   const dir = mkdtempSync(join(tmpdir(), "pm-ts-starter-fakepm-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
 
-  // Create a fake `pm` that exits 0 but prints non-JSON.
-  const fakePm = join(dir, "pm");
-  writeFileSync(fakePm, "#!/bin/sh\necho 'this is not json'\n");
-  chmodSync(fakePm, 0o755);
-
-  const savedPath = process.env.PATH;
-  process.env.PATH = `${dir}:${savedPath}`;
-  try {
+  await withFakePmOnPath(dir, "#!/bin/sh\necho 'this is not json'\n", async () => {
     await assert.rejects(
       () => harness.runCommand({ command: "ts-starter search-demo", options: { query: "test" }, args: [], pmRoot: "/tmp" }),
       (err: unknown) => isPmCliExpectedError(err) && /non-JSON/.test((err as Error).message),
     );
-  } finally {
-    process.env.PATH = savedPath;
-  }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -920,26 +955,31 @@ function mockStdio(input: string[]): () => void {
   };
 }
 
-test("setup interactive wizard completes with a custom name and verbose yes", async () => {
-  const restore = mockStdio(["my-extension", "y"]);
+/**
+ * Runs the interactive setup wizard against mock stdin and returns its result
+ * payload, restoring the real stdio afterwards.
+ *
+ * @param input - Lines the mock stdin will emit, one per `question` prompt.
+ * @returns The wizard's result payload.
+ */
+async function runSetupWizard(input: readonly string[]): Promise<{ interactive_run: boolean }> {
+  const restore = mockStdio([...input]);
   try {
     const result = await harness.runCommand({ command: "ts-starter setup", options: { interactive: true }, args: [] });
-    const payload = result.result as { interactive_run: boolean };
-    assert.strictEqual(payload.interactive_run, true, "interactive mode should run when stdin is a TTY");
+    return result.result as { interactive_run: boolean };
   } finally {
     restore();
   }
+}
+
+test("setup interactive wizard completes with a custom name and verbose yes", async () => {
+  const payload = await runSetupWizard(["my-extension", "y"]);
+  assert.strictEqual(payload.interactive_run, true, "interactive mode should run when stdin is a TTY");
 });
 
 test("setup interactive wizard defaults name and declines verbose", async () => {
-  const restore = mockStdio(["", "n"]);
-  try {
-    const result = await harness.runCommand({ command: "ts-starter setup", options: { interactive: true }, args: [] });
-    const payload = result.result as { interactive_run: boolean };
-    assert.strictEqual(payload.interactive_run, true);
-  } finally {
-    restore();
-  }
+  const payload = await runSetupWizard(["", "n"]);
+  assert.strictEqual(payload.interactive_run, true);
 });
 
 // ---------------------------------------------------------------------------
@@ -954,7 +994,14 @@ const beforeCtx: BeforeCommandHookContext = {
   pm_root: ".",
 };
 
-test("hooks fire without warnings in non-verbose mode", async () => {
+/**
+ * Runs all five lifecycle-hook invocations and asserts each returns no
+ * warnings, so the non-verbose and verbose suites assert the identical
+ * contract instead of two drifting copies.
+ *
+ * @param totalItems - The `total_items` value reported to the `on_index` hook.
+ */
+async function assertAllHooksQuiet(totalItems: number): Promise<void> {
   const before = await harness.runHook({ kind: "before_command", context: beforeCtx });
   assert.deepEqual(before, []);
 
@@ -975,38 +1022,18 @@ test("hooks fire without warnings in non-verbose mode", async () => {
 
   const onIndex = await harness.runHook({
     kind: "on_index",
-    context: { mode: "full", total_items: 0 },
+    context: { mode: "full", total_items: totalItems },
   });
   assert.deepEqual(onIndex, []);
-});
+}
+
+test("hooks fire without warnings in non-verbose mode", () => assertAllHooksQuiet(0));
 
 test("hooks log without warnings in verbose mode", async () => {
   const savedVerbose = process.env.PM_TS_STARTER_VERBOSE;
   process.env.PM_TS_STARTER_VERBOSE = "1";
   try {
-    const before = await harness.runHook({ kind: "before_command", context: beforeCtx });
-    assert.deepEqual(before, []);
-
-    const after = await harness.runHook({ kind: "after_command", context: { ...beforeCtx, ok: true } });
-    assert.deepEqual(after, []);
-
-    const onWrite = await harness.runHook({
-      kind: "on_write",
-      context: { path: "/test", scope: "project" as const, op: "create" },
-    });
-    assert.deepEqual(onWrite, []);
-
-    const onRead = await harness.runHook({
-      kind: "on_read",
-      context: { path: "/test", scope: "project" as const },
-    });
-    assert.deepEqual(onRead, []);
-
-    const onIndex = await harness.runHook({
-      kind: "on_index",
-      context: { mode: "full", total_items: 42 },
-    });
-    assert.deepEqual(onIndex, []);
+    await assertAllHooksQuiet(42);
   } finally {
     if (savedVerbose === undefined) delete process.env.PM_TS_STARTER_VERBOSE;
     else process.env.PM_TS_STARTER_VERBOSE = savedVerbose;
@@ -1066,20 +1093,8 @@ test("command override, importer, exporter, and preflight log in verbose mode", 
     const exportResult = await harness.runExporter({ exporter: "ts-starter-demo" });
     assert.ok((exportResult.result as { ts_starter: boolean }).ts_starter);
 
-    const preflightResult = await harness.runPreflightOverride({
-      command: "list",
-      args: [],
-      options: {},
-      global: {},
-      pm_root: ".",
-      decision: {
-        enforce_item_format_gate: true,
-        run_preflight_item_format_sync: false,
-        run_extension_migrations: true,
-        enforce_mandatory_migration_gate: false,
-      },
-    });
-    assert.ok(preflightResult.overridden);
+    const preflightResult = await runPassThroughPreflightOverride();
+    assert.ok(preflightResult);
   } finally {
     if (savedVerbose === undefined) delete process.env.PM_TS_STARTER_VERBOSE;
     else process.env.PM_TS_STARTER_VERBOSE = savedVerbose;
@@ -1163,9 +1178,7 @@ test("history-compact-demo resolves id from a positional argument", async () => 
 });
 
 test("context-demo defaults to json format when --format is omitted", async (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "pm-ts-starter-default-fmt-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const pmRoot = createPmWorkspace(dir);
+  const { dir, pmRoot } = setUpPmWorkspace(t, "pm-ts-starter-default-fmt-");
   if (!pmRoot) { t.skip("pm CLI unavailable"); return; }
 
   const result = await harness.runCommand({ command: "ts-starter context-demo", options: {}, args: [], pmRoot: dir });
@@ -1176,15 +1189,9 @@ test("pmJson failure with empty stderr uses the period fallback in the message",
   const dir = mkdtempSync(join(tmpdir(), "pm-ts-starter-silent-fail-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
 
-  // Create a fake `pm` that exits 1 with no output — exercises the empty-detail
+  // A fake `pm` that exits 1 with no output — exercises the empty-detail
   // arms of the pmJson failure message and cause construction.
-  const fakePm = join(dir, "pm");
-  writeFileSync(fakePm, "#!/bin/sh\nexit 1\n");
-  chmodSync(fakePm, 0o755);
-
-  const savedPath = process.env.PATH;
-  process.env.PATH = `${dir}:${savedPath}`;
-  try {
+  await withFakePmOnPath(dir, "#!/bin/sh\nexit 1\n", async () => {
     await assert.rejects(
       () => harness.runCommand({ command: "ts-starter search-demo", options: { query: "test" }, args: [], pmRoot: "/tmp" }),
       (err: unknown) => {
@@ -1194,29 +1201,19 @@ test("pmJson failure with empty stderr uses the period fallback in the message",
         return /demo failed \(pm exited \d+\)\.$/.test(msg);
       },
     );
-  } finally {
-    process.env.PATH = savedPath;
-  }
+  });
 });
 
 test("context-demo non-json failure with empty stderr yields undefined why", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "pm-ts-starter-ctx-silent-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
 
-  const fakePm = join(dir, "pm");
-  writeFileSync(fakePm, "#!/bin/sh\nexit 1\n");
-  chmodSync(fakePm, 0o755);
-
-  const savedPath = process.env.PATH;
-  process.env.PATH = `${dir}:${savedPath}`;
-  try {
+  await withFakePmOnPath(dir, "#!/bin/sh\nexit 1\n", async () => {
     await assert.rejects(
       () => harness.runCommand({ command: "ts-starter context-demo", options: { format: "markdown" }, args: [], pmRoot: "/tmp" }),
       (err: unknown) => isPmCliExpectedError(err) && /context demo failed/.test((err as Error).message),
     );
-  } finally {
-    process.env.PATH = savedPath;
-  }
+  });
 });
 
 test("onWrite hook handles a context with missing op and path", async () => {

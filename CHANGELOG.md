@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- A publish that npm accepts late is reported as failed and the GitHub Release is skipped on bun mirror lag ([pm-ts-starter-beto](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-beto.toon))
+- Add fail-closed docstring, duplication, lint, and authored-TypeScript gates ([pm-ts-starter-s2kh](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-s2kh.toon))
+
+### Other
+
+- Certify pm CLI 2026.9.21 and move onto the canonical pm-ops merge-driver, lint and duplication gates ([pm-ts-starter-jwgz](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/tasks/pm-ts-starter-jwgz.toon))
+
 ## 2026.9.18 - 2026-09-18
 
 ### Other
