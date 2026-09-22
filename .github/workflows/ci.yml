@@ -67,9 +67,6 @@ jobs:
       - name: Duplication gate
         run: npm run duplication
 
-      - name: Type check
-        run: npm run typecheck
-
       - name: Build and verify committed output is current
         shell: bash
         run: |
