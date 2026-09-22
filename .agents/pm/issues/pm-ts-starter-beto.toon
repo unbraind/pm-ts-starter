@@ -1,0 +1,21 @@
+id: pm-ts-starter-beto
+title: A publish that npm accepts late is reported as failed and the GitHub Release is skipped on bun mirror lag
+description: "The daily release workflow treated a delayed npm registry propagation as a failed publish, and let bun mirror lag decide whether a GitHub Release is created at all. Three changes, applied as anchored in-place replacements by the hub's apply.py (companion item pm-cli-website-3y5d): (1) the publish reconcile window widens from 5 x 30 s to 20 x 30 s (10 minutes) with npm view --prefer-online, and the never-visible failure message now states exactly what is known instead of the false 'failed after 3 attempts', preserving the unattested-occupant refusal byte-for-byte; (2) 'Create GitHub release' no longer depends on the bun mirror - it runs whenever the publish and the tag push succeeded (step ids + outcome + !cancelled()), and a dedicated gate step fails the job visibly via 'Fail the job on bun verification failure' after a 10-minute bun window; (3) a new 'Backfill missing GitHub releases' step creates missing Releases for attested tags, using the same pm-changelog notes command scoped to the missing tag's range. Proof: stub harness 5/5 against this repo's patched release.yml, fails 4/5 on the unpatched file; grep proofs reconcile_attempts=20=1, seq 1 20=1, Backfill missing GitHub releases=1; actionlint clean."
+type: Issue
+status: closed
+priority: 1
+tags[2]: release,reliability
+created_at: "2026-09-22T05:08:57.226Z"
+updated_at: "2026-09-22T05:09:43.730Z"
+closed_at: "2026-09-22T05:09:42.026Z"
+completed_at: "2026-09-22T05:09:42.026Z"
+author: pi-agent
+resolution: "The release workflow no longer reports a late-accepted publish as failed, no longer skips the GitHub Release on bun mirror lag, and backfills missing Releases for attested tags."
+expected_result: apply.py matches and patches this repo's release.yml in place; grep proofs each print 1; the stub harness scenarios all pass against the patched file; tests and release gates stay green.
+actual_result: "matched: 1 / refused: 0; grep proofs 1/1/1 and only unbraind/pm-ts-starter named; harness PASS=5 FAIL=0; actionlint exit 0; npm test 178/178 pass."
+comments[1]{created_at,author,text}:
+  "2026-09-22T05:09:04.949Z",pi-agent,"Applied via the hub patcher: python3 $SP/release-window/apply.py pm-ts-starter --fleet $SP/wt --output $SP/wt/pm-ts-starter/.github/workflows/release.yml printed 'matched: 1 (pm-ts-starter), refused: 0' - anchored replacements only, this repo's own file edited, never a copied file. Proofs: grep -c 'reconcile_attempts=20' release.yml = 1; grep -c 'seq 1 20' release.yml = 1; grep -c 'Backfill missing GitHub releases' release.yml = 1; grep -oE 'unbraind/pm-[a-z-]+' release.yml | sort -u prints only unbraind/pm-ts-starter. Stub harness run against THIS repo's patched release.yml: PASS=5 FAIL=0 (s1 late-visible publish reconciles; s2 never-visible fails with the new honest message; s3 unattested occupant keeps the existing refusal; s4 bun never resolves -> bun step fails after 20 attempts / a 10-minute window, gh release create v2026.09.18 still recorded, gate step exits 1 visibly; s5 backfill creates exactly the one attested orphan tag's Release and skips missing/unattested ones). The unpatched file fails 4/5 in the hub harness (pm-cli-website-3y5d). actionlint on the patched workflow: clean, exit 0."
+files[1]{path,scope}:
+  .github/workflows/release.yml,project
+close_reason: "Anchored in-place patch applied to this repo's own .github/workflows/release.yml by the hub patcher (matched: 1, refused: 0): publish reconcile widened to 20 x 30 s (10 minutes) with npm view --prefer-online and an honest never-visible message; GitHub Release creation decoupled from bun mirror lag (runs on publish + tag push success, with a dedicated gate step that fails the job visibly when bun verification failed); new 'Backfill missing GitHub releases' step closes attested tag-without-Release gaps using tag-scoped pm-changelog notes. Proofs: grep -c reconcile_attempts=20 = 1; grep -c 'seq 1 20' = 1; grep -c 'Backfill missing GitHub releases' = 1; grep -oE 'unbraind/pm-[a-z-]+' | sort -u prints only unbraind/pm-ts-starter; stub harness against this repo's patched file PASS=5 FAIL=0 (unpatched fails 4/5, hub item pm-cli-website-3y5d); actionlint exit 0; npm test 178/178 pass."
+body: ""

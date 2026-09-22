@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- A publish that npm accepts late is reported as failed and the GitHub Release is skipped on bun mirror lag ([pm-ts-starter-beto](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-beto.toon))
 - Add fail-closed docstring, duplication, lint, and authored-TypeScript gates ([pm-ts-starter-s2kh](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-s2kh.toon))
 
 ### Other
