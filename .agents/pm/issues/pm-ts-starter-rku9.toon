@@ -6,7 +6,8 @@ status: open
 priority: 2
 tags: []
 created_at: "2026-10-02T22:50:31.100Z"
-updated_at: "2026-10-02T22:50:31.100Z"
+updated_at: "2026-10-02T22:57:16.747Z"
 author: codex-sol
 acceptance_criteria: Canonical published pm-ops launcher treats non-ENOENT probe failures as absence not proven and rethrows original resolution error. Consumer remains byte-identical to published template. Real NODE_PATH file and permission fixtures pass without an omit-dev skip.
+repro_steps: "Create a disposable empty package with type=module. Copy scripts/prepare-merge-driver.ts into it unchanged. Create a regular file named not-a-directory and execute the copy from that empty package with NODE_PATH set to that file. Current canonical launcher exits nonzero with ENOTDIR instead of the original MODULE_NOT_FOUND and does not emit the omit-dev skip notice. Remove the fixture afterward. This is a diagnostic reproduction, not an accepted masking regression or a durable linked test."
 body: ""
