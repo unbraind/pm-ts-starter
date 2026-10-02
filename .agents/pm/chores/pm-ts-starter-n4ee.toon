@@ -6,26 +6,37 @@ status: blocked
 priority: 1
 tags: []
 created_at: "2026-09-29T17:00:46.063Z"
-updated_at: "2026-10-02T22:25:32.197Z"
+updated_at: "2026-10-02T22:51:47.407Z"
 author: codex-ts-starter-0929
 acceptance_criteria: An undocumented TSX declaration beside valid TypeScript fails the consumer documentation gate; Pinned installation and SDK typecheck pass with CLI 2026.9.29; Packed npm and Bun consumers execute hello and preserve native list output; All authored executable source meets four coverage metrics and required reviews pass before merge; An incomplete pm-ops directory makes prepare fail rather than silently skipping merge-driver installation
 risk: low
 blocked_reason: TSX analyzer fix awaits pm-ops PR 132; four-metric all-source coverage and full declaration documentation remain unmet; exact-head reviews pending.
-comments[2]{created_at,author,text}:
+comments[3]{created_at,author,text}:
   "2026-10-02T22:10:38.250Z",codex-sol,"Restart by codex-sol: preserved remote PR #114 and all existing bot replies/reactions were inspected. Branch is already current with origin/main. No new actionable unresolved inline finding is present. Retain documented coverage/health/publication blockers; rerun unchanged full CI gate with the host-wide flock. No merge, publish or item closure."
   "2026-10-02T22:25:29.247Z",codex-sol,"Restart: locked npm ci and release:check pass 184/184 tests, zero skips; configured coverage reports 100% lines/branches/functions for four TypeScript sources, without a separate statements dimension. PM-linked prepare-merge-driver tests, strict health with merge drivers and tracked dist equality pass. The original incomplete pm-ops fail-closed fix remains intact. Whole-authored-source coverage and declaration documentation remain incomplete, including the existing published pm-ops TSX omission tracked by pm-ops#132. Keep reviewer prerequisites separate; no merge, publish or close. Release claim for orchestrator."
+  "2026-10-02T22:50:32.994Z",codex-sol,"Cubic review round: linked manifest.json (valid tracking omission). Disposable actual-launcher NODE_PATH regular-file reproduction confirms ENOTDIR masks MODULE_NOT_FOUND but install fails closed without skip. Canonical pm-ops template must be repaired/published first; local consumer divergence is refused and a follow-up item is open. Original release:check 184/184, four-source L/B/F 100 remains valid; no runtime code changed. Retain TSX and whole-source coverage blockers."
 notes[4]{created_at,author,text}:
   "2026-09-29T17:03:03.624Z",codex-ts-starter-0929,The undocumented TSX fixture reproduces a silent pass with both pm-ops 2026.9.23 and published 2026.9.29. Canonical repair remains unmerged in unbraind/pm-ops PR 132. Keep that acceptance criterion unresolved and do not duplicate the analyzer locally. Released tooling does contain the canonical incomplete-package launcher repair. Its new behavioral regression failed before copying the shipped template.
   "2026-09-29T17:04:42.433Z",codex-ts-starter-0929,"Clean npm ci and release:check passed 184 tests on Node 24.19.0. The documentation analyzer reports 9 files and 20 declarations; this policy denominator omits TSX and some internal declarations. Coverage reports 100 percent lines branches and functions for four source files only and no independent statement metric. This is not full authored-source four-metric certification. Production audit reports zero vulnerabilities. Strict tracker health and validation pass. Public package artifact allowlist contains nine files and excludes tracker scripts fixtures and deployment data. TSX reproduction remains blocked by pm-ops PR 132."
   "2026-09-29T17:05:17.243Z",codex-ts-starter-0929,Packed artifact 2026.9.26 candidate installed successfully with clean npm and Bun consumers using CLI 2026.9.29. Both runtimes initialized synthetic Git projects and installed the allowlisted packed extension. hello returned the requested Fixture greeting; native list retained an items array and total zero; ts-starter info passed. Command times for hello/list/info were 0.642-0.728 seconds under Node and 0.920-1.104 seconds under Bun. These are single-user smoke timings only. This extension has no standalone bin so npx/bunx package CLI execution is inapplicable. No release or deployment performed.
   "2026-09-29T17:07:12.493Z",codex-ts-starter-0929,"PM-linked release:check passed after selecting pm_context_mode=tracker. The initial none/source combination was correctly refused by CLI 2026.9.29 before execution; none now requires an isolated or snapshot workspace. Direct and linked release gates both pass, but denominator and review blockers remain. The linked test metadata now uses tracker context."
-files[5]{path,scope}:
-  package-lock.json,project
-  package.json,project
-  scripts/coverage-gate.ts,project
-  scripts/prepare-merge-driver.ts,project
-  test/prepare-merge-driver.test.ts,project
-tests[2]:
+files[7]:
+  - path: /tmp/claude-1000/land-wt/_pr-state/ts-launcher-probe.mjs
+    scope: global
+    note: Disposable Node-path ENOTDIR diagnostic reproduction
+  - path: manifest.json
+    scope: project
+  - path: package-lock.json
+    scope: project
+  - path: package.json
+    scope: project
+  - path: scripts/coverage-gate.ts
+    scope: project
+  - path: scripts/prepare-merge-driver.ts
+    scope: project
+  - path: test/prepare-merge-driver.test.ts
+    scope: project
+tests[3]:
   - command: "npm run release:check"
     scope: project
     pm_context_mode: tracker
@@ -39,6 +50,13 @@ tests[2]:
     provenance:
       author: codex-sol
       created_at: "2026-10-02T22:10:40.690Z"
+      source_kind: local_mutation
+      source_ref: land-restart/pm-ts-starter-114
+  - command: node /tmp/claude-1000/land-wt/_pr-state/ts-launcher-probe.mjs
+    scope: global
+    provenance:
+      author: codex-sol
+      created_at: "2026-10-02T22:50:31.655Z"
       source_kind: local_mutation
       source_ref: land-restart/pm-ts-starter-114
 docs[1]{path,scope}:

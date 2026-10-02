@@ -1,0 +1,12 @@
+id: pm-ts-starter-rku9
+title: Consume canonical launcher non-ENOENT diagnostic repair after pm-ops publication
+description: "Cubic PR #114 finding reproduced in a disposable project: NODE_PATH points at a regular file, installer resolution fails, lstat presence probing raises ENOTDIR and masks the original MODULE_NOT_FOUND. Installation still fails closed and never prints the omit-dev skip. Keep consumer byte-identical to pinned pm-ops template. Canonical repair must preserve original resolution errors for non-ENOENT stat failures, receive tests and publication in pm-ops, then update this consumer pin/template and rerun acceptance."
+type: Issue
+status: open
+priority: 2
+tags: []
+created_at: "2026-10-02T22:50:31.100Z"
+updated_at: "2026-10-02T22:50:31.100Z"
+author: codex-sol
+acceptance_criteria: Canonical published pm-ops launcher treats non-ENOENT probe failures as absence not proven and rethrows original resolution error. Consumer remains byte-identical to published template. Real NODE_PATH file and permission fixtures pass without an omit-dev skip.
+body: ""
