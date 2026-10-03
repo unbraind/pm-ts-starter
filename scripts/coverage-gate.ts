@@ -42,8 +42,8 @@ import { fileURLToPath } from "node:url";
 /**
  * Minimum acceptable percentage for each coverage dimension Node reports.
  *
- * Statement coverage is not listed because V8 reports statements as lines; the
- * line figure is the statement figure for this runtime.
+ * Statement coverage is not independently measured by this Node reporter.
+ * Passing these three metrics does not establish statement coverage.
  */
 interface CoverageThresholds {
   /** Minimum percentage of executable lines that must be covered. */
