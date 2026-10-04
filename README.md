@@ -1,12 +1,12 @@
 # pm-ts-starter
 
-TypeScript reference extension for [pm-cli](https://github.com/unbraind/pm-cli) covering **all 9 SDK capability types** in one fully-typed `index.ts`, checked against the **pm-cli 2026.9.29 SDK**. The declared runtime compatibility floor remains 2026.8.7.
+TypeScript reference extension for [pm-cli](https://github.com/unbraind/pm-cli) covering **all 9 SDK capability types** in one fully-typed `index.ts`, checked against the **pm-cli 2026.10.4 SDK**. The declared runtime compatibility floor remains 2026.8.7.
 
-Development dependencies pin CLI/SDK and `pm-ops` to 2026.9.29 and
-`pm-changelog` to 2026.9.25. The prepare hook rejects incomplete `pm-ops`
+Development dependencies pin CLI/SDK and `pm-ops` to 2026.10.4 and
+`pm-changelog` to 2026.10.4. The prepare hook rejects incomplete `pm-ops`
 installations so missing merge drivers cannot silently pass installation.
-The published documentation analyzer still omits TSX; adopting TSX requires
-the canonical repair tracked in [pm-ops #132](https://github.com/unbraind/pm-ops/pull/132).
+The pinned documentation analyzer covers TypeScript and TSX. A consumer
+regression verifies that undocumented declarations in either file type fail.
 
 Each capability is a small, SAFE, inert demo with teaching comments. Copy the
 ones you need into your own extension and delete the rest. The reference also

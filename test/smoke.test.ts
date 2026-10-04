@@ -1185,13 +1185,18 @@ test("context-demo defaults to json format when --format is omitted", async (t) 
   assert.ok(result.result, "context-demo with default json format must return a truthy result");
 });
 
-test("pmJson failure with empty stderr uses the period fallback in the message", async (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "pm-ts-starter-silent-fail-"));
+/** Exercise a silent failing CLI in a disposable command fixture. */
+async function withSilentFailingPm(t: TestContext, body: () => Promise<void>): Promise<void> {
+  const dir = mkdtempSync(join(tmpdir(), "pm-ts-starter-silent-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
+  await withFakePmOnPath(dir, "#!/bin/sh\nexit 1\n", body);
+}
+
+test("pmJson failure with empty stderr uses the period fallback in the message", async (t) => {
 
   // A fake `pm` that exits 1 with no output — exercises the empty-detail
   // arms of the pmJson failure message and cause construction.
-  await withFakePmOnPath(dir, "#!/bin/sh\nexit 1\n", async () => {
+  await withSilentFailingPm(t, async () => {
     await assert.rejects(
       () => harness.runCommand({ command: "ts-starter search-demo", options: { query: "test" }, args: [], pmRoot: "/tmp" }),
       (err: unknown) => {
@@ -1205,10 +1210,8 @@ test("pmJson failure with empty stderr uses the period fallback in the message",
 });
 
 test("context-demo non-json failure with empty stderr yields undefined why", async (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "pm-ts-starter-ctx-silent-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
 
-  await withFakePmOnPath(dir, "#!/bin/sh\nexit 1\n", async () => {
+  await withSilentFailingPm(t, async () => {
     await assert.rejects(
       () => harness.runCommand({ command: "ts-starter context-demo", options: { format: "markdown" }, args: [], pmRoot: "/tmp" }),
       (err: unknown) => isPmCliExpectedError(err) && /context demo failed/.test((err as Error).message),

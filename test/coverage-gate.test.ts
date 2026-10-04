@@ -97,6 +97,13 @@ function writePackageJson(dir: string, gate: Record<string, unknown>): void {
   writeFileSync(join(dir, "package.json"), JSON.stringify({ coverageGate: gate }));
 }
 
+/** Write a fixture compiler artifact without repeating output-directory setup. */
+function writeCompiledFile(dir: string, name: string, contents: string): void {
+  const output = join(dir, "dist");
+  mkdirSync(output, { recursive: true });
+  writeFileSync(join(output, `${name}.js`), contents);
+}
+
 /**
  * Writes a tiny TypeScript source file that exports a single constant.
  *
@@ -381,8 +388,7 @@ test("coverage gate fails when an ignored file emits runtime code", async (t) =>
   });
   writeSource(dir, "runtime");
   // Manually create the compiled output with runtime code.
-  mkdirSync(join(dir, "dist"), { recursive: true });
-  writeFileSync(join(dir, "dist", "runtime.js"), "export const value = 42;\n");
+  writeCompiledFile(dir, "runtime", "export const value = 42;\n");
 
   await assertGateFails(dir, /emits runtime code/);
 });
@@ -398,8 +404,7 @@ test("coverage gate passes when an ignored file is genuinely type-only", async (
   });
   writeFileSync(join(dir, "types.ts"), "export type Point = { x: number; y: number };\n");
   // Manually create the compiled output with only `export {};`.
-  mkdirSync(join(dir, "dist"), { recursive: true });
-  writeFileSync(join(dir, "dist", "types.js"), "export {};\n");
+  writeCompiledFile(dir, "types", "export {};\n");
 
   const { code, stderr } = await runGate(dir);
   assert.strictEqual(code, 0, `a type-only ignore entry should pass; stderr: ${stderr}`);
@@ -608,8 +613,7 @@ test("coverage gate uses default emit paths when tsc output has no compilerOptio
     gate: { thresholds: ZERO_THRESHOLDS, ignore: ["types.ts"] },
   });
   writeFileSync(join(dir, "types.ts"), "export type Point = { x: number; y: number };\n");
-  mkdirSync(join(dir, "dist"), { recursive: true });
-  writeFileSync(join(dir, "dist", "types.js"), "export {};\n");
+  writeCompiledFile(dir, "types", "export {};\n");
   // Fake `tsc` that outputs `{}` — no compilerOptions, so defaults are used.
   const fakeTsc = writeNodeCommand(dir, "fake-tsc", 'console.log("{}");\n');
 
