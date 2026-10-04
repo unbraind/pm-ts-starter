@@ -66,3 +66,12 @@ required pm-ops to 2026.9.13 and was refused. No open Dependabot security alerts
 were present. [pm-ts-starter-audit104](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-audit104.toon)
 tracks the required canonical dependency replacement or upstream patch. A green
 configured release gate does not make the full development audit clean.
+
+CodeRabbit review corrections: the certification acceptance criterion now names
+CLI 2026.10.4; the separate whole-authored-source four-metric criterion remains
+explicit and unmet. The linked release command creates `/tmp/claude-1000` before
+`flock /tmp/claude-1000/heavy-gate.lock npm run release:check`; a disposable
+missing-parent probe fails before creation and passes afterwards. This preserves
+the mandatory shared lock and the verified release command. Initial Node 22/26
+and CodeQL CI passed. Sourcery weekly and Cubic monthly quota notices are missing
+substantive review evidence; Gemini/Copilot have not replied.
