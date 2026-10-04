@@ -1,10 +1,8 @@
 /**
- * Shared entry-point guard for the executable scripts in this package.
+ * Entry-point guard used by the docstring launcher and its behavioral tests.
  *
- * All three shipped scripts (the coverage gate, the docstring gate and the
- * merge-driver preparer) must behave identically when imported by their suites
- * versus executed as `main`, so the comparison lives in exactly one measured
- * module and can never drift between copies.
+ * Canonical path comparison keeps directly invoked symlinks from silently
+ * skipping a required gate. This module is included in strict source coverage.
  */
 
 import { realpathSync } from "node:fs";

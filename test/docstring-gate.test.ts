@@ -31,23 +31,26 @@ test("docstring gate runGate reports this package as fully documented", () => {
   assert.match(result.stdout, /^docstring-gate: \d+ file\(s\), \d+ declaration\(s\) documented\.$/);
 });
 
-test("docstring gate runGate reports an undocumented declaration and exits non-zero", () => {
-  const root = mkdtempSync(join(tmpdir(), "pm-ts-starter-docgate-"));
-  try {
-    mkdirSync(join(root, "src"), { recursive: true });
-    writeFileSync(join(root, "src", "sample.ts"), "export function undocumented(value: string): string {\n  return value;\n}\n");
-    const result = runGate(root);
-    assert.equal(result.exitCode, 1);
-    assert.equal(result.stdout, "", "a failing run writes nothing to stdout");
-    assert.match(result.stderr, /1 violation\(s\)/);
-    // Assert the LAYOUT runGate formats, not the reason wording, which pm-ops
-    // owns: re-asserting the analyzer's strings here would re-couple this suite
-    // to rules the header says live with the analyzer.
-    assert.match(result.stderr, /sample\.ts:1\s+undocumented\s+-\s+\S/);
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
+for (const extension of ["ts", "tsx"]) {
+  test(`docstring gate rejects an undocumented ${extension} declaration`, () => {
+    const root = mkdtempSync(join(tmpdir(), "pm-ts-starter-docgate-"));
+    try {
+      mkdirSync(join(root, "src"), { recursive: true });
+      writeFileSync(join(root, "src", `sample.${extension}`), "export function undocumented(value: string): string {\n  return value;\n}\n");
+      const result = runGate(root);
+      assert.equal(result.exitCode, 1);
+      assert.equal(result.stdout, "", "a failing run writes nothing to stdout");
+      assert.match(result.stderr, /1 violation\(s\)/);
+      // Assert the LAYOUT runGate formats, not the reason wording, which pm-ops
+      // owns: re-asserting the analyzer's strings here would re-couple this suite
+      // to rules the header says live with the analyzer.
+      assert.match(result.stderr, /sample\.tsx?:1\s+undocumented\s+-\s+\S/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+}
 
 test("docstring gate runGate passes a root whose every declaration is documented", () => {
   const root = mkdtempSync(join(tmpdir(), "pm-ts-starter-docgate-clean-"));

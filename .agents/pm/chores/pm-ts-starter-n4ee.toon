@@ -1,34 +1,65 @@
 id: pm-ts-starter-n4ee
-title: Certify CLI SDK 2026.9.29 and fail closed on incomplete merge-driver dependencies
-description: "Update exact development pins to published CLI and pm-ops 2026.9.29 and pm-changelog 2026.9.25. Verify the consumer documentation gate rejects TSX omissions alongside TypeScript. Preserve the public runtime compatibility floor. Validate reproducible install, release gates, packed npm and Bun execution in synthetic projects. No publication until mandatory coverage and reviews pass. Rollback is reverting this dependency and regression-test commit."
+title: Certify pm-ts-starter on PM CLI/SDK 2026.10.4 and consolidate pending dependency updates
+description: "Certify exact PM CLI/SDK, pm-ops and pm-changelog 2026.10.4; consolidate Dependabot CodeQL, CLI, jscpd and Node type updates. Preserve host floor 2026.8.7 and all strict gates. Refresh canonical launcher and cover malformed lookup diagnostics; remove newly detected duplicate logic by sharing fixtures and entry guard. Restore managed pm-github for strict CI health. Record real tracker npx/native-Bun acceptance and the separate unpatched development audit blocker."
 type: Chore
 status: blocked
 priority: 1
 tags: []
 created_at: "2026-09-29T17:00:46.063Z"
-updated_at: "2026-10-02T22:57:17.905Z"
+updated_at: "2026-10-04T11:57:25.722Z"
 author: codex-ts-starter-0929
 acceptance_criteria: An undocumented TSX declaration beside valid TypeScript fails the consumer documentation gate; Pinned installation and SDK typecheck pass with CLI 2026.9.29; Packed npm and Bun consumers execute hello and preserve native list output; All authored executable source meets four coverage metrics and required reviews pass before merge; An incomplete pm-ops directory makes prepare fail rather than silently skipping merge-driver installation
 risk: low
-blocked_reason: TSX analyzer fix awaits pm-ops PR 132; four-metric all-source coverage and full declaration documentation remain unmet; exact-head reviews pending.
-comments[4]{created_at,author,text}:
+blocked_by: pm-ts-starter-audit104
+blocked_reason: Full development npm audit has four high findings rooted in unpatched braces 3.0.3; required current pm-ops duplication gate depends on fast-glob.
+actual_result: "2026-10-04: full locked release:check passed 186/186, zero skips; 100% measured lines/branches/functions across five configured source files; 0% duplication across 19 authored sources. Canonical launcher 8/8 and .ts/.tsx docstring rejection passed. Strict health, production audit, Bun CI graph and real tracker npx/native-Bun commands passed (all 75 items; 9 capabilities; 5 search results). Read-only GitHub preview: 0 imports/1 update/0 skips. Full npm audit remains NOT CLEAN: 4 high unpatched braces findings; separate follow-up audit104. CI/reviews pending; orchestrator owns merge/closure."
+dependencies[1]{id,kind,created_at,author,source_kind,author_source}:
+  pm-ts-starter-audit104,blocked_by,"2026-10-04T11:57:23.515Z",codex-sol,"cli:update:blocked_by",detected
+comments[9]{created_at,author,text}:
   "2026-10-02T22:10:38.250Z",codex-sol,"Restart by codex-sol: preserved remote PR #114 and all existing bot replies/reactions were inspected. Branch is already current with origin/main. No new actionable unresolved inline finding is present. Retain documented coverage/health/publication blockers; rerun unchanged full CI gate with the host-wide flock. No merge, publish or item closure."
   "2026-10-02T22:25:29.247Z",codex-sol,"Restart: locked npm ci and release:check pass 184/184 tests, zero skips; configured coverage reports 100% lines/branches/functions for four TypeScript sources, without a separate statements dimension. PM-linked prepare-merge-driver tests, strict health with merge drivers and tracked dist equality pass. The original incomplete pm-ops fail-closed fix remains intact. Whole-authored-source coverage and declaration documentation remain incomplete, including the existing published pm-ops TSX omission tracked by pm-ops#132. Keep reviewer prerequisites separate; no merge, publish or close. Release claim for orchestrator."
   "2026-10-02T22:50:32.994Z",codex-sol,"Cubic review round: linked manifest.json (valid tracking omission). Disposable actual-launcher NODE_PATH regular-file reproduction confirms ENOTDIR masks MODULE_NOT_FOUND but install fails closed without skip. Canonical pm-ops template must be repaired/published first; local consumer divergence is refused and a follow-up item is open. Original release:check 184/184, four-source L/B/F 100 remains valid; no runtime code changed. Retain TSX and whole-source coverage blockers."
   "2026-10-02T22:57:14.567Z",codex-sol,"Valid Cubic/Greptile finding: the session-only diagnostic probe was incorrectly linked as a durable file/test. Removed those current links and preserved all historical receipts. The original portable repository prepare test remains linked; no canonical code changed. Diagnostic is historical evidence only; follow-up pm-ts-starter-rku9 contains portable reproduction steps. No claim that error masking is repaired."
+  "2026-10-04T11:38:52.723Z",codex-sol,"2026-10-04: certification from isolated origin/main worktree 934da76. Reuse this open Chore. Consolidate Dependabot #113 exact CodeQL SHA, #116 CLI update superseded by 2026.10.4, #117 jscpd 5.4.0 and #118 @types/node superseded by latest; exact all devDependencies, preserve 2026.8.7 host floor, full enforced 100% gate and npm/native-Bun real-tracker dogfood. No open security alerts. Canonical launcher publication follow-up is now consumable through pm-ops 2026.10.4."
+  "2026-10-04T11:47:35.508Z",codex-sol,"Installed exact pins including Babel parser 8.0.6 (newer than 8.0.5 despite latest dist-tag pointing to 7.x), ESLint 10.12.0 and jscpd 5.4.0. Byte-identity failed before canonical template copy and launcher suite then passed 7/7. New duplication gate failed test-first on three real clone pairs at unchanged 0% threshold; refactor shared logic, preserve assertions and strengthen coverage inventory for shared guard. Full npm audit has four high findings rooted in braces@3.0.3 via fast-glob/micromatch/pm-ops; registry maximum is 3.0.3 and GHSA-vfj7-8cjw-p6xm lists no patched version. Do not conceal or downgrade required latest pm-ops to npm audit proposed 2026.9.13."
+  "2026-10-04T11:54:44.318Z",codex-sol,"Full release:check passed 185/185 tests, zero skips, 100% measured lines/branches/functions across five configured sources including the shared entry guard; 0% duplication across 19 authored sources. Strict health and production audit passed; full development audit still has four high unpatched braces findings. GitHub read-only atomic preview proposes 0 imports/1 update/0 skips, no writes. Confirmed published docstrings now includes TSX: add a consumer .ts/.tsx rejection matrix before replacing the stale README omission notice. This adds coverage, changes no thresholds, and retains original docstring assertions."
+  "2026-10-04T11:56:19.849Z",codex-sol,"Real tracker packed acceptance passed under npx -y @unbrained/pm-cli@2026.10.4 and bunx --bun @unbrained/pm-cli@2026.10.4. hello --name Fleet --loud returned HELLO, FLEET!; ts-starter info reported 9 capabilities and unchanged supported floor 2026.8.7 (sdk_target is the peer floor, not the dev pin); list --all --output-budget unbounded --output-limit unbounded returned all 75 real items; context-demo --format json --depth brief succeeded; search-demo certify --limit 5 returned 5 results. All commands exited 0; scratch copy deleted. CI bun install --no-save graph also passed."
+  "2026-10-04T11:57:24.818Z",codex-sol,"Final complete gate passed 186/186 tests after TSX matrix addition, zero skips, 100% measured line/branch/function coverage and 0% duplication. npm/native-Bun real-tracker dogfood and CI Bun graph passed. Keep certification blocked on pm-ts-starter-audit104; do not treat configured green CI as a clean full development audit. Release claim for orchestrator without closing."
 notes[4]{created_at,author,text}:
   "2026-09-29T17:03:03.624Z",codex-ts-starter-0929,The undocumented TSX fixture reproduces a silent pass with both pm-ops 2026.9.23 and published 2026.9.29. Canonical repair remains unmerged in unbraind/pm-ops PR 132. Keep that acceptance criterion unresolved and do not duplicate the analyzer locally. Released tooling does contain the canonical incomplete-package launcher repair. Its new behavioral regression failed before copying the shipped template.
   "2026-09-29T17:04:42.433Z",codex-ts-starter-0929,"Clean npm ci and release:check passed 184 tests on Node 24.19.0. The documentation analyzer reports 9 files and 20 declarations; this policy denominator omits TSX and some internal declarations. Coverage reports 100 percent lines branches and functions for four source files only and no independent statement metric. This is not full authored-source four-metric certification. Production audit reports zero vulnerabilities. Strict tracker health and validation pass. Public package artifact allowlist contains nine files and excludes tracker scripts fixtures and deployment data. TSX reproduction remains blocked by pm-ops PR 132."
   "2026-09-29T17:05:17.243Z",codex-ts-starter-0929,Packed artifact 2026.9.26 candidate installed successfully with clean npm and Bun consumers using CLI 2026.9.29. Both runtimes initialized synthetic Git projects and installed the allowlisted packed extension. hello returned the requested Fixture greeting; native list retained an items array and total zero; ts-starter info passed. Command times for hello/list/info were 0.642-0.728 seconds under Node and 0.920-1.104 seconds under Bun. These are single-user smoke timings only. This extension has no standalone bin so npx/bunx package CLI execution is inapplicable. No release or deployment performed.
   "2026-09-29T17:07:12.493Z",codex-ts-starter-0929,"PM-linked release:check passed after selecting pm_context_mode=tracker. The initial none/source combination was correctly refused by CLI 2026.9.29 before execution; none now requires an isolated or snapshot workspace. Direct and linked release gates both pass, but denominator and review blockers remain. The linked test metadata now uses tracker context."
-files[6]{path,scope}:
-  manifest.json,project
-  package-lock.json,project
-  package.json,project
-  scripts/coverage-gate.ts,project
-  scripts/prepare-merge-driver.ts,project
-  test/prepare-merge-driver.test.ts,project
-tests[2]:
+files[11]:
+  - path: .github/workflows/ci.yml
+    scope: project
+    note: Restore managed pm-github before strict health
+  - path: .github/workflows/codeql.yml
+    scope: project
+    note: Dependabot #113 exact action SHA
+  - path: manifest.json
+    scope: project
+  - path: package-lock.json
+    scope: project
+    note: Exact dependency resolution and Dependabot consolidation
+  - path: package.json
+    scope: project
+  - path: scripts/coverage-gate.ts
+    scope: project
+  - path: scripts/main-invocation.ts
+    scope: project
+    note: Shared entry guard added to strict coverage inventory
+  - path: scripts/prepare-merge-driver.ts
+    scope: project
+  - path: test/coverage-gate.test.ts
+    scope: project
+    note: Share emitted-artifact fixture without weakening assertions
+  - path: test/prepare-merge-driver.test.ts
+    scope: project
+  - path: test/smoke.test.ts
+    scope: project
+    note: Share silent-failure fixture and preserve both regression assertions
+tests[3]:
   - command: "npm run release:check"
     scope: project
     pm_context_mode: tracker
@@ -44,6 +75,18 @@ tests[2]:
       created_at: "2026-10-02T22:10:40.690Z"
       source_kind: local_mutation
       source_ref: land-restart/pm-ts-starter-114
-docs[1]{path,scope}:
-  README.md,project
+  - command: "flock /tmp/claude-1000/heavy-gate.lock npm run release:check"
+    scope: project
+    timeout_seconds: 2400
+    provenance:
+      author: codex-sol
+      created_at: "2026-10-04T11:39:51.726Z"
+      source_kind: local_mutation
+      source_ref: chore/pm-ts-starter-pm-cli-2026-10-4
+docs[2]:
+  - path: docs/certification-2026.10.4.md
+    scope: project
+    note: Exact gates and real tracker packed dogfood receipts
+  - path: README.md
+    scope: project
 body: ""

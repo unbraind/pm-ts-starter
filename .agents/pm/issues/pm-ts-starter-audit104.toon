@@ -1,0 +1,15 @@
+id: pm-ts-starter-audit104
+title: Full development audit is blocked by unpatched braces through required latest pm-ops
+description: npm audit reports 4 high findings rooted in braces 3.0.3 through fast-glob 3.3.3 / micromatch / pm-ops 2026.10.4. npm maximum braces version is 3.0.3; GHSA-vfj7-8cjw-p6xm lists no patched version. Requires a canonical dependency replacement or a patched braces publication; retain required tool pins and full audit honesty.
+type: Issue
+status: open
+priority: 1
+tags: []
+created_at: "2026-10-04T11:47:36.405Z"
+updated_at: "2026-10-04T11:47:37.558Z"
+author: codex-sol
+expected_result: Both production and full development npm audits pass with genuine patched dependencies.
+actual_result: No open Dependabot alerts; full npm audit exits 1 with four high findings; suggested fix downgrades required pm-ops to 2026.9.13 and is refused.
+docs[1]{path,scope,note}:
+  "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",global,Official unpatched advisory
+body: ""
