@@ -2,14 +2,19 @@ id: pm-ts-starter-audit104
 title: Full development audit is blocked by unpatched braces through required latest pm-ops
 description: npm audit reports 4 high findings rooted in braces 3.0.3 through fast-glob 3.3.3 / micromatch / pm-ops 2026.10.4. npm maximum braces version is 3.0.3; GHSA-vfj7-8cjw-p6xm lists no patched version. Requires a canonical dependency replacement or a patched braces publication; retain required tool pins and full audit honesty.
 type: Issue
-status: open
+status: closed
 priority: 1
 tags: []
 created_at: "2026-10-04T11:47:36.405Z"
-updated_at: "2026-10-04T11:47:37.558Z"
+updated_at: "2026-10-21T18:49:47.715Z"
+closed_at: "2026-10-21T18:49:43.280Z"
+completed_at: "2026-10-21T18:49:43.280Z"
 author: codex-sol
 expected_result: Both production and full development npm audits pass with genuine patched dependencies.
 actual_result: No open Dependabot alerts; full npm audit exits 1 with four high findings; suggested fix downgrades required pm-ops to 2026.9.13 and is refused.
+comments[1]{created_at,author,text}:
+  "2026-10-21T18:48:52.975Z",codex-agent,"Authorized tracker reconciliation, audit 2026-10-21. Owner-authorized takeover of any historical assignment for this verified terminal transition. Reverified current main e5d15d4964cc: fresh npm audit reports zero findings; source tree exactly matches the audited snapshot. **Full development audit is blocked by unpatched braces through required latest pm-ops.** Fresh npm audit exits 0 with zero findings; current package.json uses pm-ops 2026.10.17 and no direct fast-glob, so the old unpatched required-chain blocker no longer holds."
 docs[1]{path,scope,note}:
   "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",global,Official unpatched advisory
+close_reason: "Reverified current main e5d15d4964cc: fresh npm audit reports zero findings; source tree exactly matches the audited snapshot. **Full development audit is blocked by unpatched braces through required latest pm-ops.** Fresh npm audit exits 0 with zero findings; current package.json uses pm-ops 2026.10.17 and no direct fast-glob, so the old unpatched required-chain blocker no longer holds."
 body: ""
