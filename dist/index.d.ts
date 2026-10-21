@@ -1,5 +1,7 @@
 import { type ExtensionBlueprint, type ExtensionModule } from "@unbrained/pm-cli/sdk/authoring";
 import type { PmCliExpectedError } from "@unbrained/pm-cli/sdk";
+export * from "./backend.ts";
+export * from "./backend-project.ts";
 /**
  * Reads a JSON file that sits at the package root, from either module layout.
  *

@@ -1,0 +1,31 @@
+id: pm-ts-starter-conformance
+title: Generate deployable typed backend conformance extensions
+description: "Generate a small production TypeScript extension with directory and injected remote read adapters, executable receipt contract tests, bounded agent output and typed unsupported-operation refusals with remedies."
+type: Feature
+status: in_progress
+priority: 1
+tags: []
+created_at: "2026-10-21T20:34:15.483Z"
+updated_at: "2026-10-21T20:51:22.045Z"
+assignee: codex-agent
+claim_principal: codex-agent
+author: codex-agent
+acceptance_criteria: "Generated npm and Bun consumers pass without Git; Contract tests fail when one receipt invariant is removed; Validate a read-only public fleet tracker copy without Git and report measured counts; Typed SDK and CLI, TOON and JSON output, README and example, unchanged npm and Bun CI release gates pass"
+comments[5]{created_at,author,text}:
+  "2026-10-21T20:34:19.732Z",codex-agent,"Overlap checked against pinned core sdk/extension/scaffold and pm-starter main: core creates a skeleton; starter setup returns an inert scaffold plan and laboratory examples. Neither generates a deployable typed directory/remote adapter with executable receipt contracts. This feature owns that narrow project generator. Reconciliation PR 147 items are excluded. Keep the pinned SDK unchanged; run focused checks locally and both full release gates in CI due to CPU saturation."
+  "2026-10-21T20:41:18.346Z",codex-agent,"Implemented a standalone nine-file TypeScript project generator, typed directory and injected remote adapters, SDK complete-list certification, compact summaries and fail-before-provider write refusals. Public read-only validation used unbraind/pm-ts-starter main e5d15d4964ccddf5b3af2a1a127c7793cf899408: 163 files remained hash-identical; directory Node and native Bun each certified 78 items in 288-byte JSON; remote boundary also certified 78. Git absent from PATH and discovery ceiling set. No deployed remote-service acceptance is claimed."
+  "2026-10-21T20:43:06.485Z",codex-agent,"Focused backend tests pass 6/6, including actual npm and Bun installation/build and native Bun contracts with Git absent. Targeted runtime coverage is 100 percent lines, branches and functions across both new modules. Behavioral revert proof: replacing only createBackendAdapter receipt certification with the unvalidated provider result makes the generated suite fail with read_output must be load-bearing. Raised only the runtime peer/manifest floor to tested 2026.10.17 because the new exports require complete-list certification; the devDependency pin remains unchanged. CI now executes the existing full npm and Bun release:check scripts at unchanged thresholds on Node 22 and 26."
+  "2026-10-21T20:45:04.452Z",codex-agent,"Added a generated-extension host-harness acceptance and TOON decode round trip. The host test caught that an empty flags array still requires schema capability in the pinned SDK; omitted unused flags metadata so the generated extension needs only commands. The failed linked run wrote no tracker evidence because test-result tracking is disabled; rerunning the corrected contract now. SDK empty-flags capability behavior will be reported as a UX gap, without filing upstream work."
+  "2026-10-21T20:51:22.044Z",codex-agent,"Corrected linked test run passed 6/6 with zero failures/skips/cancellations; npm and Bun install/build, Node and native Bun generated contracts (one test each), host activation, TOON round trip and the behavioral revert all passed. Exact linked command: node --test test/backend.test.ts. Test-result tracking is disabled in this tracker, so this comment preserves the measured result. Compatibility/manifest checks passed 5/5; npm run typecheck, npm run build:test, npm run lint, npm run docstring and npm run duplication passed."
+files[5]{path,scope}:
+  .github/workflows/ci.yml,project
+  backend-project.ts,project
+  backend.ts,project
+  index.ts,project
+  test/backend.test.ts,project
+tests[1]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
+  node --test test/backend.test.ts,project,codex-agent,"2026-10-21T20:41:33.831Z",local_mutation,feat/typed-backend-conformance
+docs[2]{path,scope}:
+  docs/backend-conformance.md,project
+  README.md,project
+body: ""
