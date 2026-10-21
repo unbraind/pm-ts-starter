@@ -119,7 +119,7 @@ test("generated npm and Bun projects build and execute contracts with Git absent
   assert.equal(generateBackendProject(project, "pm-contract").ok, true);
   const bin = join(root, "bin");
   mkdirSync(bin);
-  for (const [name, path] of [["node", process.execPath], ["npm", process.env.npm_execpath ?? join(dirname(process.execPath), "../lib/node_modules/npm/bin/npm-cli.js")], ["bun", process.env.BUN_EXE ?? spawnSync("which", ["bun"], { encoding: "utf8" }).stdout.trim()]]) {
+  for (const [name, path] of [["node", process.execPath], ["npm", join(dirname(process.execPath), "npm")], ["bun", process.env.BUN_EXE ?? spawnSync("which", ["bun"], { encoding: "utf8" }).stdout.trim()]]) {
     assert.ok(path, name + " must be available");
     symlinkSync(path, join(bin, name));
   }
