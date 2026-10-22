@@ -6,24 +6,64 @@ status: in_progress
 priority: 1
 tags: []
 created_at: "2026-10-21T20:34:15.483Z"
-updated_at: "2026-10-21T20:54:48.357Z"
+updated_at: "2026-10-22T10:24:30.767Z"
 author: codex-agent
 acceptance_criteria: "Generated npm and Bun consumers pass without Git; Contract tests fail when one receipt invariant is removed; Validate a read-only public fleet tracker copy without Git and report measured counts; Typed SDK and CLI, TOON and JSON output, README and example, unchanged npm and Bun CI release gates pass"
-comments[6]{created_at,author,text}:
+comments[15]{created_at,author,text}:
   "2026-10-21T20:34:19.732Z",codex-agent,"Overlap checked against pinned core sdk/extension/scaffold and pm-starter main: core creates a skeleton; starter setup returns an inert scaffold plan and laboratory examples. Neither generates a deployable typed directory/remote adapter with executable receipt contracts. This feature owns that narrow project generator. Reconciliation PR 147 items are excluded. Keep the pinned SDK unchanged; run focused checks locally and both full release gates in CI due to CPU saturation."
   "2026-10-21T20:41:18.346Z",codex-agent,"Implemented a standalone nine-file TypeScript project generator, typed directory and injected remote adapters, SDK complete-list certification, compact summaries and fail-before-provider write refusals. Public read-only validation used unbraind/pm-ts-starter main e5d15d4964ccddf5b3af2a1a127c7793cf899408: 163 files remained hash-identical; directory Node and native Bun each certified 78 items in 288-byte JSON; remote boundary also certified 78. Git absent from PATH and discovery ceiling set. No deployed remote-service acceptance is claimed."
   "2026-10-21T20:43:06.485Z",codex-agent,"Focused backend tests pass 6/6, including actual npm and Bun installation/build and native Bun contracts with Git absent. Targeted runtime coverage is 100 percent lines, branches and functions across both new modules. Behavioral revert proof: replacing only createBackendAdapter receipt certification with the unvalidated provider result makes the generated suite fail with read_output must be load-bearing. Raised only the runtime peer/manifest floor to tested 2026.10.17 because the new exports require complete-list certification; the devDependency pin remains unchanged. CI now executes the existing full npm and Bun release:check scripts at unchanged thresholds on Node 22 and 26."
   "2026-10-21T20:45:04.452Z",codex-agent,"Added a generated-extension host-harness acceptance and TOON decode round trip. The host test caught that an empty flags array still requires schema capability in the pinned SDK; omitted unused flags metadata so the generated extension needs only commands. The failed linked run wrote no tracker evidence because test-result tracking is disabled; rerunning the corrected contract now. SDK empty-flags capability behavior will be reported as a UX gap, without filing upstream work."
   "2026-10-21T20:51:22.044Z",codex-agent,"Corrected linked test run passed 6/6 with zero failures/skips/cancellations; npm and Bun install/build, Node and native Bun generated contracts (one test each), host activation, TOON round trip and the behavioral revert all passed. Exact linked command: node --test test/backend.test.ts. Test-result tracking is disabled in this tracker, so this comment preserves the measured result. Compatibility/manifest checks passed 5/5; npm run typecheck, npm run build:test, npm run lint, npm run docstring and npm run duplication passed."
   "2026-10-21T20:54:47.245Z",codex-agent,"Initial CI run https://github.com/unbraind/pm-ts-starter/actions/runs/39673952463 passed npm release:check on Node 22 and 26: 193/193 tests each, zero failures/skips/cancellations, seven measured sources at 100 percent lines/branches/functions. Bun release gates exposed a consumer harness issue: npm_execpath is Bun under bun run. Fixed the shim to use the actual Node toolchain npm. Reproduction command env npm_execpath=bun node --test test/backend.test.ts now passes 6/6. CodeQL passed. Final unchanged-threshold npm/Bun gates and exact-head run URL will be reported in PR 148; automated review providers did not supply approval. Implementation claim is released for orchestrator verification; item remains in_progress."
-files[5]{path,scope}:
+  "2026-10-22T09:32:56.430Z",pi-agent,"Review round for PR 148: three unresolved CodeRabbit threads (generated CLI option-like tracker token, README pin drift, generated-project subprocess timeout and Bun prerequisite). Verifying each against current code before editing."
+  "2026-10-22T09:43:06.213Z",pi-agent,"Verified PR 148 threads against current code. Generated CLI destructuring treats a leading --json as the tracker path. README lines 5-6 still say 2026.10.4 while package.json pins CLI/SDK and pm-ops at 2026.10.17 and pm-changelog at 2026.10.16. Generated consumer spawnSync calls have no timeout, and a missing which result can throw before the Bun prerequisite message. Local Bun skipping is not added: this contract and CI require Bun, and the review suggestion only adds a timeout. Historical certification notes stay unchanged."
+  "2026-10-22T09:56:56.225Z",pi-agent,"Review fixes: generated CLI parses a leading --json as a flag against the default tracker; README development pins match package.json; generated consumer commands use a 300000ms ceiling and Bun lookup failures stay prerequisites. Revert proofs failed as required: parser deep-equal, CLI wiring regex, timeout ceiling assertion after 2s, missing Bun exception, README pin sentence. Generated npm and Bun consumer test passed, including inspect --json. Local Bun skipping was not added."
+  "2026-10-22T10:04:46.973Z",codex-agent,"Continuing PR 148 with author codex-agent. Remote head is current and includes origin/main. Read all three unresolved threads and all comments; latest CodeRabbit review has no Outside diff range section. Auditing the previous uncommitted draft, reproducing behavioral revert proofs, then running unchanged npm and Bun release gates. No review replies or resolutions."
+  "2026-10-22T10:06:03.006Z",codex-agent,"Verified draft fixes and extended self-review: failed Bun lookups reject even with nonempty output; unknown leading options are refused; removed a load-sensitive wall-clock assertion while retaining ETIMEDOUT verification. Independent revert proofs rerun: reverting only parseCliInvocation to positional parsing fails leading-option test; removing only runBoundedCommand timeout fails ETIMEDOUT test; removing only Bun prerequisite validation fails missing-Bun assertion; reverting only README pin sentence fails dependency consistency test. Each mutant exited 1 with one failed test, restored immediately. Fixed focused run passed 4/4, no skips. Full generated consumer acceptance and unchanged release gates follow."
+  "2026-10-22T10:09:47.458Z",codex-agent,"Strict pm health passes after matching CI setup: install the project-pinned pm-github extension and prepare clone-local merge drivers. Existing stale-work and historical-provenance advisories remain; no history records rewritten. The linked backend run hit its default 120-second wrapper timeout on the shared host; retrying the identical command with a 600-second wrapper. Consumer subprocess ceilings remain 300 seconds. Full changelog regeneration made no content changes."
+  "2026-10-22T10:12:18.194Z",codex-agent,"Additional generated-CLI behavioral proof passed in an isolated real tracker: intact emitted inspect --json returned exit 0 and ok:true; reverting only the emitted cliSource argument-parsing statement to positional destructuring, rebuilding, and repeating the same invocation returned exit 2 and backend_unavailable. Package source remained unchanged during this external proof."
+  "2026-10-22T10:19:54.978Z",codex-agent,"Clean CI-identity Node 26 coverage passes 197/197, zero failures, skips, cancellations or TODOs; all seven measured sources reach unchanged 100 percent lines/branches/functions. Generated npm and native Bun consumers passed on retry, including default-tracker JSON and unknown-option refusal. Earlier linked run reached Bun default 5-second timeout under load; this clean retry passed. Earlier ambient npm gate exposed host npm user configuration exported as npm_config_allow_scripts (EALLOWSCRIPTS); clean HOME avoids that host-only setting. Interrupted that already-failed gate to rerun cleanly; it is not counted as a pass. Audit, pack and changelog check pass; final release verification is finishing."
+  "2026-10-22T10:24:27.740Z",codex-agent,"Review round complete: PRRT_kwDOSZpwFM6u_Z6Q fixes default-tracker option parsing; PRRT_kwDOSZpwFM6u_Z6g aligns README dependency pins; PRRT_kwDOSZpwFM6u_Z6i bounds subprocesses and makes Bun mandatory with actionable lookup failure. All findings valid; no Outside diff range findings. Full npm run release:check and bun run release:check both exit 0 on Node 26 with clean CI identity: 197/197 tests each, zero failures/skips/cancellations/TODOs; seven measured sources at 100 percent lines/branches/functions, 0 percent duplication, 24 documented declarations, production audit zero vulnerabilities, packing/changelog/release checks pass. Exact identity environment: env HOME=$(mktemp -d) GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 npm run release:check; same environment for bun run release:check, with BUN_EXE resolved beforehand. All mutants restored; committed dist rebuilt. Existing history prefix preserved byte-for-byte. Releasing claim while item remains in_progress; orchestrator verifies and closes."
+files[7]{path,scope}:
   .github/workflows/ci.yml,project
   backend-project.ts,project
   backend.ts,project
   index.ts,project
+  README.md,project
   test/backend.test.ts,project
-tests[1]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
-  node --test test/backend.test.ts,project,codex-agent,"2026-10-21T20:41:33.831Z",local_mutation,feat/typed-backend-conformance
+  test/compatibility-floor.test.ts,project
+tests[4]:
+  - command: node --test test/backend.test.ts
+    scope: project
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-21T20:41:33.831Z"
+      source_kind: local_mutation
+      source_ref: feat/typed-backend-conformance
+  - command: node --test --test-name-pattern 'leading option|generated project commands stop|Bun lookup|README development-pin' test/backend.test.ts test/compatibility-floor.test.ts
+    scope: project
+    provenance:
+      author: pi-agent
+      created_at: "2026-10-22T09:56:47.412Z"
+      source_kind: local_mutation
+      source_ref: feat/typed-backend-conformance
+  - command: "npm run release:check"
+    scope: project
+    timeout_seconds: 1800
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-22T10:12:30.757Z"
+      source_kind: local_mutation
+      source_ref: feat/typed-backend-conformance
+  - command: "bun run release:check"
+    scope: project
+    timeout_seconds: 1800
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-22T10:12:41.081Z"
+      source_kind: local_mutation
+      source_ref: feat/typed-backend-conformance
 docs[2]{path,scope}:
   docs/backend-conformance.md,project
   README.md,project

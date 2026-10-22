@@ -2,8 +2,8 @@
 
 TypeScript reference extension for [pm-cli](https://github.com/unbraind/pm-cli) covering **all 9 SDK capability types** in one fully-typed `index.ts`, checked against the **pinned pm-cli 2026.10.17 SDK**. The backend conformance surface requires the tested SDK floor 2026.10.17.
 
-Development dependencies pin CLI/SDK and `pm-ops` to 2026.10.4 and
-`pm-changelog` to 2026.10.4. The prepare hook rejects incomplete `pm-ops`
+Development dependencies pin CLI/SDK and `pm-ops` to 2026.10.17 and
+`pm-changelog` to 2026.10.16. The prepare hook rejects incomplete `pm-ops`
 installations so missing merge drivers cannot silently pass installation.
 The pinned documentation analyzer covers TypeScript and TSX. A consumer
 regression verifies that undocumented declarations in either file type fail.
@@ -169,6 +169,9 @@ bun run test:bun
 node dist/cli.js inspect ./tracker --json
 ```
 
+`node dist/cli.js inspect --json` reads the default `.agents/pm` tracker. A leading
+option is a flag, not a tracker path.
+
 The target must be new; existing directories are refused. Generation emits nine
 small text files and never runs installation, Git, or network commands. The generated
 package is independent of pm-ts-starter and uses the tested SDK floor 2026.10.17.
@@ -194,5 +197,8 @@ See [the SDK example](docs/backend-conformance.md) for adapter composition.
 All starter commands and generated-project generation, builds, certified reads,
 refusals and contract tests work in plain directories. These paths require no Git
 executable. The backend contract suite runs npm and Bun consumers with Git absent
-from `PATH` and an explicit Git discovery ceiling. SDK reads may maintain disposable
+from `PATH` and an explicit Git discovery ceiling. Both npm and Bun are required
+for this suite, including local runs; set `BUN_EXE` if Bun is outside `PATH`.
+Consumer subprocesses have a five-minute timeout, and install failures fail the test.
+SDK reads may maintain disposable
 caches; use a tracker copy for archival inputs. No generated operation needs Git.

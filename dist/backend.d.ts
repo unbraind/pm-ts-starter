@@ -52,4 +52,24 @@ export declare function createBackendAdapter(backend: "directory" | "remote", re
 export declare function createDirectoryAdapter(pmRoot: string): BackendAdapter;
 /** Connect a caller-owned MCP/HTTP transport without assuming a wire protocol. */
 export declare function createRemoteAdapter(reader: RemoteReader): BackendAdapter;
+/** Standalone CLI argv after a leading option has been kept out of the tracker position. */
+export interface CliInvocation {
+    /** Requested operation. Empty argv selects inspect. */
+    operation: string;
+    /** Tracker root. The default applies when the next token is absent or an option. */
+    tracker: string;
+    /** Tokens after the optional tracker, including a leading option. */
+    flags: string[];
+}
+/**
+ * Parse generated-CLI argv so a leading option is never used as the tracker path.
+ *
+ * `inspect --json` is a normal default-tracker invocation. Positional destructuring
+ * assigns `--json` to the tracker, opens that token as a directory, and reports
+ * initialization failure instead of honoring the flag.
+ *
+ * @param argv - Arguments after the node binary and script path.
+ * @returns Operation, tracker root, and remaining flags.
+ */
+export declare function parseCliInvocation(argv: readonly string[]): CliInvocation;
 //# sourceMappingURL=backend.d.ts.map

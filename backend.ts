@@ -88,3 +88,33 @@ export function createDirectoryAdapter(pmRoot: string): BackendAdapter {
 export function createRemoteAdapter(reader: RemoteReader): BackendAdapter {
   return createBackendAdapter("remote", reader);
 }
+
+/** Standalone CLI argv after a leading option has been kept out of the tracker position. */
+export interface CliInvocation {
+  /** Requested operation. Empty argv selects inspect. */
+  operation: string;
+  /** Tracker root. The default applies when the next token is absent or an option. */
+  tracker: string;
+  /** Tokens after the optional tracker, including a leading option. */
+  flags: string[];
+}
+
+/**
+ * Parse generated-CLI argv so a leading option is never used as the tracker path.
+ *
+ * `inspect --json` is a normal default-tracker invocation. Positional destructuring
+ * assigns `--json` to the tracker, opens that token as a directory, and reports
+ * initialization failure instead of honoring the flag.
+ *
+ * @param argv - Arguments after the node binary and script path.
+ * @returns Operation, tracker root, and remaining flags.
+ */
+export function parseCliInvocation(argv: readonly string[]): CliInvocation {
+  const [operation = "inspect", ...rest] = argv;
+  const trackerArg = rest[0] !== undefined && !rest[0].startsWith("--") ? rest[0] : undefined;
+  return {
+    operation,
+    tracker: trackerArg ?? ".agents/pm",
+    flags: trackerArg === undefined ? [...rest] : rest.slice(1),
+  };
+}

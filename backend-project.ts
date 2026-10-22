@@ -49,7 +49,7 @@ export function buildBackendProjectFiles(name: string): Record<string, string> {
     "src/index.ts": extensionSource(name),
     "src/cli.ts": cliSource,
     "test/backend.test.ts": contractTests,
-    "README.md": `# ${name}\n\nRead-only production pm extension. Run npm install, npm run build and npm test (or bun install, bun run build and bun run test:bun). Install the built package with pm package install.\n\nUse pm ${name} inspect, or node dist/cli.js inspect <tracker-root> --json. TOON is the default. create/update/delete return nonzero typed refusals with remedies. SDK consumers import createDirectoryAdapter or createRemoteAdapter.\n\nRemoteReader.listAllComplete must return an unmodified SDK complete-list envelope. Supply your authenticated MCP/HTTP transport and enforce request timeouts and cancellation there. No network access or credentials are configured by this project. Contract tests use a real directory tracker and pass its receipts through the remote boundary. This proves adapter conformance, not acceptance of a deployed remote service.\n\n## Without git\n\nGeneration, builds, reads, refusals and contract tests work in plain directories with Git absent from PATH. No operation in this project requires Git. Reads suppress extension activation and return certified counts only; writes are unsupported. The SDK can maintain disposable read caches; use a copy for archival inputs.\n`,
+    "README.md": `# ${name}\n\nRead-only production pm extension. Run npm install, npm run build and npm test (or bun install, bun run build and bun run test:bun). Install the built package with pm package install.\n\nUse pm ${name} inspect, or node dist/cli.js inspect [tracker-root] [--json]. A leading --json uses the default .agents/pm tracker. TOON is the default. create/update/delete return nonzero typed refusals with remedies. SDK consumers import createDirectoryAdapter or createRemoteAdapter.\n\nRemoteReader.listAllComplete must return an unmodified SDK complete-list envelope. Supply your authenticated MCP/HTTP transport and enforce request timeouts and cancellation there. No network access or credentials are configured by this project. Contract tests use a real directory tracker and pass its receipts through the remote boundary. This proves adapter conformance, not acceptance of a deployed remote service.\n\n## Without git\n\nGeneration, builds, reads, refusals and contract tests work in plain directories with Git absent from PATH. No operation in this project requires Git. Reads suppress extension activation and return certified counts only; writes are unsupported. The SDK can maintain disposable read caches; use a copy for archival inputs.\n`,
     ".gitignore": "node_modules/\ndist/\n*.tgz\n",
   };
 }
@@ -81,11 +81,11 @@ export default defineExtension({
 }
 
 const cliSource = `#!/usr/bin/env node
-import { createDirectoryAdapter, type BackendOperation } from "./backend.js";
+import { createDirectoryAdapter, parseCliInvocation, type BackendOperation } from "./backend.js";
 import { encode } from "@toon-format/toon";
-const [operation = "inspect", tracker = ".agents/pm", ...flags] = process.argv.slice(2);
+const { operation, tracker, flags } = parseCliInvocation(process.argv.slice(2));
 if (!["inspect", "create", "update", "delete"].includes(operation) || flags.some(flag => flag !== "--json")) {
-  console.log(JSON.stringify({ ok: false, code: "invalid_arguments", remedy: "Use inspect|create|update|delete <tracker-root> [--json]." }));
+  console.log(JSON.stringify({ ok: false, code: "invalid_arguments", remedy: "Use inspect|create|update|delete [tracker-root] [--json]. A leading --json uses .agents/pm." }));
   process.exitCode = 2;
 } else {
   const receipt = await createDirectoryAdapter(tracker).execute(operation as BackendOperation);

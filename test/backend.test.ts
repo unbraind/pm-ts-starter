@@ -3,10 +3,10 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, mkdirSync, readFileSync, writeFileSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import test, { type TestContext } from "node:test";
 import { PmClient } from "@unbrained/pm-cli/sdk";
-import { createDirectoryAdapter, createRemoteAdapter } from "../backend.ts";
+import { createDirectoryAdapter, createRemoteAdapter, parseCliInvocation } from "../backend.ts";
 import { buildBackendProjectFiles, generateBackendProject, readBackendSource } from "../backend-project.ts";
 import extension from "../index.ts";
 import { createExtensionTestHarness } from "@unbrained/pm-cli/sdk/testing";
@@ -27,6 +27,132 @@ async function tracker(root: string): Promise<PmClient> {
     status: "closed", closeReason: "Contract fixture completed" });
   return client;
 }
+
+/** Ceiling for one generated-project install, build, or contract command. */
+const GENERATED_COMMAND_TIMEOUT_MS = 300_000;
+
+/** Fields the Bun lookup needs; a full spawn result is assignable to this shape. */
+interface ToolLookup {
+  /** Exit status, or null when the lookup timed out before exiting. */
+  readonly status: number | null;
+  /** Standard output, null when the spawn produced none. */
+  readonly stdout: string | null;
+  /** Spawn error, present for a missing binary or a timeout. */
+  readonly error?: Error;
+}
+
+/**
+ * Run one generated-project command and stop it if it exceeds the ceiling.
+ *
+ * A stalled registry must fail the test instead of blocking the runner. A
+ * non-zero exit is returned unchanged so an install failure cannot become a skip.
+ *
+ * @param command - Executable path, already resolved by the caller.
+ * @param args - Arguments forwarded without a shell.
+ * @param options - Working directory, environment, and optional shorter ceiling.
+ * @returns The spawn result, including a timeout error when the ceiling is hit.
+ */
+function runBoundedCommand(
+  command: string,
+  args: readonly string[],
+  options: { cwd?: string; env?: NodeJS.ProcessEnv; timeoutMs?: number } = {},
+): SpawnSyncReturns<string> {
+  return spawnSync(command, [...args], {
+    cwd: options.cwd,
+    env: options.env,
+    encoding: "utf8",
+    timeout: options.timeoutMs ?? GENERATED_COMMAND_TIMEOUT_MS,
+  });
+}
+
+/**
+ * Render a bounded-command failure without assuming the streams exist.
+ *
+ * @param run - Spawn result that may have timed out before producing output.
+ * @returns Error message plus whatever the child wrote.
+ */
+function commandText(run: SpawnSyncReturns<string>): string {
+  return `${run.error?.message ?? ""}\n${run.stdout ?? ""}${run.stderr ?? ""}`;
+}
+
+/**
+ * Locate Bun for the generated consumer checks.
+ *
+ * Bun is a prerequisite of this contract, including outside CI. A timed-out or
+ * empty lookup fails closed; it is not treated as an absent optional tool.
+ *
+ * @param env - Environment that may override the lookup with `BUN_EXE`.
+ * @param lookup - Injected search, defaulting to a bounded `which bun`.
+ * @returns The Bun executable path.
+ */
+function requireBunExecutable(
+  env: NodeJS.ProcessEnv,
+  lookup: (env: NodeJS.ProcessEnv) => ToolLookup = lookupBun,
+): string {
+  const override = env.BUN_EXE?.trim();
+  if (override) return override;
+  const found = lookup(env);
+  if ((found.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT") {
+    throw new Error("Timed out while locating Bun. Refusing to skip consumer checks.");
+  }
+  const path = found.stdout?.trim();
+  if (found.status !== 0 || found.error || !path) throw new Error("Bun is required for generated consumer checks. Install Bun or set BUN_EXE.");
+  return path;
+}
+
+/**
+ * Find Bun on PATH with a short ceiling.
+ *
+ * @param env - Environment whose PATH is searched.
+ * @returns The lookup result, including a null stdout when `which` fails.
+ */
+function lookupBun(env: NodeJS.ProcessEnv): ToolLookup {
+  return runBoundedCommand("which", ["bun"], { env, timeoutMs: 10_000 });
+}
+
+test("a leading option is a flag, not the generated CLI tracker path", () => {
+  assert.deepEqual(parseCliInvocation(["inspect", "--json"]), {
+    operation: "inspect", tracker: ".agents/pm", flags: ["--json"],
+  });
+  assert.deepEqual(parseCliInvocation(["delete", "custom-tracker", "--json"]), {
+    operation: "delete", tracker: "custom-tracker", flags: ["--json"],
+  });
+  assert.deepEqual(parseCliInvocation([]), {
+    operation: "inspect", tracker: ".agents/pm", flags: [],
+  });
+  assert.deepEqual(parseCliInvocation(["create"]), {
+    operation: "create", tracker: ".agents/pm", flags: [],
+  });
+  const cli = buildBackendProjectFiles("pm-contract")["src/cli.ts"];
+  assert.match(cli, /parseCliInvocation\(process\.argv\.slice\(2\)\)/);
+  assert.doesNotMatch(cli, /tracker = "\.agents\/pm"/);
+});
+
+test("generated project commands stop at their ceiling and keep failed exits", () => {
+  assert.equal(GENERATED_COMMAND_TIMEOUT_MS, 300_000);
+  const timedOut = runBoundedCommand(process.execPath, ["-e", "setTimeout(() => {}, 2000)"], { timeoutMs: 200 });
+  assert.equal((timedOut.error as NodeJS.ErrnoException | undefined)?.code, "ETIMEDOUT");
+  assert.notEqual(timedOut.status, 0);
+  const failed = runBoundedCommand(process.execPath, ["-e", "process.exit(9)"], { timeoutMs: 5_000 });
+  assert.equal(failed.status, 9);
+  assert.equal(failed.error, undefined);
+  const ok = runBoundedCommand(process.execPath, ["-e", "process.stdout.write('ok')"], { timeoutMs: 5_000 });
+  assert.equal(ok.status, 0);
+  assert.equal(ok.stdout, "ok");
+});
+
+test("Bun lookup failures stay prerequisites instead of skipped coverage", () => {
+  assert.equal(requireBunExecutable({ BUN_EXE: "  /opt/bun  " }, () => {
+    throw new Error("override must not search");
+  }), "/opt/bun");
+  assert.throws(() => requireBunExecutable({}, () => ({ status: 1, stdout: null })), /Bun is required for generated consumer checks/);
+  assert.throws(() => requireBunExecutable({}, () => ({ status: 1, stdout: "  " })), /Bun is required for generated consumer checks/);
+  assert.throws(() => requireBunExecutable({}, () => ({ status: 1, stdout: "/invalid/bun" })), /Bun is required for generated consumer checks/);
+  assert.throws(() => requireBunExecutable({}, () => ({ status: 0, stdout: "/invalid/bun", error: new Error("lookup failed") })), /Bun is required for generated consumer checks/);
+  assert.equal(requireBunExecutable({}, () => ({ status: 0, stdout: "/usr/bin/bun\n" })), "/usr/bin/bun");
+  const timedOut = Object.assign(new Error("spawnSync which ETIMEDOUT"), { code: "ETIMEDOUT" });
+  assert.throws(() => requireBunExecutable({}, () => ({ status: null, stdout: "", error: timedOut })), /Timed out while locating Bun/);
+});
 
 test("directory and remote inspect real terminal-inclusive receipts and never invoke writes", async (t) => {
   const root = scratch(t);
@@ -117,9 +243,10 @@ test("generated npm and Bun projects build and execute contracts with Git absent
   const root = scratch(t);
   const project = join(root, "project");
   assert.equal(generateBackendProject(project, "pm-contract").ok, true);
+  const bunPath = requireBunExecutable(process.env);
   const bin = join(root, "bin");
   mkdirSync(bin);
-  for (const [name, path] of [["node", process.execPath], ["npm", join(dirname(process.execPath), "npm")], ["bun", process.env.BUN_EXE ?? spawnSync("which", ["bun"], { encoding: "utf8" }).stdout.trim()]]) {
+  for (const [name, path] of [["node", process.execPath], ["npm", join(dirname(process.execPath), "npm")], ["bun", bunPath]] as const) {
     assert.ok(path, name + " must be available");
     symlinkSync(path, join(bin, name));
   }
@@ -127,25 +254,31 @@ test("generated npm and Bun projects build and execute contracts with Git absent
   const { NODE_TEST_CONTEXT: _context, NODE_TEST_WORKER_ID: _worker, ...cleanEnv } = process.env;
   const env = { ...cleanEnv, PATH: bin, GIT_CEILING_DIRECTORIES: dirname(root) };
   for (const [command, args] of [["npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund"]], ["bun", ["install", "--ignore-scripts", "--no-save"]], ["npm", ["run", "build"]], ["npm", ["test"]], ["bun", ["run", "build"]], ["bun", ["run", "test:bun"]]] as const) {
-    const run = spawnSync(join(bin, command), args, { cwd: project, env, encoding: "utf8" });
-    assert.equal(run.status, 0, run.stdout + run.stderr);
-    if ((args as readonly string[]).includes("test")) assert.match(run.stdout + run.stderr, /tests 1/);
-    if ((args as readonly string[]).includes("test:bun")) assert.match(run.stdout + run.stderr, /1 pass/);
+    const run = runBoundedCommand(join(bin, command), args, { cwd: project, env });
+    assert.equal(run.status, 0, commandText(run));
+    if ((args as readonly string[]).includes("test")) assert.match(commandText(run), /tests 1/);
+    if ((args as readonly string[]).includes("test:bun")) assert.match(commandText(run), /1 pass/);
   }
   const client = await tracker(root);
-  const cli = spawnSync(process.execPath, ["dist/cli.js", "inspect", join(root, "tracker"), "--json"], { cwd: project, env, encoding: "utf8" });
-  assert.equal(cli.status, 0, cli.stdout + cli.stderr);
+  const cli = runBoundedCommand(process.execPath, ["dist/cli.js", "inspect", join(root, "tracker"), "--json"], { cwd: project, env });
+  assert.equal(cli.status, 0, commandText(cli));
   assert.equal(JSON.parse(cli.stdout).item_count, 2);
-  for (const args of [["delete", join(root, "tracker"), "--json"], ["unknown"], ["inspect", "tracker", "--bad"]]) {
-    const refusal = spawnSync(process.execPath, ["dist/cli.js", ...args], { cwd: project, env, encoding: "utf8" });
-    assert.equal(refusal.status, 2, refusal.stdout + refusal.stderr);
+  mkdirSync(join(project, ".agents"));
+  symlinkSync(join(root, "tracker"), join(project, ".agents", "pm"));
+  const defaultJson = runBoundedCommand(process.execPath, ["dist/cli.js", "inspect", "--json"], { cwd: project, env });
+  assert.equal(defaultJson.status, 0, commandText(defaultJson));
+  assert.equal(JSON.parse(defaultJson.stdout).ok, true);
+  assert.equal(JSON.parse(defaultJson.stdout).item_count, 2);
+  for (const args of [["delete", join(root, "tracker"), "--json"], ["unknown"], ["inspect", "tracker", "--bad"], ["inspect", "--bad"]]) {
+    const refusal = runBoundedCommand(process.execPath, ["dist/cli.js", ...args], { cwd: project, env });
+    assert.equal(refusal.status, 2, commandText(refusal));
     assert.equal(JSON.parse(refusal.stdout).ok, false);
   }
-  const toon = spawnSync(process.execPath, ["dist/cli.js", "inspect", join(root, "tracker")], { cwd: project, env, encoding: "utf8" });
-  assert.equal(toon.status, 0);
+  const toon = runBoundedCommand(process.execPath, ["dist/cli.js", "inspect", join(root, "tracker")], { cwd: project, env });
+  assert.equal(toon.status, 0, commandText(toon));
   assert.match(toon.stdout, /item_count: 2/);
   assert.equal((await client.listAllComplete()).items.length, 2);
-  const hostCheck = spawnSync(process.execPath, ["--input-type=module", "-e", `
+  const hostCheck = runBoundedCommand(process.execPath, ["--input-type=module", "-e", `
     import assert from "node:assert/strict";
     import extension from "./dist/index.js";
     import { createExtensionTestHarness } from "@unbrained/pm-cli/sdk/testing";
@@ -156,12 +289,12 @@ test("generated npm and Bun projects build and execute contracts with Git absent
     assert.equal(result.result.item_count, 2);
     assert.equal(decode(process.env.CONTRACT_TOON).item_count, 2);
     await assert.rejects(harness.runCommand({ command: "pm-contract inspect", pmRoot: "missing-tracker" }), { name: "PmCliError", exitCode: 2 });
-  `], { cwd: project, env: { ...env, CONTRACT_TRACKER: join(root, "tracker"), CONTRACT_TOON: toon.stdout }, encoding: "utf8" });
-  assert.equal(hostCheck.status, 0, hostCheck.stdout + hostCheck.stderr);
+  `], { cwd: project, env: { ...env, CONTRACT_TRACKER: join(root, "tracker"), CONTRACT_TOON: toon.stdout } });
+  assert.equal(hostCheck.status, 0, commandText(hostCheck));
   // Behavioral revert: removing only adapter certification must break the emitted contract suite.
   const source = join(project, "src/backend.ts");
   writeFileSync(source, readFileSync(source, "utf8").replace("certifyCompleteListResult(await reader.listAllComplete())", "(await reader.listAllComplete() as Awaited<ReturnType<PmClient['listAllComplete']>>)") );
-  const reverted = spawnSync(process.execPath, ["--test", "test/backend.test.ts"], { cwd: project, env, encoding: "utf8" });
+  const reverted = runBoundedCommand(process.execPath, ["--test", "test/backend.test.ts"], { cwd: project, env });
   assert.notEqual(reverted.status, 0, "contract must fail when receipt certification is removed");
-  assert.match(reverted.stdout + reverted.stderr, /must be load-bearing/);
+  assert.match(commandText(reverted), /must be load-bearing/);
 });

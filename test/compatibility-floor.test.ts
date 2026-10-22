@@ -118,6 +118,19 @@ test("the development dependency is an exact pin at or above the declared floor"
   );
 });
 
+test("the README development-pin sentence matches package.json", () => {
+  const opening = readFileSync(resolve(repoRoot, "README.md"), "utf8").split("\n").slice(0, 8).join("\n");
+  const cli = packageJson.devDependencies?.[CLI];
+  const ops = packageJson.devDependencies?.["pm-ops"];
+  const changelog = packageJson.devDependencies?.["pm-changelog"];
+  assert.equal(typeof cli, "string", "package.json must pin the CLI/SDK");
+  assert.equal(typeof ops, "string", "package.json must pin pm-ops");
+  assert.equal(typeof changelog, "string", "package.json must pin pm-changelog");
+  assert.equal(cli, ops, "the README states one shared pin for the CLI/SDK and pm-ops");
+  assert.ok(opening.includes(`pin CLI/SDK and \`pm-ops\` to ${ops} and`), opening);
+  assert.ok(opening.includes(`\`pm-changelog\` to ${changelog}.`), opening);
+});
+
 test("the version comparison orders YYYY.M.D numerically, not lexicographically", () => {
   // In the repository as it stands the pin equals the floor, so the
   // greater-than branch of atOrAbove is never reached by the assertion above.
