@@ -17,7 +17,8 @@
     "dist/",
     "manifest.json",
     "README.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "backend.ts"
   ],
   "scripts": {
     "build": "tsc",
@@ -44,7 +45,7 @@
     "verify:release-changelog-date": "node scripts/verify-release-changelog-date.ts"
   },
   "peerDependencies": {
-    "@unbrained/pm-cli": ">=2026.8.7"
+    "@unbrained/pm-cli": ">=2026.10.17"
   },
   "devDependencies": {
     "@babel/eslint-parser": "8.0.7",

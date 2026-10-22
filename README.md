@@ -1,9 +1,9 @@
 # pm-ts-starter
 
-TypeScript reference extension for [pm-cli](https://github.com/unbraind/pm-cli) covering **all 9 SDK capability types** in one fully-typed `index.ts`, checked against the **pm-cli 2026.10.4 SDK**. The declared runtime compatibility floor remains 2026.8.7.
+TypeScript reference extension for [pm-cli](https://github.com/unbraind/pm-cli) covering **all 9 SDK capability types** in one fully-typed `index.ts`, checked against the **pinned pm-cli 2026.10.17 SDK**. The backend conformance surface requires the tested SDK floor 2026.10.17.
 
-Development dependencies pin CLI/SDK and `pm-ops` to 2026.10.4 and
-`pm-changelog` to 2026.10.4. The prepare hook rejects incomplete `pm-ops`
+Development dependencies pin CLI/SDK and `pm-ops` to 2026.10.17 and
+`pm-changelog` to 2026.10.16. The prepare hook rejects incomplete `pm-ops`
 installations so missing merge drivers cannot silently pass installation.
 The pinned documentation analyzer covers TypeScript and TSX. A consumer
 regression verifies that undocumented declarations in either file type fail.
@@ -153,3 +153,52 @@ itself lists each affected stream in its output; `pm history --verify <id>` spot
 content, so `reconcile` only re-greens the hash chain (no data loss) — see the authoritative
 [pm-cli merge-safety guide](https://github.com/unbraind/pm-cli/blob/main/docs/MERGE_SAFETY.md). The
 older blunt `pm history-repair --all` remains available as a lower-level primitive.
+
+## Typed backend conformance project
+
+Generate a deployable TypeScript extension with an SDK surface, a standalone CLI,
+and executable directory/remote receipt contracts:
+
+```sh
+pm ts-starter backend-project --target ./pm-my-backend --name pm-my-backend --json
+cd pm-my-backend
+npm install
+npm run build
+npm test
+bun run test:bun
+node dist/cli.js inspect ./tracker --json
+```
+
+`node dist/cli.js inspect --json` reads the default `.agents/pm` tracker. A leading
+option is a flag, not a tracker path.
+
+The target must be new; existing directories are refused. Generation emits nine
+small text files and never runs installation, Git, or network commands. The generated
+package is independent of pm-ts-starter and uses the tested SDK floor 2026.10.17.
+Publish with your normal npm workflow after configuring package ownership and CI.
+
+`createDirectoryAdapter(root)` reads all statuses through the SDK with extensions
+disabled. `createRemoteAdapter(reader)` accepts a caller-owned authenticated
+MCP/HTTP transport returning the same complete-list envelope. Both certify strict,
+unbounded, full reads before returning compact counts and proof. A remote transport
+owns its timeout, cancellation and credentials; the generated project does not assume
+a hosted API or configure a connection. Contract tests exercise real tracker data
+through both boundaries, including missing-receipt negative controls.
+
+`execute("create" | "update" | "delete")` returns a discriminated
+`unsupported_operation` refusal with a remedy, before invoking the provider. Invalid
+source receipts return `invalid_receipt` and SDK findings; unavailable backends return
+`backend_unavailable` without leaking the underlying error. Standalone CLI failures
+exit 2 and offer JSON or default TOON. The extension registers `pm <name> inspect`.
+See [the SDK example](docs/backend-conformance.md) for adapter composition.
+
+## Without git
+
+All starter commands and generated-project generation, builds, certified reads,
+refusals and contract tests work in plain directories. These paths require no Git
+executable. The backend contract suite runs npm and Bun consumers with Git absent
+from `PATH` and an explicit Git discovery ceiling. Both npm and Bun are required
+for this suite, including local runs; set `BUN_EXE` if Bun is outside `PATH`.
+Consumer subprocesses have a five-minute timeout, and install failures fail the test.
+SDK reads may maintain disposable
+caches; use a tracker copy for archival inputs. No generated operation needs Git.

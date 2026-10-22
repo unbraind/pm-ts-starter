@@ -41,6 +41,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import * as readline from "node:readline/promises";
+import { generateBackendProject } from "./backend-project.js";
+export * from "./backend.js";
+export * from "./backend-project.js";
 // ---------------------------------------------------------------------------
 // Root-file resolution — manifest.json and package.json both live at the
 // repository root. When this module is compiled into dist/ they sit one
@@ -352,6 +355,33 @@ const infoCommand = defineCommand({
         };
         console.error(JSON.stringify(info, null, 2));
         return info;
+    },
+});
+const backendProjectCommand = defineCommand({
+    name: "ts-starter backend-project",
+    description: "Generate a deployable TypeScript extension with executable backend receipt contracts.",
+    intent: "generate a typed backend conformance project",
+    examples: ["pm ts-starter backend-project --target ./pm-my-backend --name pm-my-backend"],
+    failure_hints: ["Choose a new writable target directory and a lowercase pm-prefixed package name."],
+    arguments: [],
+    flags: [
+        { long: "--target", value_name: "directory", description: "New project directory (must not exist).", type: "string" },
+        { long: "--name", value_name: "name", description: "Lowercase npm package name, e.g. pm-my-backend.", type: "string" },
+    ],
+    async run(ctx) {
+        const target = String(ctx.options["target"] ?? "").trim();
+        const name = String(ctx.options["name"] ?? "").trim();
+        if (!target || !name)
+            throw pmExpectedError("Provide --target and --name.", {
+                context: { command: "ts-starter backend-project", code: "missing_arguments",
+                    nextSteps: ["pm ts-starter backend-project --target ./pm-my-backend --name pm-my-backend"] },
+            });
+        const result = generateBackendProject(target, name);
+        if (!result.ok)
+            throw pmExpectedError(result.remedy, {
+                context: { command: "ts-starter backend-project", code: result.code, nextSteps: [result.remedy] },
+            });
+        return result;
     },
 });
 const planDemoCommand = defineCommand({
@@ -807,6 +837,7 @@ const commandsBlueprint = defineExtensionBlueprint({
         searchDemoCommand,
         historyCompactDemoCommand,
         setupCommand,
+        backendProjectCommand,
     ],
     commandOverrides: { list: listCommandOverride },
     flags: { list: listFlags },
