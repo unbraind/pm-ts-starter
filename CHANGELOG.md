@@ -17,10 +17,6 @@
 - The release job authenticated with a stored npm token that expired, so publishing stopped while every other gate stayed green ([pm-ts-starter-epz5](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-epz5.toon))
 - A release run bumped and committed a new version every night while publishing was impossible, because the only externally-failable step runs last ([pm-ts-starter-2l5j](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-2l5j.toon))
 
-### Other
-
-- Certify pm-ts-starter on PM CLI/SDK 2026.10.4 and consolidate pending dependency updates ([pm-ts-starter-n4ee](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-n4ee.toon))
-
 ## 2026.10.5 - 2026-10-05
 
 ### Other
