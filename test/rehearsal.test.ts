@@ -41,6 +41,13 @@ function refusal(code: RehearsalRefusal["code"]): (error: unknown) => boolean {
   return error => error instanceof RehearsalRefusal && error.code === code && error.remedy.length > 10;
 }
 
+/** Assert both refusal and byte preservation for an unsafe storage attempt. */
+async function assertSourcePreservedRefusal(options: { source: string; workDir: string }, code: RehearsalRefusal["code"]): Promise<void> {
+  const original = bytes(options.source);
+  await assert.rejects(rehearseSchemaMigration({ ...options, plan }), refusal(code));
+  assert.equal(bytes(options.source), original);
+}
+
 test("old/new custom tracker fixtures migrate once, retain terminal rows and preserve every source byte", async t => {
   const options = await fixture(t), before = bytes(options.source);
   const first = await rehearseSchemaMigration({ ...options, plan });
@@ -281,9 +288,7 @@ test("resuming refuses a scratch schema redirected outside its private tracker",
   const file = join(options.workDir, "tracker", "settings.json"), raw = JSON.parse(readFileSync(file, "utf8"));
   raw.schema.files.fields = join(options.source, "schema", "fields.json");
   writeFileSync(file, JSON.stringify(raw));
-  const before = bytes(options.source);
-  await assert.rejects(rehearseSchemaMigration({ ...options, plan }), refusal("unsafe_storage"));
-  assert.equal(bytes(options.source), before);
+  await assertSourcePreservedRefusal(options, "unsafe_storage");
 });
 
 test("installed CLI emits TOON/JSON and typed field refusals with Git absent", async t => {
@@ -311,4 +316,11 @@ test("installed CLI emits TOON/JSON and typed field refusals with Git absent", a
   assert.equal(invalid.status, 2); const error = JSON.parse(invalid.stderr);
   assert.equal(error.code, "invalid_data");
   assert.deepEqual(error.verification_errors, ["experiments/fixture-active.toon:legacy_count"]);
+});
+
+test("scratch lock-directory aliases refuse before acquiring any source lock", async t => {
+  const options = await fixture(t);
+  mkdirSync(options.workDir);
+  symlinkSync(join(options.source, "locks"), join(options.workDir, "locks"));
+  await assertSourcePreservedRefusal(options, "unsafe_storage");
 });

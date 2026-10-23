@@ -29,6 +29,8 @@ journals. Repeat the identical command to resume. Omitting `--source` uses the
 active tracker; a separate caller workspace keeps even host startup outside the
 read-only source. The harness itself only reads the source. Source and scratch
 must be disjoint real directories, with no symlinks, hardlinked or special files.
+Existing scratch contents, including lock directories, are scanned before acquiring
+a lease, so a lock alias cannot redirect writes into the source.
 Schema paths must stay inside the tracker. Snapshots are capped at 256 MiB and
 20000 files. Extensions, locks, search artifacts, runtime caches and transaction
 journals are excluded from the input snapshot.

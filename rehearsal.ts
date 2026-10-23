@@ -115,13 +115,13 @@ function safePath(target: string): void {
   }
 }
 /** Read authoritative bytes only; refuse links, special files and excessive snapshots. */
-function snapshot(root: string): Map<string, Buffer> {
+function snapshot(root: string, skipDerived = true): Map<string, Buffer> {
   const files = new Map<string, Buffer>();
   let bytes = 0;
   /** Walk one tracker-relative directory without following links. */
   function walk(folder: string): void {
     for (const name of readdirSync(join(root, folder)).sort()) {
-      if (folder === "" && excluded.has(name)) continue;
+      if (skipDerived && folder === "" && excluded.has(name)) continue;
       const file = join(folder, name);
       const stat = lstatSync(join(root, file));
       if (stat.isDirectory()) {
@@ -186,13 +186,13 @@ async function executeRehearsal(options: RehearsalOptions): Promise<RehearsalRec
   assertLocalSchema(source, input);
   const identity = digest(JSON.stringify([realpathSync(source), plan]));
   const resumed = existsSync(work);
-  if (!resumed) mkdirSync(work, { mode: 0o700 });
+  if (resumed) snapshot(work, false);
+  else mkdirSync(work, { mode: 0o700 });
   const release = await acquireLock(work, "rehearsal", 300, "schema-rehearsal", false, false, 0);
   try {
     const checkpointPath = join(work, "rehearsal.json"), tracker = join(work, "tracker");
     let state: Checkpoint;
     if (resumed) {
-      snapshot(work);
       assertLocalSchema(tracker, snapshot(tracker));
       state = JSON.parse(readFileSync(checkpointPath, "utf8")) as Checkpoint;
       if (state.version !== 1 || state.identity !== identity || state.fingerprint !== sourceFingerprint ||
