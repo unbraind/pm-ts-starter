@@ -40,7 +40,7 @@ export interface RehearsalReceipt {
     resumed: boolean;
     /** SHA-256 of the authoritative input snapshot. */
     source_fingerprint: string;
-    /** Source fingerprint still matches after execution. */
+    /** Source matches this extension's snapshot taken before its first controlled write; excludes earlier host startup. */
     source_unchanged: true;
 }
 /** Stable refusal with a remedy, free of source values or machine paths. */
@@ -60,6 +60,8 @@ export declare class RehearsalRefusal extends Error {
 export declare function parseRehearsalPlan(value: unknown): RehearsalPlan;
 /** Read a bounded regular plan file without accepting filesystem aliases. */
 export declare function readRehearsalPlan(file: string): RehearsalPlan;
+/** Refuse CLI sources the host may have written before the extension could fingerprint them. */
+export declare function assertIndependentRehearsalSource(source: string, activeTracker: string): void;
 /** Sanitize storage and SDK failures into stable, actionable public refusals. */
 export declare function rehearseSchemaMigration(options: RehearsalOptions): Promise<RehearsalReceipt>;
 //# sourceMappingURL=rehearsal.d.ts.map

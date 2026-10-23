@@ -30,9 +30,13 @@ pm ts-starter rehearse-schema --source ./old-tracker \
 
 `REHEARSAL_DIR` must identify private scratch storage outside any Git repository.
 The command creates `run-1`, containing `tracker/`, `rehearsal.json`, and SDK runtime
-journals. Repeat the identical command to resume. Omitting `--source` uses the
-active tracker; a separate caller workspace keeps even host startup outside the
-read-only source. The harness itself only reads the source. Source and scratch
+journals. Repeat the identical command to resume. `--source` is mandatory and must
+neither equal nor contain the active caller tracker after realpath resolution,
+including through aliases. These cases refuse before reading the plan or creating
+scratch artifacts. Run from a separate caller tracker. Host startup may recreate
+missing `schema/workflows.json` even for read commands, before the extension runs
+([pm-cli#1568](https://github.com/unbraind/pm-cli/issues/1568)); a refusal cannot undo
+or certify those earlier host writes. The harness itself only reads the source. Source and scratch
 must be disjoint real directories, with no symlinks, hardlinked or special files.
 Existing scratch contents, including lock directories, are scanned before acquiring
 a lease, so a lock alias cannot redirect writes into the source.
@@ -52,8 +56,12 @@ an explicit valid key and type. Every physical `.toon` or `.md` item outside
 schema/history storage must belong to a registered, flat item folder, and its
 count must match the certified SDK enumeration. Scratch settings, corpus size, authoritative bytes and committed core progress
 are checked again before resuming any core mutation. Existing history streams
-must parse and pass the SDK hash-chain verification. Source bytes stay unchanged
-on refusal as well as success.
+must parse and pass the SDK hash-chain verification. The extension never writes
+source bytes, on refusal or success. Its source fingerprint is taken before any
+scratch creation, lease, SDK read or migration it controls. `source_unchanged: true`
+certifies equality with that snapshot at completion, not with bytes from before
+host startup. The standalone SDK has no active host tracker; callers embedding it
+must keep their own startup and other writes outside the source observation window.
 
 Concurrent callers may receive `unavailable` while the creator initializes the
 first checkpoint or another caller owns the lease. Retry after that caller
@@ -92,8 +100,8 @@ all-status list. Field constraints follow SDK coercion and validation semantics.
 
 | Refusal | Remedy |
 | --- | --- |
-| `invalid_plan` | Supply a readable version 1 JSON plan using core operations. |
-| `unsafe_storage` | Choose disjoint, regular, private directory storage outside Git; keep schema files local. |
+| `invalid_plan` | Supply explicit `--source`, plan and scratch flags, and a readable version 1 plan using core operations. |
+| `unsafe_storage` | Run from a separate caller tracker that the source neither equals nor contains; choose disjoint, regular, private directory storage outside Git and keep schema files local. |
 | `invalid_data` | Repair reported fields in a separately reviewed copy and start a new rehearsal. |
 | `source_changed` | Restore the original source/plan or start from a new stable snapshot. |
 | `unavailable` | Check initialization, custom definitions, permissions and lock ownership, then retry. |
@@ -159,7 +167,7 @@ empty corpus may succeed only with valid, declared schema operations.
 | Existing `history/*.jsonl` streams | SDK parsing and hash-chain verification; malformed item/workspace JSONL and broken hashes refuse. Missing history is supported under SDK policy. |
 | Source directory entries and all copied file names/bytes | Regular files only, no aliases, 256 MiB, 20000 entries, 64 components; special/linked storage, bounds violations and source drift refuse. Top-level extensions, runtime, locks, search, transactions and Git metadata are deliberately excluded and never used as source migration state. |
 | Existing scratch tree, `rehearsal.json`, SDK schema plans and transaction journals | Whole scratch tree scanned for aliases before leasing; valid source/plan identity, safe integer counts, matching corpus/byte fingerprint and committed core evidence required. Missing/malformed/edited/partial checkpoints, fabricated completion or affected counts, invalid journal counts/status and deleted items refuse. Scratch locks retain the SDK lease policy. |
-| CLI `--plan`, `--work-dir`, optional `--source`; active tracker if source omitted | Required nonempty string flags; malformed explicit source never falls back. Positional arguments and unsupported options, including dry-run, refuse. Native host global flags select the caller tracker and output; `--json` changes rendering only. Installed CLI tests cover JSON, TOON, replay, errors and simultaneous callers. |
+| CLI `--plan`, `--work-dir`, required `--source`; active caller tracker | Required nonempty string flags; source never defaults. Realpath equality and source containment of the active tracker refuse before plan reads, with the pm-cli#1568 remedy. Positional arguments and unsupported options, including dry-run, refuse. Native host global flags select the caller tracker and output; `--json` changes rendering only. Installed CLI tests cover host workflow scaffolding followed by omitted/same-source refusal, JSON, TOON, replay, errors and simultaneous callers; command tests cover realpath aliases and containment. |
 | Process cwd, environment and host configuration | Relative paths resolve from cwd; explicit SDK roots and `noExtensions` isolate migration reads from ambient `PM_PATH`, `PM_GLOBAL_PATH`, author and home settings. A child process with conflicting environment still refuses invalid source settings. Git-absent tests prove no Git executable is needed. Host extension startup belongs to the separate caller workspace; executable source extensions and remote backends require a prior directory export. |
 
 Each refusal test awaits a thrown `RehearsalRefusal` (or native CLI typed error and

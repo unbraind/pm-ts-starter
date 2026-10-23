@@ -210,6 +210,12 @@ caches; use a tracker copy for archival inputs. No generated operation needs Git
 rehearses custom item field/type evolution on a private resumable copy outside Git.
 The original tracker is read only; invalid data produces field diagnostics. Repeat
 the same command after interruption to resume without duplicate migration history.
+An explicit `--source` is required. Run from a separate caller tracker: the source
+must neither equal nor contain the active tracker after realpath resolution.
+Host startup can recreate missing schema files before extension code runs
+([pm-cli#1568](https://github.com/unbraind/pm-cli/issues/1568)), even for read commands.
+`source_unchanged: true` compares the extension's snapshot taken before its first
+controlled write with the final source; it cannot certify bytes before host startup.
 Use native TOON or `--json` for compact count receipts. Core remains authoritative
 for schema and migrations; pm-presets owns configuration upgrades.
 

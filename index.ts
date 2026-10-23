@@ -93,7 +93,7 @@ import * as readline from "node:readline/promises";
 
 import { generateBackendProject } from "./backend-project.ts";
 import { createPmCliExpectedError } from "@unbrained/pm-cli/sdk";
-import { rehearseSchemaMigration, readRehearsalPlan, RehearsalRefusal } from "./rehearsal.ts";
+import { assertIndependentRehearsalSource, rehearseSchemaMigration, readRehearsalPlan, RehearsalRefusal } from "./rehearsal.ts";
 export * from "./rehearsal.ts";
 export * from "./backend.ts";
 export * from "./backend-project.ts";
@@ -476,21 +476,22 @@ const schemaRehearsalCommand = defineCommand({
   name: "ts-starter rehearse-schema",
   description: "Rehearse core schema migrations on a private resumable copy; never write the source tracker.",
   intent: "validate extension-owned item schema evolution safely",
-  examples: ["pm ts-starter rehearse-schema --plan ./migration.json --work-dir ./scratch-rehearsal --json"],
+  examples: ["pm ts-starter rehearse-schema --source ./old-tracker --plan ./migration.json --work-dir ./scratch-rehearsal --json"],
   failure_hints: ["Keep the plan unchanged when resuming; choose private scratch storage outside Git."],
   arguments: [],
   flags: [
-    { long: "--source", value_name: "tracker", value_type: "string", description: "Read-only source tracker; defaults to the active tracker." },
+    { long: "--source", value_name: "tracker", value_type: "string", description: "Required source tracker; must neither equal nor contain the active caller tracker." },
     { long: "--plan", value_name: "file", value_type: "string", description: "Version 1 JSON migration plan." },
     { long: "--work-dir", value_name: "directory", value_type: "string", description: "Private non-Git directory, created once and reused for resume." },
   ],
   async run(ctx) {
     try {
       if (ctx.args.length || Object.keys(ctx.options).some(key => !["plan", "source", "workDir", "work-dir", "json"].includes(key))) throw new RehearsalRefusal("invalid_plan", "Use only the documented rehearsal flags and no positional arguments.");
-      const planFile = ctx.options["plan"], workDir = ctx.options["workDir"] ?? ctx.options["work-dir"];
+      const planFile = ctx.options["plan"], workDir = ctx.options["workDir"] ?? ctx.options["work-dir"], source = ctx.options["source"];
       if (typeof planFile !== "string" || !planFile.trim() || typeof workDir !== "string" || !workDir.trim() ||
-        (ctx.options["source"] !== undefined && (typeof ctx.options["source"] !== "string" || !ctx.options["source"].trim()))) throw new RehearsalRefusal("invalid_plan", "Provide --plan <file>, --work-dir <directory> and a nonempty --source when supplied.");
-      return await rehearseSchemaMigration({ source: typeof ctx.options["source"] === "string" ? ctx.options["source"] : ctx.pm_root, workDir, plan: readRehearsalPlan(planFile) });
+        typeof source !== "string" || !source.trim()) throw new RehearsalRefusal("invalid_plan", "Provide --plan <file>, --work-dir <directory> and an explicit nonempty --source from a separate caller tracker; host startup may already have changed the active tracker (unbraind/pm-cli#1568).");
+      assertIndependentRehearsalSource(source, ctx.pm_root);
+      return await rehearseSchemaMigration({ source, workDir, plan: readRehearsalPlan(planFile) });
     } catch (error) {
       const refusal = error instanceof RehearsalRefusal ? error : new RehearsalRefusal("invalid_plan", "Provide a readable version 1 JSON plan.");
       throw createPmCliExpectedError(refusal.remedy, { context: { code: refusal.code, required: refusal.remedy,

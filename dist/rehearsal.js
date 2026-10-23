@@ -67,6 +67,11 @@ function inside(root, target) {
     const rel = relative(root, target);
     return rel === "" || (!isAbsolute(rel) && rel !== ".." && !rel.startsWith(`..${sep}`));
 }
+/** Refuse CLI sources the host may have written before the extension could fingerprint them. */
+export function assertIndependentRehearsalSource(source, activeTracker) {
+    if (inside(realpathSync(source), realpathSync(activeTracker)))
+        throw new RehearsalRefusal("unsafe_storage", "Run from a separate caller tracker and select an explicit --source that neither equals nor contains it; host startup may already have changed the active tracker (unbraind/pm-cli#1568).");
+}
 /** Require real directories throughout a caller-supplied path. */
 function safePath(target) {
     for (let current = resolve(target);; current = dirname(current)) {

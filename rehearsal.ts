@@ -49,7 +49,7 @@ export interface RehearsalReceipt {
   resumed: boolean;
   /** SHA-256 of the authoritative input snapshot. */
   source_fingerprint: string;
-  /** Source fingerprint still matches after execution. */
+  /** Source matches this extension's snapshot taken before its first controlled write; excludes earlier host startup. */
   source_unchanged: true;
 }
 /** Stable refusal with a remedy, free of source values or machine paths. */
@@ -121,6 +121,10 @@ export function readRehearsalPlan(file: string): RehearsalPlan {
 function inside(root: string, target: string): boolean {
   const rel = relative(root, target);
   return rel === "" || (!isAbsolute(rel) && rel !== ".." && !rel.startsWith(`..${sep}`));
+}
+/** Refuse CLI sources the host may have written before the extension could fingerprint them. */
+export function assertIndependentRehearsalSource(source: string, activeTracker: string): void {
+  if (inside(realpathSync(source), realpathSync(activeTracker))) throw new RehearsalRefusal("unsafe_storage", "Run from a separate caller tracker and select an explicit --source that neither equals nor contains it; host startup may already have changed the active tracker (unbraind/pm-cli#1568).");
 }
 /** Require real directories throughout a caller-supplied path. */
 function safePath(target: string): void {

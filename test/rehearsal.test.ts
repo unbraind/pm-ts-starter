@@ -8,7 +8,7 @@ import test, { type TestContext } from "node:test";
 import { PmClient, acquireLock, readSettings, readLocatedItem, resolveItemTypeRegistry, serializeItemDocument } from "@unbrained/pm-cli/sdk";
 import { createExtensionTestHarness } from "@unbrained/pm-cli/sdk/testing";
 import extension from "../index.ts";
-import { parseRehearsalPlan, readRehearsalPlan, rehearseSchemaMigration, RehearsalRefusal, type RehearsalPlan } from "../rehearsal.ts";
+import { assertIndependentRehearsalSource, parseRehearsalPlan, readRehearsalPlan, rehearseSchemaMigration, RehearsalRefusal, type RehearsalPlan } from "../rehearsal.ts";
 
 const plan: RehearsalPlan = { version: 1, steps: [
   { kind: "rename-field", from: "legacy_ref", to: "external_ref" },
@@ -211,19 +211,19 @@ test("diagnostics are bounded and syntax errors identify the document", async t 
 test("registered command validates input and delegates with native agent output", async t => {
   const options = await fixture(t);
   const command = await rehearsalCommand();
-  const base = { command: "ts-starter rehearse-schema", args: [], options: {}, global: {}, pm_root: options.source };
+  const base = { command: "ts-starter rehearse-schema", args: [], options: {}, global: {}, pm_root: options.root };
   await assert.rejects(async () => command.run(base), (error: unknown) => error instanceof Error && error.name === "PmCliError");
   await assert.rejects(async () => command.run({ ...base, options: null as unknown as typeof base.options }), (error: unknown) => {
     assert.ok(error instanceof Error && "code" in error); assert.equal(error.code, "invalid_plan"); return true;
   });
   await assert.rejects(async () => command.run({ ...base, options: { plan: "missing", "work-dir": options.workDir } }), (error: unknown) => error instanceof Error && error.name === "PmCliError");
   const planFile = join(options.root, "plan.json"); writeFileSync(planFile, JSON.stringify(plan));
-  assert.equal((await command.run({ ...base, options: { plan: planFile, workDir: options.workDir } }) as { items: number }).items, 2);
-  assert.equal((await command.run({ ...base, pm_root: "unused", options: { source: options.source, plan: planFile, "work-dir": options.workDir } }) as { resumed: boolean }).resumed, true);
+  assert.equal((await command.run({ ...base, options: { source: options.source, plan: planFile, workDir: options.workDir } }) as { items: number }).items, 2);
+  assert.equal((await command.run({ ...base, options: { source: options.source, plan: planFile, "work-dir": options.workDir } }) as { resumed: boolean }).resumed, true);
   const itemFile = join(options.source, "experiments", "fixture-active.toon");
   const originalItem = readFileSync(itemFile, "utf8");
   writeFileSync(itemFile, originalItem.replace(/legacy_count:.*$/m, "legacy_count: invalid"));
-  await assert.rejects(async () => command.run({ ...base, options: { plan: planFile, workDir: join(options.root, "invalid-run") } }), (error: unknown) => {
+  await assert.rejects(async () => command.run({ ...base, options: { source: options.source, plan: planFile, workDir: join(options.root, "invalid-run") } }), (error: unknown) => {
     assert.ok(error instanceof Error && "code" in error && "context" in error);
     assert.equal(error.code, "invalid_data");
     assert.deepEqual((error.context as { verification_errors: string[] }).verification_errors, ["experiments/fixture-active.toon:legacy_count"]);
@@ -232,12 +232,12 @@ test("registered command validates input and delegates with native agent output"
   writeFileSync(itemFile, originalItem);
   const settingsFile = join(options.source, "settings.json"), originalSettings = readFileSync(settingsFile, "utf8");
   writeFileSync(settingsFile, JSON.stringify({ ...JSON.parse(originalSettings), item_format: "invalid" }));
-  await assert.rejects(async () => command.run({ ...base, options: { plan: planFile, workDir: join(options.root, "settings-run") } }), (error: unknown) => {
+  await assert.rejects(async () => command.run({ ...base, options: { source: options.source, plan: planFile, workDir: join(options.root, "settings-run") } }), (error: unknown) => {
     assert.ok(error instanceof Error && "code" in error); assert.equal(error.code, "invalid_data"); return true;
   });
   writeFileSync(settingsFile, originalSettings);
   writeFileSync(planFile, " ".repeat(65537));
-  await assert.rejects(async () => command.run({ ...base, options: { plan: planFile, workDir: join(options.root, "huge-run") } }), (error: unknown) => {
+  await assert.rejects(async () => command.run({ ...base, options: { source: options.source, plan: planFile, workDir: join(options.root, "huge-run") } }), (error: unknown) => {
     assert.ok(error instanceof Error && "code" in error); assert.equal(error.code, "invalid_plan"); return true;
   });
 });
@@ -327,9 +327,10 @@ test("resuming refuses a scratch schema redirected outside its private tracker",
   await assertSourcePreservedRefusal(options, "unsafe_storage");
 });
 
-test("installed CLI emits TOON/JSON and typed field refusals with Git absent", async t => {
+/** Install the built package into a separate real caller tracker without Git. */
+async function installedRehearsalFixture(t: TestContext) {
   const options = await fixture(t), host = join(options.root, "caller"), localPackage = join(options.root, "package");
-  await new PmClient({ pmRoot: host, noExtensions: true, author: "fixture-agent" }).init("caller", { defaults: true, mergeFence: false, agentGuidance: "skip" });
+  cpSync(options.source, host, { recursive: true });
   mkdirSync(localPackage);
   for (const file of ["dist", "manifest.json", "package.json"]) cpSync(resolve(import.meta.dirname, "..", file), join(localPackage, file), { recursive: true });
   const cli = resolve(import.meta.dirname, "../node_modules/@unbrained/pm-cli/dist/cli.js");
@@ -339,6 +340,11 @@ test("installed CLI emits TOON/JSON and typed field refusals with Git absent", a
   const env = { ...process.env, PATH: noGit, GIT_CEILING_DIRECTORIES: options.root };
   const file = join(options.root, "migration.json"); writeFileSync(file, JSON.stringify(plan));
   const args = [cli, "--pm-path", host, "ts-starter", "rehearse-schema", "--source", options.source, "--plan", file, "--work-dir", options.workDir];
+  return { options, host, cli, env, file, args };
+}
+
+test("installed CLI emits TOON/JSON and typed field refusals with Git absent", async t => {
+  const { options, env, file, args } = await installedRehearsalFixture(t);
   const before = bytes(options.source);
   const first = spawnSync(process.execPath, [...args, "--json"], { cwd: options.root, env, encoding: "utf8", timeout: 30000 });
   assert.equal(first.status, 0, first.stderr); assert.equal(JSON.parse(first.stdout).affected, 4);
@@ -382,6 +388,48 @@ test("installed CLI emits TOON/JSON and typed field refusals with Git absent", a
     else { assert.equal(result.status, 2, result.stderr); assert.equal(JSON.parse(result.stderr).code, "unavailable"); }
   }
   assert.equal(bytes(options.source), before);
+});
+
+/** Observe host startup scaffolding while requiring refusal before extension writes. */
+async function assertStartupSourceRefusal(t: TestContext, mode: "omitted" | "active"): Promise<void> {
+  const { options, host, env, args } = await installedRehearsalFixture(t);
+  rmSync(join(host, "schema", "workflows.json"));
+  const before = bytes(options.source), sourceIndex = args.indexOf("--source");
+  const invocation = mode === "omitted" ? args.filter((_, index) => index !== sourceIndex && index !== sourceIndex + 1) :
+    args.map(value => value === options.source ? host : value);
+  const result = spawnSync(process.execPath, [...invocation, "--json"], { cwd: options.root, env, encoding: "utf8", timeout: 30000 });
+  assert.equal(result.status, 2, result.stderr);
+  const error = JSON.parse(result.stderr);
+  assert.equal(error.code, mode === "omitted" ? "invalid_plan" : "unsafe_storage");
+  assert.match(error.required, /--source/);
+  assert.match(error.required, /pm-cli#1568/);
+  assert.equal(existsSync(options.workDir), false);
+  assert.doesNotMatch(result.stdout + result.stderr, /source_unchanged/);
+  // The pinned host already wrote before the refusal: no extension receipt can certify those earlier bytes.
+  assert.equal(existsSync(join(host, "schema", "workflows.json")), true);
+  assert.equal(bytes(options.source), before);
+}
+
+test("CLI source isolation refuses omitted source after host startup", async t => {
+  await assertStartupSourceRefusal(t, "omitted");
+});
+
+test("CLI source isolation refuses the active tracker after host startup", async t => {
+  await assertStartupSourceRefusal(t, "active");
+});
+
+test("CLI source isolation resolves aliases and refuses containing sources before reading a plan", async t => {
+  const options = await fixture(t), command = await rehearsalCommand();
+  const sourceAlias = join(options.root, "source-alias"), parentAlias = join(options.root, "parent-alias");
+  symlinkSync(options.source, sourceAlias); symlinkSync(options.root, parentAlias);
+  for (const [source, active] of [[options.source, options.source], [sourceAlias, options.source], [options.source, sourceAlias], [options.root, options.source], [parentAlias, sourceAlias]]) {
+    await assert.rejects(async () => command.run({ command: "ts-starter rehearse-schema", args: [], options: { source, plan: "missing", workDir: options.workDir }, global: {}, pm_root: active }), (error: unknown) => {
+      assert.ok(error instanceof Error && "code" in error);
+      assert.equal(error.code, "unsafe_storage"); assert.match(error.message, /pm-cli#1568/); return true;
+    });
+  }
+  assert.equal(existsSync(options.workDir), false);
+  assert.doesNotThrow(() => assertIndependentRehearsalSource(options.source, options.root));
 });
 
 test("scratch lock-directory aliases refuse before acquiring any source lock", async t => {
@@ -612,7 +660,7 @@ test("input audit rejects primitive plans, empty locations and malformed CLI val
   const options = await fixture(t);
   for (const patch of [{ source: "" }, { source: 4 }, { workDir: " " }, { afterStep: 4 }]) await assert.rejects(rehearseSchemaMigration({ ...options, plan, ...patch } as Parameters<typeof rehearseSchemaMigration>[0]), refusal("invalid_plan"));
   const planFile = join(options.root, "valid-plan.json"); writeFileSync(planFile, JSON.stringify(plan));
-  const validOptions = { plan: planFile, workDir: options.workDir };
+  const validOptions = { source: options.source, plan: planFile, workDir: options.workDir };
   for (const value of ["", " ", 4, null]) {
     const command = await rehearsalCommand();
     await assert.rejects(async () => command.run({ command: "ts-starter rehearse-schema", args: [], options: { ...validOptions, source: value }, global: {}, pm_root: options.source }), (error: unknown) => error instanceof Error && "code" in error && error.code === "invalid_plan");
