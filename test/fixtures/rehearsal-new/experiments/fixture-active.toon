@@ -1,0 +1,13 @@
+id: fixture-active
+title: Evaluate indexing
+description: Old custom schema fixture
+type: Investigation
+status: open
+priority: 2
+tags: []
+created_at: "2026-10-23T20:10:24.999Z"
+updated_at: "2026-10-23T20:10:25.149Z"
+author: fixture-agent
+external_ref: RFC-17
+legacy_count: 17
+body: ""

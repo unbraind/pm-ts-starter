@@ -203,3 +203,23 @@ for this suite, including local runs; set `BUN_EXE` if Bun is outside `PATH`.
 Consumer subprocesses have a five-minute timeout, and install failures fail the test.
 SDK reads may maintain disposable
 caches; use a tracker copy for archival inputs. No generated operation needs Git.
+
+## Schema migration rehearsal
+
+`pm ts-starter rehearse-schema --source ./old-tracker --plan ./migration.json --work-dir "$REHEARSAL_DIR/run-1" --json`
+rehearses custom item field/type evolution on a private resumable copy outside Git.
+The original tracker is read only; invalid data produces field diagnostics. Repeat
+the same command after interruption to resume without duplicate migration history.
+An explicit `--source` is required. Run from a separate caller tracker: the source
+must neither equal nor contain the active tracker after realpath resolution.
+Host startup can recreate missing schema files before extension code runs
+([pm-cli#1568](https://github.com/unbraind/pm-cli/issues/1568)), even for read commands.
+`source_unchanged: true` compares the extension's snapshot taken before its first
+controlled write with the final source; it cannot certify bytes before host startup.
+Use native TOON or `--json` for compact count receipts. Core remains authoritative
+for schema and migrations; pm-presets owns configuration upgrades.
+
+The typed SDK exports `rehearseSchemaMigration`, `parseRehearsalPlan`, and
+`RehearsalRefusal`. See the [guide and SDK example](docs/schema-migration-rehearsal.md)
+and [JSON plan](docs/examples/schema-migration.json). This feature works without Git
+and requires a directory tracker; export remote data explicitly before rehearsal.

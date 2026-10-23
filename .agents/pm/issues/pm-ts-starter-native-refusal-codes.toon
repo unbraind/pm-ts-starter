@@ -1,0 +1,15 @@
+id: pm-ts-starter-native-refusal-codes
+title: Preserve native refusal codes in legacy starter demo errors
+description: The legacy pmExpectedError helper stores context.code but does not mirror it to error.code. Current CLI native error rendering falls back to command_failed for these demo errors. The new schema rehearsal command uses the SDK createPmCliExpectedError factory and is unaffected. Replace or delegate legacy construction to the SDK factory in a focused follow-up.
+type: Issue
+status: open
+priority: 2
+tags: []
+created_at: "2026-10-23T20:21:24.679Z"
+updated_at: "2026-10-23T20:21:25.510Z"
+author: codex-agent
+acceptance_criteria: Legacy demo refusals retain producer-owned native codes in installed CLI JSON output
+files[2]{path,scope}:
+  index.ts,project
+  test/smoke.test.ts,project
+body: ""

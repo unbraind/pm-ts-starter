@@ -1,0 +1,20 @@
+{
+  "fields": [
+    {
+      "key": "legacy_count",
+      "type": "number",
+      "commands": [
+        "create",
+        "update"
+      ]
+    },
+    {
+      "key": "legacy_ref",
+      "type": "string",
+      "commands": [
+        "create",
+        "update"
+      ]
+    }
+  ]
+}
