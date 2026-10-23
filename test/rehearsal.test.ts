@@ -1,6 +1,6 @@
 /** Real tracker contracts for isolated migration and crash-window recovery. */
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { cpSync, truncateSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -8,7 +8,7 @@ import test, { type TestContext } from "node:test";
 import { PmClient, acquireLock, readSettings, readLocatedItem, serializeItemDocument } from "@unbrained/pm-cli/sdk";
 import { createExtensionTestHarness } from "@unbrained/pm-cli/sdk/testing";
 import extension from "../index.ts";
-import { parseRehearsalPlan, rehearseSchemaMigration, RehearsalRefusal, type RehearsalPlan } from "../rehearsal.ts";
+import { parseRehearsalPlan, readRehearsalPlan, rehearseSchemaMigration, RehearsalRefusal, type RehearsalPlan } from "../rehearsal.ts";
 
 const plan: RehearsalPlan = { version: 1, steps: [
   { kind: "rename-field", from: "legacy_ref", to: "external_ref" },
@@ -41,11 +41,30 @@ function refusal(code: RehearsalRefusal["code"]): (error: unknown) => boolean {
   return error => error instanceof RehearsalRefusal && error.code === code && error.remedy.length > 10;
 }
 
+/** Exercise actual simultaneous CLI processes without serializing their startup. */
+async function cliProcess(args: string[], cwd: string, env: NodeJS.ProcessEnv): Promise<{ status: number | null; stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, args, { cwd, env, timeout: 30000 });
+    let stdout = "", stderr = "";
+    child.stdout.on("data", data => { stdout += data; });
+    child.stderr.on("data", data => { stderr += data; });
+    child.on("error", reject);
+    child.on("close", status => resolve({ status, stdout, stderr }));
+  });
+}
+
 /** Assert both refusal and byte preservation for an unsafe storage attempt. */
 async function assertSourcePreservedRefusal(options: { source: string; workDir: string }, code: RehearsalRefusal["code"]): Promise<void> {
   const original = bytes(options.source);
   await assert.rejects(rehearseSchemaMigration({ ...options, plan }), refusal(code));
   assert.equal(bytes(options.source), original);
+}
+
+/** Leave one committed core step behind an unadvanced wrapper checkpoint. */
+async function interruptedFixture(t: TestContext): Promise<Awaited<ReturnType<typeof fixture>>> {
+  const options = await fixture(t);
+  await assert.rejects(rehearseSchemaMigration({ ...options, plan, afterStep() { throw new Error("interrupted"); } }), refusal("unavailable"));
+  return options;
 }
 
 test("old/new custom tracker fixtures migrate once, retain terminal rows and preserve every source byte", async t => {
@@ -192,17 +211,32 @@ test("registered command validates input and delegates with native agent output"
   const command = harness.activation.commands.handlers.find(entry => entry.command === "ts-starter rehearse-schema")!;
   const base = { command: "ts-starter rehearse-schema", args: [], options: {}, global: {}, pm_root: options.source };
   await assert.rejects(async () => command.run(base), (error: unknown) => error instanceof Error && error.name === "PmCliError");
+  await assert.rejects(async () => command.run({ ...base, options: null as unknown as typeof base.options }), (error: unknown) => {
+    assert.ok(error instanceof Error && "code" in error); assert.equal(error.code, "invalid_plan"); return true;
+  });
   await assert.rejects(async () => command.run({ ...base, options: { plan: "missing", "work-dir": options.workDir } }), (error: unknown) => error instanceof Error && error.name === "PmCliError");
   const planFile = join(options.root, "plan.json"); writeFileSync(planFile, JSON.stringify(plan));
   assert.equal((await command.run({ ...base, options: { plan: planFile, workDir: options.workDir } }) as { items: number }).items, 2);
   assert.equal((await command.run({ ...base, pm_root: "unused", options: { source: options.source, plan: planFile, "work-dir": options.workDir } }) as { resumed: boolean }).resumed, true);
   const itemFile = join(options.source, "experiments", "fixture-active.toon");
-  writeFileSync(itemFile, readFileSync(itemFile, "utf8").replace(/legacy_count:.*$/m, "legacy_count: invalid"));
+  const originalItem = readFileSync(itemFile, "utf8");
+  writeFileSync(itemFile, originalItem.replace(/legacy_count:.*$/m, "legacy_count: invalid"));
   await assert.rejects(async () => command.run({ ...base, options: { plan: planFile, workDir: join(options.root, "invalid-run") } }), (error: unknown) => {
     assert.ok(error instanceof Error && "code" in error && "context" in error);
     assert.equal(error.code, "invalid_data");
     assert.deepEqual((error.context as { verification_errors: string[] }).verification_errors, ["experiments/fixture-active.toon:legacy_count"]);
     return true;
+  });
+  writeFileSync(itemFile, originalItem);
+  const settingsFile = join(options.source, "settings.json"), originalSettings = readFileSync(settingsFile, "utf8");
+  writeFileSync(settingsFile, JSON.stringify({ ...JSON.parse(originalSettings), item_format: "invalid" }));
+  await assert.rejects(async () => command.run({ ...base, options: { plan: planFile, workDir: join(options.root, "settings-run") } }), (error: unknown) => {
+    assert.ok(error instanceof Error && "code" in error); assert.equal(error.code, "invalid_data"); return true;
+  });
+  writeFileSync(settingsFile, originalSettings);
+  writeFileSync(planFile, " ".repeat(65537));
+  await assert.rejects(async () => command.run({ ...base, options: { plan: planFile, workDir: join(options.root, "huge-run") } }), (error: unknown) => {
+    assert.ok(error instanceof Error && "code" in error); assert.equal(error.code, "invalid_plan"); return true;
   });
 });
 
@@ -310,12 +344,42 @@ test("installed CLI emits TOON/JSON and typed field refusals with Git absent", a
   assert.equal(replay.status, 0, replay.stderr); assert.match(replay.stdout, /resumed: true/);
   assert.equal(bytes(options.source), before);
   const item = join(options.source, "experiments", "fixture-active.toon");
-  writeFileSync(item, readFileSync(item, "utf8").replace(/legacy_count:.*$/m, "legacy_count: invalid"));
+  const originalItem = readFileSync(item, "utf8");
+  writeFileSync(item, originalItem.replace(/legacy_count:.*$/m, "legacy_count: invalid"));
   const invalidArgs = args.map(value => value === options.workDir ? join(options.root, "invalid") : value);
   const invalid = spawnSync(process.execPath, [...invalidArgs, "--json"], { cwd: options.root, env, encoding: "utf8", timeout: 30000 });
   assert.equal(invalid.status, 2); const error = JSON.parse(invalid.stderr);
   assert.equal(error.code, "invalid_data");
   assert.deepEqual(error.verification_errors, ["experiments/fixture-active.toon:legacy_count"]);
+  writeFileSync(item, originalItem);
+  for (const [file, replacement] of [
+    ["settings.json", JSON.stringify({ ...JSON.parse(readFileSync(join(options.source, "settings.json"), "utf8")), item_format: "invalid" })],
+    ["schema/types.json", '{"definitions":[]}'],
+    ["schema/fields.json", '{"fields":[{}]}'],
+  ]) {
+    const target = join(options.source, file), original = readFileSync(target, "utf8");
+    writeFileSync(target, replacement);
+    const snapshot = bytes(options.source);
+    const result = spawnSync(process.execPath, [...invalidArgs.map(value => value === join(options.root, "invalid") ? join(options.root, `invalid-${file.replaceAll("/", "-")}`) : value), "--json"], { cwd: options.root, env, encoding: "utf8", timeout: 30000 });
+    assert.equal(result.status, 2, result.stderr); assert.equal(JSON.parse(result.stderr).code, "invalid_data");
+    assert.equal(bytes(options.source), snapshot);
+    writeFileSync(target, original);
+  }
+  writeFileSync(file, " ".repeat(65537));
+  const huge = spawnSync(process.execPath, [...args, "--json"], { cwd: options.root, env, encoding: "utf8", timeout: 30000 });
+  assert.equal(huge.status, 2); assert.equal(JSON.parse(huge.stderr).code, "invalid_plan");
+  writeFileSync(file, JSON.stringify(plan));
+  const alias = join(options.root, "plan-alias"); symlinkSync(file, alias);
+  const linked = spawnSync(process.execPath, [...args.map(value => value === file ? alias : value), "--json"], { cwd: options.root, env, encoding: "utf8", timeout: 30000 });
+  assert.equal(linked.status, 2); assert.equal(JSON.parse(linked.stderr).code, "invalid_plan");
+  const parallel = args.map(value => value === options.workDir ? join(options.root, "parallel") : value);
+  const concurrent = await Promise.all(Array.from({ length: 2 }, () => cliProcess([...parallel, "--json"], options.root, env)));
+  assert.ok(concurrent.some(result => result.status === 0));
+  for (const result of concurrent) {
+    if (result.status === 0) assert.equal(JSON.parse(result.stdout).affected, 4);
+    else { assert.equal(result.status, 2, result.stderr); assert.equal(JSON.parse(result.stderr).code, "unavailable"); }
+  }
+  assert.equal(bytes(options.source), before);
 });
 
 test("scratch lock-directory aliases refuse before acquiring any source lock", async t => {
@@ -323,4 +387,159 @@ test("scratch lock-directory aliases refuse before acquiring any source lock", a
   mkdirSync(options.workDir);
   symlinkSync(join(options.source, "locks"), join(options.workDir, "locks"));
   await assertSourcePreservedRefusal(options, "unsafe_storage");
+});
+
+test("invalid settings cannot report zero-item success with unmigrated custom items", async t => {
+  const options = await fixture(t), file = join(options.source, "settings.json");
+  const settings = JSON.parse(readFileSync(file, "utf8")); settings.item_format = "invalid";
+  writeFileSync(file, JSON.stringify(settings));
+  await assertSourcePreservedRefusal(options, "invalid_data");
+  assert.equal(existsSync(join(options.workDir, "rehearsal.json")), false);
+  for (const id of ["fixture-active", "fixture-done"]) {
+    assert.match(readFileSync(join(options.workDir, "tracker", "experiments", `${id}.toon`), "utf8"), /legacy_ref:/);
+  }
+});
+
+test("malformed and partial schemas never silently narrow corpus validation", async t => {
+  const cases = [
+    ["settings.json", "{}"],
+    ["schema/types.json", "{"],
+    ["schema/types.json", '{"definitions":[]}'],
+    ["schema/statuses.json", "null"],
+    ["schema/workflows.json", "[]"],
+    ["schema/fields.json", '{"fields":{}}'],
+    ["schema/fields.json", '{"fields":[{"key":"legacy_ref","type":"string"},{}]}'],
+    ["schema/fields.json", '{"fields":[{"key":"legacy_ref"}]}'],
+    ["schema/fields.json", '{"fields":[{"key":"legacy_ref","type":"string"},{"key":"legacy_count","type":"typo"}]}'],
+  ];
+  for (const [file, raw] of cases) await t.test(`${file}: ${raw}`, async t => {
+    const options = await fixture(t);
+    writeFileSync(join(options.source, file), raw);
+    await assertSourcePreservedRefusal(options, "invalid_data");
+    assert.equal(existsSync(join(options.workDir, "rehearsal.json")), false);
+  });
+});
+
+test("all SDK field schema representations validate item values before migration", async t => {
+  for (const format of ["array", "definitions", "inline"]) await t.test(format, async t => {
+    const options = await fixture(t), file = join(options.source, "schema", "fields.json");
+    const fields = JSON.parse(readFileSync(file, "utf8")).fields as { key: string; type?: string }[];
+    writeFileSync(file, JSON.stringify(format === "array" ? fields : format === "definitions" ? { definitions: fields } : { fields: [] }));
+    if (format === "inline") {
+      const file = join(options.source, "settings.json"), settings = JSON.parse(readFileSync(file, "utf8"));
+      settings.schema.fields = fields; writeFileSync(file, JSON.stringify(settings));
+    }
+    const item = join(options.source, "experiments", "fixture-active.toon");
+    writeFileSync(item, readFileSync(item, "utf8").replace(/legacy_count:.*$/m, "legacy_count: invalid"));
+    await assertSourcePreservedRefusal(options, "invalid_data");
+  });
+});
+
+test("resuming validates scratch settings before another core operation", async t => {
+  const options = await interruptedFixture(t);
+  const tracker = join(options.workDir, "tracker"), file = join(tracker, "settings.json");
+  const settings = JSON.parse(readFileSync(file, "utf8")); settings.item_format = "invalid";
+  writeFileSync(file, JSON.stringify(settings));
+  const before = bytes(tracker);
+  await assertSourcePreservedRefusal(options, "invalid_data");
+  assert.equal(bytes(tracker), before);
+});
+
+test("unregistered and nested physical items cannot disappear from a certified count", async t => {
+  for (const folder of ["unregistered", "experiments/nested"]) await t.test(folder, async t => {
+    const options = await fixture(t);
+    mkdirSync(join(options.source, folder), { recursive: true });
+    cpSync(join(options.source, "experiments", "fixture-active.toon"), join(options.source, folder, "hidden.toon"));
+    await assertSourcePreservedRefusal(options, "invalid_data");
+  });
+});
+
+test("hidden physical item files cannot bypass the SDK corpus count", async t => {
+  const options = await fixture(t);
+  cpSync(join(options.source, "experiments", "fixture-active.toon"), join(options.source, "experiments", ".hidden.toon"));
+  await assertSourcePreservedRefusal(options, "invalid_data");
+  assert.equal(existsSync(join(options.workDir, "rehearsal.json")), false);
+});
+
+test("resuming a smaller scratch corpus refuses before replaying core journals", async t => {
+  const options = await interruptedFixture(t);
+  const tracker = join(options.workDir, "tracker");
+  rmSync(join(tracker, "experiments", "fixture-done.toon"));
+  const before = bytes(join(tracker, "history"));
+  await assertSourcePreservedRefusal(options, "invalid_data");
+  assert.ok(bytes(join(tracker, "history")) === before, "Refusal must precede core history writes");
+});
+
+test("parallel callers share one scratch lease and migrate each item exactly once", async t => {
+  const options = await fixture(t), before = bytes(options.source);
+  const outcomes = await Promise.allSettled(Array.from({ length: 6 }, () => rehearseSchemaMigration({ ...options, plan })));
+  assert.equal(outcomes.filter(outcome => outcome.status === "fulfilled").length, 1);
+  for (const outcome of outcomes) if (outcome.status === "rejected") assert.ok(refusal("unavailable")(outcome.reason));
+  assert.equal((await rehearseSchemaMigration({ ...options, plan })).affected, 4);
+  assert.equal(bytes(options.source), before);
+  for (const id of ["fixture-active", "fixture-done"]) {
+    const history = readFileSync(join(options.workDir, "tracker", "history", `${id}.jsonl`), "utf8");
+    assert.equal(history.split("\n").filter(line => line.includes('"op":"schema_rename_field"')).length, 1);
+    assert.equal(history.split("\n").filter(line => line.includes('"op":"schema_rename_type"')).length, 1);
+  }
+});
+
+test("initializing scratch directories refuse before competing for the creator lease", async t => {
+  const options = await fixture(t);
+  mkdirSync(options.workDir);
+  await assertSourcePreservedRefusal(options, "unavailable");
+  assert.deepEqual(readdirSync(options.workDir), [], "A competing caller must not create lock storage before the first checkpoint");
+});
+
+test("plan entry points bound names, optional scope, payload and file storage", async t => {
+  const options = await fixture(t), file = join(options.root, "plan.json");
+  for (const step of [
+    { ...plan.steps[0], type: "../Experiment" }, { ...plan.steps[0], type: "x".repeat(65) },
+    { ...plan.steps[0], extra: "unexpected" }, { ...plan.steps[0], from: "x".repeat(65) },
+  ]) assert.throws(() => parseRehearsalPlan({ version: 1, steps: [step] }), refusal("invalid_plan"));
+  assert.deepEqual(parseRehearsalPlan({ ...plan, extra: "x".repeat(1000000) }), plan);
+  writeFileSync(file, JSON.stringify(plan));
+  assert.deepEqual(readRehearsalPlan(file), plan);
+  for (const value of ["{", "{}", " ".repeat(65537) + JSON.stringify(plan)]) {
+    writeFileSync(file, value); assert.throws(() => readRehearsalPlan(file), refusal("invalid_plan"));
+  }
+  assert.throws(() => readRehearsalPlan(options.root), refusal("invalid_plan"));
+  assert.throws(() => readRehearsalPlan(join(options.root, "missing")), refusal("invalid_plan"));
+  writeFileSync(file, JSON.stringify(plan));
+  const alias = join(options.root, "alias"); symlinkSync(file, alias);
+  assert.throws(() => readRehearsalPlan(alias), refusal("invalid_plan"));
+  rmSync(alias); symlinkSync(options.root, alias);
+  assert.throws(() => readRehearsalPlan(join(alias, "plan.json")), refusal("unsafe_storage"));
+  rmSync(alias); linkSync(file, alias);
+  assert.throws(() => readRehearsalPlan(file), refusal("invalid_plan"));
+  assert.equal(existsSync(options.workDir), false);
+});
+
+test("snapshot traversal bounds include directories as well as file bytes", async t => {
+  const options = await fixture(t);
+  mkdirSync(join(options.source, ...Array(65).fill("nested")), { recursive: true });
+  await assertSourcePreservedRefusal(options, "unsafe_storage");
+  rmSync(join(options.source, "nested"), { recursive: true });
+  for (let index = 0; index < 20001; index++) mkdirSync(join(options.source, `empty-${index}`));
+  await assertSourcePreservedRefusal(options, "unsafe_storage");
+});
+
+test("plan reads use the same normalized path checked for aliases", async t => {
+  const options = await fixture(t), nested = join(options.root, "other", "child");
+  mkdirSync(nested, { recursive: true });
+  writeFileSync(join(options.root, "other", "plan.json"), JSON.stringify(plan));
+  writeFileSync(join(options.root, "plan.json"), "{}");
+  const alias = join(options.root, "alias"); symlinkSync(nested, alias);
+  await assert.rejects(async () => readRehearsalPlan(`${alias}/../plan.json`), refusal("invalid_plan"));
+});
+
+test("custom item folders cannot redirect SDK reads or migrations outside item storage", async t => {
+  for (const folder of ["../../old/experiments", "experiments/nested", "schema", "history", "extensions"]) await t.test(folder, async t => {
+    const options = await fixture(t), file = join(options.source, "schema", "types.json");
+    const types = JSON.parse(readFileSync(file, "utf8"));
+    types.definitions.push({ name: "Redirected", folder });
+    writeFileSync(file, JSON.stringify(types));
+    await assertSourcePreservedRefusal(options, folder.startsWith("..") ? "unavailable" : "unsafe_storage");
+    assert.equal(existsSync(join(options.workDir, "rehearsal.json")), false);
+  });
 });

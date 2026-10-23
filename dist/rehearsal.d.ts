@@ -58,6 +58,8 @@ export declare class RehearsalRefusal extends Error {
 }
 /** Refuse unsupported plans before creating scratch artifacts. */
 export declare function parseRehearsalPlan(value: unknown): RehearsalPlan;
+/** Read a bounded regular plan file without accepting filesystem aliases. */
+export declare function readRehearsalPlan(file: string): RehearsalPlan;
 /** Sanitize storage and SDK failures into stable, actionable public refusals. */
 export declare function rehearseSchemaMigration(options: RehearsalOptions): Promise<RehearsalReceipt>;
 //# sourceMappingURL=rehearsal.d.ts.map

@@ -15,6 +15,11 @@ as `external_ref`, then renames `Experiment` to `Investigation`. Each operation
 uses the host's existing `schemaRenameField`, `schemaRenameType`, or
 `schemaRemapStatus` method. Optional `type` scopes a field rename. The wrapper
 supports 1–32 ordered operations; it does not implement arbitrary value transforms.
+Names and optional type scopes use 1–64 ASCII letters, digits, underscores or
+hyphens, starting with a letter. Step objects accept only the documented keys.
+Plan files must be regular, unlinked files no larger than 64 KiB; symlinked parent
+directories are refused too. The object parser discards unrelated top-level data
+before cloning the bounded plan.
 
 With this extension installed in a separate caller workspace:
 
@@ -31,9 +36,26 @@ read-only source. The harness itself only reads the source. Source and scratch
 must be disjoint real directories, with no symlinks, hardlinked or special files.
 Existing scratch contents, including lock directories, are scanned before acquiring
 a lease, so a lock alias cannot redirect writes into the source.
-Schema paths must stay inside the tracker. Snapshots are capped at 256 MiB and
-20000 files. Extensions, locks, search artifacts, runtime caches and transaction
-journals are excluded from the input snapshot.
+Schema paths must stay inside the tracker. Item folders must be flat and cannot
+overlap schema, history or runtime storage. Snapshots are capped at 256 MiB,
+20000 total file/directory entries and 64 path components. Extensions, locks,
+search artifacts, runtime caches and transaction journals are excluded from the
+input snapshot.
+
+Settings and schema fallback warnings are fatal: default settings cannot certify
+an unread custom corpus. Valid legacy Markdown and missing-schema bootstrap
+notices remain supported. Field definitions must retain an explicit valid key
+and type through SDK normalization. Every physical `.toon` or `.md` item outside
+schema/history storage must belong to a registered, flat item folder, and its
+count must match the certified SDK enumeration. Scratch settings and corpus size
+are checked again before resuming any core mutation. Source bytes stay unchanged
+on refusal as well as success.
+
+Concurrent callers may receive `unavailable` while the creator initializes the
+first checkpoint or another caller owns the lease. Retry after that caller
+finishes. A checkpoint-free directory is refused before acquiring a lease, so a
+competing caller cannot displace the creator. If initialization stops before any
+checkpoint exists, choose a new scratch directory.
 
 ```ts
 import { rehearseSchemaMigration, RehearsalRefusal } from "pm-ts-starter";

@@ -93,7 +93,7 @@ import * as readline from "node:readline/promises";
 
 import { generateBackendProject } from "./backend-project.ts";
 import { createPmCliExpectedError } from "@unbrained/pm-cli/sdk";
-import { rehearseSchemaMigration, parseRehearsalPlan, RehearsalRefusal } from "./rehearsal.ts";
+import { rehearseSchemaMigration, readRehearsalPlan, RehearsalRefusal } from "./rehearsal.ts";
 export * from "./rehearsal.ts";
 export * from "./backend.ts";
 export * from "./backend-project.ts";
@@ -487,7 +487,7 @@ const schemaRehearsalCommand = defineCommand({
     try {
       const planFile = ctx.options["plan"], workDir = ctx.options["workDir"] ?? ctx.options["work-dir"];
       if (typeof planFile !== "string" || typeof workDir !== "string") throw new RehearsalRefusal("invalid_plan", "Provide --plan <file> and --work-dir <directory>.");
-      return await rehearseSchemaMigration({ source: typeof ctx.options["source"] === "string" ? ctx.options["source"] : ctx.pm_root, workDir, plan: parseRehearsalPlan(JSON.parse(readFileSync(planFile, "utf8"))) });
+      return await rehearseSchemaMigration({ source: typeof ctx.options["source"] === "string" ? ctx.options["source"] : ctx.pm_root, workDir, plan: readRehearsalPlan(planFile) });
     } catch (error) {
       const refusal = error instanceof RehearsalRefusal ? error : new RehearsalRefusal("invalid_plan", "Provide a readable version 1 JSON plan.");
       throw createPmCliExpectedError(refusal.remedy, { context: { code: refusal.code, required: refusal.remedy,

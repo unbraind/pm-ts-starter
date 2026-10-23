@@ -1,11 +1,11 @@
 /** Isolated, resumable rehearsals around the authoritative SDK migration engine. */
 import { createHash } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import {
   PmClient, acquireLock, certifyCompleteListResult, isPmCliExpectedError,
-  readLocatedItem, readSettings, resolveItemTypeRegistry, writeFileAtomic,
-  type SchemaEvolutionMigrationRequest,
+  readLocatedItem, readSettingsWithMetadata, resolveItemTypeRegistry, resolveRuntimeFieldRegistry, writeFileAtomic,
+  type PmSettings, type SchemaEvolutionMigrationRequest,
 } from "@unbrained/pm-cli/sdk";
 
 /** Extension data changes supported by core, without duplicating its migration engine. */
@@ -96,11 +96,25 @@ export function parseRehearsalPlan(value: unknown): RehearsalPlan {
     if (!step || !["rename-field", "rename-type", "remap-status"].includes(step.kind) ||
       typeof step.from !== "string" || typeof step.to !== "string" || !/^[a-zA-Z][\w-]{0,63}$/.test(step.from) ||
       !/^[a-zA-Z][\w-]{0,63}$/.test(step.to) || step.from.toLowerCase() === step.to.toLowerCase() ||
-      ("type" in step && (step.kind !== "rename-field" || typeof step.type !== "string"))) {
+      ("type" in step && (step.kind !== "rename-field" || typeof step.type !== "string" || !/^[a-zA-Z][\w-]{0,63}$/.test(step.type))) ||
+      Object.keys(step).some(key => !["kind", "from", "to", "type"].includes(key))) {
       throw new RehearsalRefusal("invalid_plan", "Use distinct schema names and a core rename-field, rename-type or remap-status operation.");
     }
   }
-  return structuredClone(plan) as RehearsalPlan;
+  return { version: 1, steps: structuredClone(plan.steps) };
+}
+/** Read a bounded regular plan file without accepting filesystem aliases. */
+export function readRehearsalPlan(file: string): RehearsalPlan {
+  try {
+    const target = resolve(file);
+    safePath(dirname(target));
+    const stat = lstatSync(target);
+    if (!stat.isFile() || stat.nlink !== 1 || stat.size > 64 * 1024) throw new RehearsalRefusal("invalid_plan", "Use a regular, unlinked JSON plan file no larger than 64 KiB.");
+    return parseRehearsalPlan(JSON.parse(readFileSync(target, "utf8")));
+  } catch (error) {
+    if (error instanceof RehearsalRefusal) throw error;
+    throw new RehearsalRefusal("invalid_plan", "Provide a readable version 1 JSON plan.");
+  }
 }
 /** Reject containment, traversal and symlinks rather than guessing ownership. */
 function inside(root: string, target: string): boolean {
@@ -117,12 +131,13 @@ function safePath(target: string): void {
 /** Read authoritative bytes only; refuse links, special files and excessive snapshots. */
 function snapshot(root: string, skipDerived = true): Map<string, Buffer> {
   const files = new Map<string, Buffer>();
-  let bytes = 0;
+  let bytes = 0, entries = 0;
   /** Walk one tracker-relative directory without following links. */
   function walk(folder: string): void {
     for (const name of readdirSync(join(root, folder)).sort()) {
       if (skipDerived && folder === "" && excluded.has(name)) continue;
       const file = join(folder, name);
+      if (++entries > 20000 || file.split(sep).length > 64) throw new RehearsalRefusal("unsafe_storage", "Reduce the tracker snapshot below 20000 entries and 64 directory levels.");
       const stat = lstatSync(join(root, file));
       if (stat.isDirectory()) {
         if (/\.(toon|md)$/.test(name)) throw new RehearsalRefusal("unsafe_storage", "Replace item-shaped directories with valid regular item files before rehearsing.");
@@ -131,7 +146,7 @@ function snapshot(root: string, skipDerived = true): Map<string, Buffer> {
       else {
         if (!stat.isFile() || stat.nlink !== 1) throw new RehearsalRefusal("unsafe_storage", "Use a snapshot with regular, unlinked files only.");
         bytes += stat.size;
-        if (bytes > 256 * 1024 * 1024 || files.size >= 20000) throw new RehearsalRefusal("unsafe_storage", "Reduce the tracker snapshot below 256 MiB and 20000 files.");
+        if (bytes > 256 * 1024 * 1024) throw new RehearsalRefusal("unsafe_storage", "Reduce the tracker snapshot below 256 MiB.");
         files.set(file, readFileSync(join(root, file)));
       }
     }
@@ -150,11 +165,33 @@ function assertLocalSchema(root: string, files: Map<string, Buffer>): void {
     if (isAbsolute(file) || !inside(root, resolve(root, file))) throw new RehearsalRefusal("unsafe_storage", "Keep schema files inside the tracker before rehearsing.");
   }
 }
+/** Refuse field definitions silently dropped or coerced by the SDK normalizer. */
+function assertFieldDefinitions(root: string, files: Map<string, Buffer>, settings: PmSettings): void {
+  const settingsFile = JSON.parse(files.get("settings.json")!.toString()) as { schema?: { fields?: unknown }; };
+  const file = files.get(relative(root, resolve(root, settings.schema.files.fields!)))!;
+  const parsed: unknown = JSON.parse(file.toString());
+  const document = parsed as { fields?: unknown; definitions?: unknown };
+  const definitions = Array.isArray(parsed) ? parsed : document.fields ?? document.definitions;
+  const registry = resolveRuntimeFieldRegistry(settings.schema);
+  for (const field of [...(settingsFile.schema?.fields ?? []) as unknown[], ...definitions as unknown[]]) {
+    const raw = field as { key?: unknown; type?: unknown } | null;
+    const resolved = typeof raw?.key === "string" ? registry.by_key.get(raw.key) : undefined;
+    if (!resolved || raw?.type !== resolved.type) throw new RehearsalRefusal("invalid_data", "Repair incomplete or invalid field definitions before rehearsing.");
+  }
+}
 /** Validate every physical item with the SDK before accepting a certified corpus. */
 async function inspect(root: string): Promise<number> {
-  const settings = await readSettings(root);
+  const { settings, warnings } = await readSettingsWithMetadata(root);
+  if (warnings.some(warning => !warning.startsWith("runtime_schema_bootstrap_created:") && warning !== "settings_item_format_legacy_json_markdown_coerced_to_toon")) {
+    throw new RehearsalRefusal("invalid_data", "Repair invalid tracker settings or schema files before rehearsing; SDK fallback settings cannot certify a corpus.");
+  }
+  const files = snapshot(root);
+  assertFieldDefinitions(root, files, settings);
   const registry = resolveItemTypeRegistry(settings);
+  if (registry.folders.some(folder => folder !== basename(folder) || excluded.has(folder) || ["history", "schema"].includes(folder))) throw new RehearsalRefusal("unsafe_storage", "Use flat, tracker-local item folders outside schema, history and runtime storage.");
   const diagnostics: RehearsalDiagnostic[] = [];
+  const physical = [...files.keys()].filter(file => /\.(toon|md)$/.test(file) && !["history", "schema"].includes(file.split(sep)[0]));
+  if (physical.some(file => !registry.folders.includes(dirname(file)))) throw new RehearsalRefusal("invalid_data", "Register every physical item folder and use flat item directories before rehearsing.");
   for (const folder of registry.folders) {
     if (!existsSync(join(root, folder))) continue;
     for (const name of readdirSync(join(root, folder)).sort()) {
@@ -170,7 +207,9 @@ async function inspect(root: string): Promise<number> {
     }
   }
   if (diagnostics.length) throw new RehearsalRefusal("invalid_data", "Repair the reported fields in a separate reviewed tracker copy, then start a new rehearsal.", diagnostics);
-  return certifyCompleteListResult(await new PmClient({ pmRoot: root, noExtensions: true }).listAllComplete()).items.length;
+  const count = certifyCompleteListResult(await new PmClient({ pmRoot: root, noExtensions: true }).listAllComplete()).items.length;
+  if (count !== physical.length) throw new RehearsalRefusal("invalid_data", "Repair the physical item corpus; SDK enumeration must include every item document.");
+  return count;
 }
 /** Run actual SDK migrations exclusively on a private copy and resume stable core operation IDs. */
 async function executeRehearsal(options: RehearsalOptions): Promise<RehearsalReceipt> {
@@ -186,7 +225,10 @@ async function executeRehearsal(options: RehearsalOptions): Promise<RehearsalRec
   assertLocalSchema(source, input);
   const identity = digest(JSON.stringify([realpathSync(source), plan]));
   const resumed = existsSync(work);
-  if (resumed) snapshot(work, false);
+  if (resumed) {
+    snapshot(work, false);
+    if (!existsSync(join(work, "rehearsal.json"))) throw new RehearsalRefusal("unavailable", "Wait for the initial rehearsal checkpoint before retrying; use a new scratch directory if initialization was interrupted.");
+  }
   else mkdirSync(work, { mode: 0o700 });
   const release = await acquireLock(work, "rehearsal", 300, "schema-rehearsal", false, false, 0);
   try {
@@ -200,6 +242,7 @@ async function executeRehearsal(options: RehearsalOptions): Promise<RehearsalRec
         !Number.isInteger(state.affected) || state.affected < 0 || !Number.isInteger(state.items) || state.items < 0) {
         throw new RehearsalRefusal("source_changed", "Use the original source and plan, or choose a new rehearsal directory.");
       }
+      if (await inspect(tracker) !== state.items) throw new RehearsalRefusal("invalid_data", "Restore the complete scratch corpus before resuming.");
     } else {
       mkdirSync(tracker, { mode: 0o700 });
       for (const [file, data] of input) {
