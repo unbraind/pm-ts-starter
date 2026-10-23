@@ -55,7 +55,7 @@ references must identify declared types and statuses. Field definitions require
 an explicit valid key and type. Every physical `.toon` or `.md` item outside
 schema/history storage must belong to a registered, flat item folder, and its
 count must match the certified SDK enumeration. Scratch settings, corpus size, authoritative bytes and committed core progress
-are checked again before resuming any core mutation. Existing history streams
+are checked again after SDK recovery and before starting a new core operation. Storage containment and source/plan identity are checked before recovery. Existing history streams
 must parse and pass the SDK hash-chain verification. The extension never writes
 source bytes, on refusal or success. Its source fingerprint is taken before any
 scratch creation, lease, SDK read or migration it controls. `source_unchanged: true`
@@ -111,8 +111,16 @@ core operation, before its synchronous observer, then advances completed-step an
 affected counts. If execution stops at the observer boundary, the same core
 migration ID replays without duplicating item history. A completed-step claim must
 have committed SDK journal evidence and matching affected counts. Changed scratch
-bytes or an interruption before the observed-byte checkpoint require a new scratch
-directory; they cannot produce a successful resume receipt. Ordinary thrown interruptions release
+bytes at an observed checkpoint refuse. If termination precedes that checkpoint,
+resume first replays the pending stable migration ID through the SDK, then
+fingerprints the recovered state and validates the corpus, histories and committed
+counts. The `observed_step` marker distinguishes a recorded post-commit fingerprint
+from the pre-commit fingerprint, retaining byte-drift detection at the observer.
+The pinned SDK can refuse replay with `workspace_history_state_conflict` when
+termination falls between its transaction commit and workspace audit. This yields
+`unavailable` with a specific remedy: preserve the interrupted scratch and use a
+new scratch directory with the original source and plan. It never becomes a
+permanent `invalid_data` refusal for that SDK limitation. Ordinary thrown interruptions release
 the wrapper lock. Hard process termination retains the SDK's 300-second lease;
 retry after it expires. Never remove a live writer's lock. Scratch is caller-owned
 private storage: retain it for review or remove it explicitly after review. There
@@ -122,8 +130,14 @@ Tests cover real TOON and JSON Markdown trackers, terminal rows, invalid numeric
 custom fields, immutable source bytes, changed inputs, storage refusals and a
 terminated child with Git absent from PATH. The termination test advances only
 the scratch runtime lease timestamp to simulate expiry; item histories remain
-append-only. The optional synchronous SDK `afterStep` observer exposes the commit /
-checkpoint boundary for controlled interruption tests.
+append-only. The optional synchronous SDK `afterStep` observer runs after the observed-byte
+checkpoint and before completed counts advance. The crash matrix also terminates
+real child processes before and after every SDK call, SDK transaction commit and
+wrapper checkpoint write, plus mid-copy: 27 boundaries across all three migration
+kinds. Each case compares final schema, item values and history operations against
+an uninterrupted run, verifies immutable source bytes and history idempotency, or
+executes the exact fresh-directory remedy for initialization and SDK audit gaps.
+Only scratch runtime lease timestamps are advanced to simulate expiry.
 
 ## Public fleet rehearsal measurement
 

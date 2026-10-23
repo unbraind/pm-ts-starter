@@ -162,9 +162,13 @@ test("external schema paths, changed sources and incompatible checkpoints refuse
   await assert.rejects(rehearseSchemaMigration({ ...options, plan }), refusal("source_changed"));
   rmSync(join(options.source, "new.txt"));
   const checkpoint = join(options.workDir, "rehearsal.json"), raw = readFileSync(checkpoint, "utf8");
-  for (const patch of [{ version: 2 }, { identity: "different" }, { completed: -1 }, { completed: 99 }, { completed: 0.5 }, { affected: -1 }, { affected: "two" }, { items: -1 }, { items: "two" }]) {
+  for (const patch of [{ version: 2 }, { identity: "different" }, { completed: -1 }, { completed: 99 }, { completed: 0.5 }, { affected: -1 }, { affected: "two" }, { items: -1 }, { items: "two" }, { observed_step: -1 }]) {
     writeFileSync(checkpoint, JSON.stringify({ ...JSON.parse(raw), ...patch }));
     await assert.rejects(rehearseSchemaMigration({ ...options, plan }), refusal("source_changed"));
+  }
+  for (const tracker_fingerprint of [undefined, "edited"]) {
+    writeFileSync(checkpoint, JSON.stringify({ ...JSON.parse(raw), tracker_fingerprint }));
+    await assert.rejects(rehearseSchemaMigration({ ...options, plan }), refusal("invalid_data"));
   }
   writeFileSync(checkpoint, raw);
   await assert.rejects(rehearseSchemaMigration({ ...options, plan: { version: 1, steps: [plan.steps[0]] } }), refusal("source_changed"));
@@ -259,6 +263,65 @@ test("a terminated process resumes with no Git executable or enclosing repositor
   assert.equal(resumed.status, 0, resumed.stderr);
   assert.equal(JSON.parse(resumed.stdout).affected, 4);
   assert.equal(bytes(options.source), before);
+});
+
+/** Compare complete semantic state while allowing SDK mutation timestamps to differ. */
+async function finalState(workDir: string): Promise<unknown> {
+  const tracker = join(workDir, "tracker");
+  const items = (await new PmClient({ pmRoot: tracker, noExtensions: true }).listAllComplete()).items;
+  const history = readdirSync(join(tracker, "history")).sort().map(file => [file,
+    readFileSync(join(tracker, "history", file), "utf8").trim().split("\n").map(line => String(JSON.parse(line).op).replace(/:rehearsal-.*/, "")),
+  ]);
+  return { settings: await readSettings(tracker), items: items.map(({ updated_at: _updatedAt, ...item }) => item).sort((a, b) => a.id.localeCompare(b.id)), history };
+}
+
+/** Simulate time passing after a terminated writer, touching only scratch leases. */
+function expireScratchLeases(workDir: string): void {
+  for (const entry of readdirSync(workDir, { recursive: true, withFileTypes: true })) {
+    if (!entry.isFile() || !entry.name.endsWith(".lock")) continue;
+    const file = join(entry.parentPath, entry.name), lease = JSON.parse(readFileSync(file, "utf8"));
+    writeFileSync(file, JSON.stringify({ ...lease, created_at: "2000-01-01T00:00:00.000Z" }));
+  }
+}
+
+test("crash matrix resumes every SDK commit and wrapper checkpoint boundary or proves its initialization remedy", async t => {
+  const baseline = await fixture(t);
+  const client = new PmClient({ pmRoot: baseline.source, noExtensions: true, author: "fixture-agent" });
+  await client.schemaAddStatus("reviewing", { role: ["active"] });
+  await client.update("fixture-active", { status: "reviewing" });
+  const crashPlan: RehearsalPlan = { version: 1, steps: [...plan.steps, { kind: "remap-status", from: "reviewing", to: "verified" }] };
+  const expectedReceipt = await rehearseSchemaMigration({ ...baseline, plan: crashPlan });
+  const expected = await finalState(baseline.workDir);
+  const boundaries = ["copy:middle",
+    ...Array.from({ length: 1 + 2 * crashPlan.steps.length }, (_, index) => [`checkpoint:${index}:before`, `checkpoint:${index}:after`]).flat(),
+    ...["sdk", "commit"].flatMap(kind => crashPlan.steps.flatMap((_, index) => [`${kind}:${index}:before`, `${kind}:${index}:after`])),
+  ];
+  for (const boundary of boundaries) await t.test(boundary, async t => {
+    const options = await fixture(t);
+    cpSync(baseline.source, options.source, { recursive: true });
+    const original = bytes(options.source);
+    const env = { ...process.env, PATH: "", GIT_CEILING_DIRECTORIES: options.root };
+    const crashed = spawnSync(process.execPath, [resolve(import.meta.dirname, "helpers/rehearsal-crash-runner.ts"), JSON.stringify({ ...options, plan: crashPlan }), boundary], { cwd: options.root, env, encoding: "utf8", timeout: 30000 });
+    assert.equal(crashed.status, 73, crashed.stderr);
+    expireScratchLeases(options.workDir);
+    let workDir = options.workDir;
+    if (["copy:middle", "checkpoint:0:before"].includes(boundary) || boundary.startsWith("commit:")) {
+      await assert.rejects(rehearseSchemaMigration({ ...options, plan: crashPlan }), error => {
+        assert.ok(error instanceof RehearsalRefusal);
+        assert.equal(error.code, "unavailable"); assert.match(error.remedy, /new scratch directory/);
+        if (boundary.startsWith("commit:")) assert.match(error.remedy, /SDK replay.*workspace audit/);
+        return true;
+      });
+      workDir = join(options.root, "remedy");
+    }
+    const receipt = await rehearseSchemaMigration({ ...options, workDir, plan: crashPlan });
+    assert.deepEqual([receipt.items, receipt.steps, receipt.affected], [expectedReceipt.items, expectedReceipt.steps, expectedReceipt.affected]);
+    assert.deepEqual(await finalState(workDir), expected);
+    assert.equal(bytes(options.source), original);
+    const stableHistory = bytes(join(workDir, "tracker", "history"));
+    await rehearseSchemaMigration({ ...options, workDir, plan: crashPlan });
+    assert.equal(bytes(join(workDir, "tracker", "history")), stableHistory);
+  });
 });
 
 test("oversized snapshots and unreadable physical item directories refuse safely", async t => {

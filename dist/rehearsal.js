@@ -253,6 +253,12 @@ async function inspect(root) {
         throw new RehearsalRefusal("invalid_data", "Repair the physical item corpus; SDK enumeration must include every item document.");
     return count;
 }
+/** Replay an SDK-owned durable operation without reconstructing its migration engine. */
+async function applyStep(client, state, step, index) {
+    const controls = { migrationId: `rehearsal-${state.identity.slice(0, 24)}-${index}`, author: "schema-rehearsal" };
+    return step.kind === "rename-field" ? client.schemaRenameField(step.from, step.to, controls, step.type) :
+        step.kind === "rename-type" ? client.schemaRenameType(step.from, step.to, controls) : client.schemaRemapStatus(step.from, step.to, controls);
+}
 /** Run actual SDK migrations exclusively on a private copy and resume stable core operation IDs. */
 async function executeRehearsal(options) {
     if (![options.source, options.workDir].every(value => typeof value === "string" && value.trim().length > 0) ||
@@ -284,14 +290,27 @@ async function executeRehearsal(options) {
     const release = await acquireLock(work, "rehearsal", 300, "schema-rehearsal", false, false, 0);
     try {
         const checkpointPath = join(work, "rehearsal.json"), tracker = join(work, "tracker");
+        const client = new PmClient({ pmRoot: tracker, noExtensions: true, author: "schema-rehearsal" });
         let state;
+        let recovered;
         if (resumed) {
             assertLocalSchema(tracker, snapshot(tracker));
             state = JSON.parse(readFileSync(checkpointPath, "utf8"));
             if (state.version !== 1 || state.identity !== identity || state.fingerprint !== sourceFingerprint ||
                 !Number.isSafeInteger(state.completed) || state.completed < 0 || state.completed > plan.steps.length ||
-                !Number.isSafeInteger(state.affected) || state.affected < 0 || !Number.isSafeInteger(state.items) || state.items < 0) {
+                !Number.isSafeInteger(state.affected) || state.affected < 0 || !Number.isSafeInteger(state.items) || state.items < 0 ||
+                (state.observed_step !== undefined && state.observed_step !== state.completed)) {
                 throw new RehearsalRefusal("source_changed", "Use the original source and plan, or choose a new rehearsal directory.");
+            }
+            if (typeof state.tracker_fingerprint !== "string" || !/^[a-f0-9]{64}$/.test(state.tracker_fingerprint))
+                throw new RehearsalRefusal("invalid_data", "Use a new scratch directory; this checkpoint has no valid scratch byte fingerprint.");
+            // The SDK may have committed (or partially applied) the next stable ID
+            // without returning to this wrapper. Let its journal finish recovery
+            // before inspecting the corpus or comparing a pre-commit fingerprint.
+            if (state.completed < plan.steps.length && existsSync(join(tracker, "transactions", "schema", `rehearsal-${identity.slice(0, 24)}-${state.completed}-plan.json`))) {
+                recovered = await applyStep(client, state, plan.steps[state.completed], state.completed);
+                if (state.observed_step === undefined)
+                    state.tracker_fingerprint = fingerprint(snapshot(tracker));
             }
             if (await inspect(tracker) !== state.items)
                 throw new RehearsalRefusal("invalid_data", "Restore the complete scratch corpus before resuming.");
@@ -306,13 +325,11 @@ async function executeRehearsal(options) {
             state = { version: 1, identity, fingerprint: sourceFingerprint, completed: 0, affected: 0, items: await inspect(tracker), tracker_fingerprint: fingerprint(snapshot(tracker)) };
             await writeFileAtomic(checkpointPath, JSON.stringify(state));
         }
-        const client = new PmClient({ pmRoot: tracker, noExtensions: true, author: "schema-rehearsal" });
         for (let index = state.completed; index < plan.steps.length; index++) {
-            const step = plan.steps[index];
-            const controls = { migrationId: `rehearsal-${identity.slice(0, 24)}-${index}`, author: "schema-rehearsal" };
-            const result = step.kind === "rename-field" ? await client.schemaRenameField(step.from, step.to, controls, step.type) :
-                step.kind === "rename-type" ? await client.schemaRenameType(step.from, step.to, controls) : await client.schemaRemapStatus(step.from, step.to, controls);
+            const result = recovered ?? await applyStep(client, state, plan.steps[index], index);
+            recovered = undefined;
             state.tracker_fingerprint = fingerprint(snapshot(tracker));
+            state.observed_step = index;
             // Persist the observed core commit while keeping wrapper progress behind it.
             // An observer interruption can replay core's stable ID, but changed bytes
             // or fabricated wrapper counts must never certify a partial migration.
@@ -320,6 +337,7 @@ async function executeRehearsal(options) {
             options.afterStep?.(index);
             state.completed = index + 1;
             state.affected += result.affected_item_count;
+            delete state.observed_step;
             await writeFileAtomic(checkpointPath, JSON.stringify(state));
         }
         if (await inspect(tracker) !== state.items)
@@ -341,6 +359,8 @@ export async function rehearseSchemaMigration(options) {
     catch (error) {
         if (error instanceof RehearsalRefusal)
             throw error;
+        if (isPmCliExpectedError(error) && error.code === "workspace_history_state_conflict")
+            throw new RehearsalRefusal("unavailable", "SDK replay could not reconcile its workspace audit after termination. Preserve the scratch for inspection and use a new scratch directory with the original source and plan.");
         throw new RehearsalRefusal("unavailable", "Check tracker initialization, custom definitions, scratch permissions and lock ownership; retry the same rehearsal, or use a new scratch directory after correcting invalid input.");
     }
 }
