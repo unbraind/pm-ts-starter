@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "steps": [
+    { "kind": "rename-field", "from": "legacy_ref", "to": "external_ref" },
+    { "kind": "rename-type", "from": "Experiment", "to": "Investigation" }
+  ]
+}

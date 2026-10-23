@@ -1,0 +1,33 @@
+id: pm-ts-starter-schema-rehearsal
+title: Rehearse extension item schema migrations without changing source trackers
+description: "Repeatable extension-owned item-data rehearsal using SDK schema migration operations on an isolated copy, with resumable steps and field-level diagnostics."
+type: Feature
+status: in_progress
+priority: 1
+tags: []
+created_at: "2026-10-23T19:59:52.634Z"
+updated_at: "2026-10-23T20:18:04.308Z"
+assignee: codex-agent
+claim_principal: codex-agent
+author: codex-agent
+acceptance_criteria: An interrupted migration resumes once; Invalid old data yields field-level diagnostics; No original tracker is modified during rehearsal
+comments[5]{created_at,author,text}:
+  "2026-10-23T20:00:11.407Z",codex-agent,"Overlap rechecked: SDK schemaRenameField/schemaRenameType/runSchemaEvolutionMigration already own planning, collision checks, canonical item writes and durable transaction recovery. pm-presets upgrade owns settings/configuration. This feature adds an isolated data rehearsal and field diagnostics around those APIs, never a competing schema engine. Tracker search found no duplicate; backend conformance is separate."
+  "2026-10-23T20:11:44.760Z",codex-agent,"Implemented typed SDK rehearsal and rehearse-schema command using core SDK schema migration operations, canonical item parsing, certified full lists, atomic checkpoints and SDK locks. Targeted contracts: 18 pass; rehearsal module measured 100% lines/branches/functions. Real public pm-review snapshot at 536af20d: 53 items, 112 files, 1877486 bytes; 2 steps, 44 affected item-operation pairs; replay unchanged; read-only source fingerprint f25019de926f51be6dd25de81335f088ca7ac2aee5ef50c6806892cb1c5495f7. First measured SDK rehearsal 4337 ms. Hard termination recovery retains the SDK 300-second lease; test simulates runtime lease expiry only."
+  "2026-10-23T20:14:13.158Z",codex-agent,"Behavioral revert proof: disabled actual SDK writes by setting dryRun:true in executeRehearsal controls, then ran node --test --test-name-pattern old/new test/rehearsal.test.ts. Both real fixture regressions failed with legacy_ref/Experiment retained instead of external_ref/Investigation. Restored implementation and rebuilt. Installed packed CLI acceptance also passes against the read-only public tracker with Git absent from PATH. Command uses createPmCliExpectedError and native verification_errors for field diagnostics."
+  "2026-10-23T20:16:54.764Z",codex-agent,"Final local acceptance: 19 targeted tests pass, rehearsal source 100% lines/branches/functions; typecheck, test typecheck, lint, docstring and zero-duplication gates pass. pm test --run --progress ran targeted tests/typecheck/lint: 3 commands passed, evidence recording intentionally disabled by existing project settings, so results are recorded here. Independent public export comparison: all 112 original files byte-identical, same file set, all source files read-only; 22 field + 22 type changes across 53 items. Local health has pre-existing installed pm-github host-version skew and generated fence drift; CI performs its own pinned extension installation and prepare step. No history repair or fence work performed."
+  "2026-10-23T20:18:04.307Z",codex-agent,"Independent semantic verification completed on the public export: all 53 canonical item documents and bodies match after only the intended field/type renames and updated_at removal for comparison. SDK list rows enrich linked files/docs with workspace-dependent existence data, so canonical SDK item documents were used for the lossless comparison. No original SDK client was opened for rehearsal. The original file-set and byte comparison remains 112/112 unchanged."
+files[4]{path,scope}:
+  index.ts,project
+  package.json,project
+  rehearsal.ts,project
+  test/rehearsal.test.ts,project
+tests[3]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
+  node --test test/rehearsal.test.ts,project,codex-agent,"2026-10-23T20:14:11.449Z",local_mutation,feat/schema-migration-rehearsal
+  npm run typecheck,project,codex-agent,"2026-10-23T20:14:57.960Z",local_mutation,feat/schema-migration-rehearsal
+  npm run lint,project,codex-agent,"2026-10-23T20:14:57.960Z",local_mutation,feat/schema-migration-rehearsal
+docs[3]{path,scope}:
+  docs/examples/schema-migration.json,project
+  docs/schema-migration-rehearsal.md,project
+  README.md,project
+body: ""

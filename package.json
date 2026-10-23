@@ -18,7 +18,9 @@
     "manifest.json",
     "README.md",
     "CHANGELOG.md",
-    "backend.ts"
+    "backend.ts",
+    "docs/schema-migration-rehearsal.md",
+    "docs/examples/schema-migration.json"
   ],
   "scripts": {
     "build": "tsc",

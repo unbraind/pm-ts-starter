@@ -1,5 +1,6 @@
 import { type ExtensionBlueprint, type ExtensionModule } from "@unbrained/pm-cli/sdk/authoring";
 import type { PmCliExpectedError } from "@unbrained/pm-cli/sdk";
+export * from "./rehearsal.ts";
 export * from "./backend.ts";
 export * from "./backend-project.ts";
 /**

@@ -1,0 +1,8 @@
+{
+  "definitions": [
+    {
+      "name": "Experiment",
+      "folder": "experiments"
+    }
+  ]
+}

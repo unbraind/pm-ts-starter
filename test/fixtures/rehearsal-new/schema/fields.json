@@ -1,0 +1,23 @@
+{
+  "fields": [
+    {
+      "key": "legacy_count",
+      "type": "number",
+      "commands": [
+        "create",
+        "update"
+      ]
+    },
+    {
+      "key": "external_ref",
+      "type": "string",
+      "commands": [
+        "create",
+        "update"
+      ],
+      "metadata_key": "external_ref",
+      "front_matter_key": "external_ref",
+      "cli_flag": "external-ref"
+    }
+  ]
+}

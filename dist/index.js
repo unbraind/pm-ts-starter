@@ -42,6 +42,9 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import * as readline from "node:readline/promises";
 import { generateBackendProject } from "./backend-project.js";
+import { createPmCliExpectedError } from "@unbrained/pm-cli/sdk";
+import { rehearseSchemaMigration, parseRehearsalPlan, RehearsalRefusal } from "./rehearsal.js";
+export * from "./rehearsal.js";
 export * from "./backend.js";
 export * from "./backend-project.js";
 // ---------------------------------------------------------------------------
@@ -355,6 +358,32 @@ const infoCommand = defineCommand({
         };
         console.error(JSON.stringify(info, null, 2));
         return info;
+    },
+});
+const schemaRehearsalCommand = defineCommand({
+    name: "ts-starter rehearse-schema",
+    description: "Rehearse core schema migrations on a private resumable copy; never write the source tracker.",
+    intent: "validate extension-owned item schema evolution safely",
+    examples: ["pm ts-starter rehearse-schema --plan ./migration.json --work-dir ./scratch-rehearsal --json"],
+    failure_hints: ["Keep the plan unchanged when resuming; choose private scratch storage outside Git."],
+    flags: [
+        { long: "--source", value_name: "tracker", value_type: "string", description: "Read-only source tracker; defaults to the active tracker." },
+        { long: "--plan", value_name: "file", value_type: "string", description: "Version 1 JSON migration plan." },
+        { long: "--work-dir", value_name: "directory", value_type: "string", description: "Private non-Git directory, created once and reused for resume." },
+    ],
+    async run(ctx) {
+        try {
+            const planFile = ctx.options["plan"], workDir = ctx.options["workDir"] ?? ctx.options["work-dir"];
+            if (typeof planFile !== "string" || typeof workDir !== "string")
+                throw new RehearsalRefusal("invalid_plan", "Provide --plan <file> and --work-dir <directory>.");
+            return await rehearseSchemaMigration({ source: typeof ctx.options["source"] === "string" ? ctx.options["source"] : ctx.pm_root, workDir, plan: parseRehearsalPlan(JSON.parse(readFileSync(planFile, "utf8"))) });
+        }
+        catch (error) {
+            const refusal = error instanceof RehearsalRefusal ? error : new RehearsalRefusal("invalid_plan", "Provide a readable version 1 JSON plan.");
+            throw createPmCliExpectedError(refusal.remedy, { context: { code: refusal.code, required: refusal.remedy,
+                    nextSteps: [refusal.remedy], why: `diagnostic_count=${refusal.diagnostic_count}`,
+                    verification_errors: refusal.diagnostics.map(({ file, field }) => `${file}:${field}`) } });
+        }
     },
 });
 const backendProjectCommand = defineCommand({
@@ -838,6 +867,7 @@ const commandsBlueprint = defineExtensionBlueprint({
         historyCompactDemoCommand,
         setupCommand,
         backendProjectCommand,
+        schemaRehearsalCommand,
     ],
     commandOverrides: { list: listCommandOverride },
     flags: { list: listFlags },

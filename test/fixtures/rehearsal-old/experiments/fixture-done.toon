@@ -1,0 +1,16 @@
+id: fixture-done
+title: Measure cold reads
+description: Terminal custom schema fixture
+type: Experiment
+status: closed
+priority: 2
+tags: []
+created_at: "2026-10-23T20:10:25.021Z"
+updated_at: "2026-10-23T20:10:25.021Z"
+closed_at: "2026-10-23T20:10:25.021Z"
+completed_at: "2026-10-23T20:10:25.021Z"
+author: fixture-agent
+close_reason: Measurement complete
+legacy_count: 18
+legacy_ref: RFC-18
+body: ""
