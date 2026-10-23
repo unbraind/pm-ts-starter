@@ -1,9 +1,10 @@
 # pm-ts-starter
 
-TypeScript reference extension for [pm-cli](https://github.com/unbraind/pm-cli) covering **all 9 SDK capability types** in one fully-typed `index.ts`, checked against the **pinned pm-cli 2026.10.17 SDK**. The backend conformance surface requires the tested SDK floor 2026.10.17.
+TypeScript reference extension for [pm-cli](https://github.com/unbraind/pm-cli) covering **all 9 SDK capability types** in one fully-typed `index.ts`, checked against the **pinned pm-cli SDK** (the exact version is in `package.json`). The backend conformance surface requires the tested SDK floor 2026.10.17.
 
-Development dependencies pin CLI/SDK and `pm-ops` to 2026.10.17 and
-`pm-changelog` to 2026.10.16. The prepare hook rejects incomplete `pm-ops`
+Development dependencies pin the CLI/SDK, `pm-ops` and `pm-changelog` to exact
+versions in `package.json`; Dependabot moves them together as the `pm-toolchain`
+group. The prepare hook rejects incomplete `pm-ops`
 installations so missing merge drivers cannot silently pass installation.
 The pinned documentation analyzer covers TypeScript and TSX. A consumer
 regression verifies that undocumented declarations in either file type fail.
