@@ -1,0 +1,28 @@
+id: pm-ts-starter-o0c4
+title: "README pin sentence restates exact dev pins, so every toolchain bump fails CI"
+description: "test/compatibility-floor.test.ts required the pm-cli and pm-ops pins to be equal and the README opening to restate them and the pm-changelog pin verbatim, so every Dependabot pm-toolchain bump (PR #146: 2026.10.17 to 2026.10.20) failed test (22) and test (26) until someone edited the README."
+type: Issue
+status: closed
+priority: 2
+tags[3]: coupling,dependabot,readme
+created_at: "2026-10-23T10:09:33.360Z"
+updated_at: "2026-10-23T10:09:58.840Z"
+deadline: "2026-10-24T10:09:33.360Z"
+closed_at: "2026-10-23T10:09:58.799Z"
+completed_at: "2026-10-23T10:09:58.799Z"
+author: claude-orchestrator
+estimated_minutes: 20
+acceptance_criteria: A pm-toolchain bump passes without editing README; exact calendar-version pins are still required; a README that restates a pin fails; the compatibility floor sentence is unaffected
+repro_steps: "Bump @unbrained/pm-cli, pm-ops and pm-changelog in package.json; run node --test test/compatibility-floor.test.ts"
+resolution: README states that the toolchain is pinned to exact versions in package.json; the test checks exact pins and refuses a README that restates a pin
+expected_result: A pm-toolchain Dependabot bump passes without a README edit
+actual_result: Every bump failed the README pin sentence test until the README was edited
+comments[1]{created_at,author,text}:
+  "2026-10-23T10:09:33.360Z",claude-orchestrator,"Revert proof: the previous README fails the new test (0/1); with simulated 2026.10.20 pins the new test passes (1/1); full file 5/5."
+files[2]{path,scope}:
+  README.md,project
+  test/compatibility-floor.test.ts,project
+tests[1]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
+  node --test test/compatibility-floor.test.ts,project,claude-orchestrator,"2026-10-23T10:09:33.360Z",local_mutation,test/readme-pin-sentence-without-versions
+close_reason: "README pin sentence no longer restates versions; the test requires exact calendar-version pins and refuses a README that restates one; passes on main pins and on simulated 2026.10.20 pins, fails on the previous README."
+body: "README now says the CLI/SDK, pm-ops and pm-changelog are pinned to exact versions in package.json and moved together by Dependabot; the test keeps the exact-pin guarantee and refuses a README that restates a pin."

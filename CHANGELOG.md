@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- README pin sentence restates exact dev pins, so every toolchain bump fails CI ([pm-ts-starter-o0c4](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-o0c4.toon))
+
 ## 2026.10.23 - 2026-10-23
 
 ### Changed
