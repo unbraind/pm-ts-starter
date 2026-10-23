@@ -5,7 +5,7 @@ import { cpSync, truncateSync, existsSync, linkSync, mkdirSync, mkdtempSync, rea
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test, { type TestContext } from "node:test";
-import { PmClient, acquireLock, readSettings, readLocatedItem, serializeItemDocument } from "@unbrained/pm-cli/sdk";
+import { PmClient, acquireLock, readSettings, readLocatedItem, resolveItemTypeRegistry, serializeItemDocument } from "@unbrained/pm-cli/sdk";
 import { createExtensionTestHarness } from "@unbrained/pm-cli/sdk/testing";
 import extension from "../index.ts";
 import { parseRehearsalPlan, readRehearsalPlan, rehearseSchemaMigration, RehearsalRefusal, type RehearsalPlan } from "../rehearsal.ts";
@@ -20,13 +20,10 @@ async function fixture(t: TestContext): Promise<{ root: string; source: string; 
   const root = mkdtempSync(join(tmpdir(), "schema-rehearsal-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const source = join(root, "old"), workDir = join(root, "rehearsal");
-  const client = new PmClient({ pmRoot: source, noExtensions: true, author: "fixture-agent" });
-  await client.init("fixture", { defaults: true, mergeFence: false, agentGuidance: "skip" });
-  await client.schemaAddField("legacy_ref", { type: "string" });
-  await client.schemaAddField("legacy_count", { type: "number" });
-  await client.schemaAddType("Experiment", { folder: "experiments" });
-  await client.run("create", { options: { id: "fixture-active", title: "Evaluate indexing", description: "Old custom schema fixture", type: "Experiment", legacyRef: "RFC-17", legacyCount: 17, priority: 2 } });
-  await client.run("create", { options: { id: "fixture-done", title: "Measure cold reads", description: "Terminal custom schema fixture", type: "Experiment", legacyRef: "RFC-18", legacyCount: 18, priority: 2, status: "closed", closeReason: "Measurement complete" } });
+  // Copy the SDK-generated tracker, including real schema and history, instead
+  // of repeating seven setup mutations for every refusal matrix row.
+  cpSync(new URL("./fixtures/rehearsal-old", import.meta.url), source, { recursive: true });
+  for (const folder of resolveItemTypeRegistry(await readSettings(source)).folders) mkdirSync(join(source, folder), { recursive: true });
   return { root, source, workDir };
 }
 
@@ -54,9 +51,9 @@ async function cliProcess(args: string[], cwd: string, env: NodeJS.ProcessEnv): 
 }
 
 /** Assert both refusal and byte preservation for an unsafe storage attempt. */
-async function assertSourcePreservedRefusal(options: { source: string; workDir: string }, code: RehearsalRefusal["code"]): Promise<void> {
+async function assertSourcePreservedRefusal(options: { source: string; workDir: string }, code?: RehearsalRefusal["code"]): Promise<void> {
   const original = bytes(options.source);
-  await assert.rejects(rehearseSchemaMigration({ ...options, plan }), refusal(code));
+  await assert.rejects(rehearseSchemaMigration({ ...options, plan }), code ? refusal(code) : error => error instanceof RehearsalRefusal);
   assert.equal(bytes(options.source), original);
 }
 
@@ -65,6 +62,12 @@ async function interruptedFixture(t: TestContext): Promise<Awaited<ReturnType<ty
   const options = await fixture(t);
   await assert.rejects(rehearseSchemaMigration({ ...options, plan, afterStep() { throw new Error("interrupted"); } }), refusal("unavailable"));
   return options;
+}
+
+/** Activate the real registered command for SDK boundary assertions. */
+async function rehearsalCommand() {
+  const activation = await createExtensionTestHarness(extension, { name: "pm-ts-starter", capabilities: ["commands", "renderers", "hooks", "schema", "importers", "search", "parser", "preflight", "services"] });
+  return activation.activation.commands.handlers.find(entry => entry.command === "ts-starter rehearse-schema")!;
 }
 
 test("old/new custom tracker fixtures migrate once, retain terminal rows and preserve every source byte", async t => {
@@ -159,7 +162,7 @@ test("external schema paths, changed sources and incompatible checkpoints refuse
   await assert.rejects(rehearseSchemaMigration({ ...options, plan }), refusal("source_changed"));
   rmSync(join(options.source, "new.txt"));
   const checkpoint = join(options.workDir, "rehearsal.json"), raw = readFileSync(checkpoint, "utf8");
-  for (const patch of [{ version: 2 }, { identity: "different" }, { completed: -1 }, { completed: 99 }, { affected: -1 }, { items: -1 }]) {
+  for (const patch of [{ version: 2 }, { identity: "different" }, { completed: -1 }, { completed: 99 }, { completed: 0.5 }, { affected: -1 }, { affected: "two" }, { items: -1 }, { items: "two" }]) {
     writeFileSync(checkpoint, JSON.stringify({ ...JSON.parse(raw), ...patch }));
     await assert.rejects(rehearseSchemaMigration({ ...options, plan }), refusal("source_changed"));
   }
@@ -207,8 +210,7 @@ test("diagnostics are bounded and syntax errors identify the document", async t 
 
 test("registered command validates input and delegates with native agent output", async t => {
   const options = await fixture(t);
-  const harness = await createExtensionTestHarness(extension, { name: "pm-ts-starter", capabilities: ["commands", "renderers", "hooks", "schema", "importers", "search", "parser", "preflight", "services"] });
-  const command = harness.activation.commands.handlers.find(entry => entry.command === "ts-starter rehearse-schema")!;
+  const command = await rehearsalCommand();
   const base = { command: "ts-starter rehearse-schema", args: [], options: {}, global: {}, pm_root: options.source };
   await assert.rejects(async () => command.run(base), (error: unknown) => error instanceof Error && error.name === "PmCliError");
   await assert.rejects(async () => command.run({ ...base, options: null as unknown as typeof base.options }), (error: unknown) => {
@@ -374,7 +376,7 @@ test("installed CLI emits TOON/JSON and typed field refusals with Git absent", a
   assert.equal(linked.status, 2); assert.equal(JSON.parse(linked.stderr).code, "invalid_plan");
   const parallel = args.map(value => value === options.workDir ? join(options.root, "parallel") : value);
   const concurrent = await Promise.all(Array.from({ length: 2 }, () => cliProcess([...parallel, "--json"], options.root, env)));
-  assert.ok(concurrent.some(result => result.status === 0));
+  assert.ok(concurrent.some(result => result.status === 0), JSON.stringify(concurrent));
   for (const result of concurrent) {
     if (result.status === 0) assert.equal(JSON.parse(result.stdout).affected, 4);
     else { assert.equal(result.status, 2, result.stderr); assert.equal(JSON.parse(result.stderr).code, "unavailable"); }
@@ -497,7 +499,7 @@ test("plan entry points bound names, optional scope, payload and file storage", 
     { ...plan.steps[0], type: "../Experiment" }, { ...plan.steps[0], type: "x".repeat(65) },
     { ...plan.steps[0], extra: "unexpected" }, { ...plan.steps[0], from: "x".repeat(65) },
   ]) assert.throws(() => parseRehearsalPlan({ version: 1, steps: [step] }), refusal("invalid_plan"));
-  assert.deepEqual(parseRehearsalPlan({ ...plan, extra: "x".repeat(1000000) }), plan);
+  assert.throws(() => parseRehearsalPlan({ ...plan, extra: "unsupported" }), refusal("invalid_plan"));
   writeFileSync(file, JSON.stringify(plan));
   assert.deepEqual(readRehearsalPlan(file), plan);
   for (const value of ["{", "{}", " ".repeat(65537) + JSON.stringify(plan)]) {
@@ -513,6 +515,185 @@ test("plan entry points bound names, optional scope, payload and file storage", 
   rmSync(alias); linkSync(file, alias);
   assert.throws(() => readRehearsalPlan(file), refusal("invalid_plan"));
   assert.equal(existsSync(options.workDir), false);
+});
+
+test("trimmed schema escapes refuse before SDK reads on new and resumed runs", async t => {
+  for (const resumed of [false, true]) for (const section of ["fields", "types", "statuses", "workflows"]) await t.test(`${section}, resumed=${resumed}`, async t => {
+    const options = await fixture(t);
+    if (resumed) await rehearseSchemaMigration({ ...options, plan });
+    const tracker = resumed ? join(options.workDir, "tracker") : options.source;
+    const file = join(tracker, "settings.json"), settings = JSON.parse(readFileSync(file, "utf8"));
+    settings.schema.files[section] = ` \t../../old/schema/${section}.json\n`;
+    writeFileSync(file, JSON.stringify(settings));
+    const before = bytes(tracker);
+    await assertSourcePreservedRefusal(options, "unsafe_storage");
+    assert.equal(bytes(tracker), before);
+    if (!resumed) assert.equal(existsSync(options.workDir), false);
+  });
+});
+
+test("canonical local schema paths with surrounding whitespace remain isolated", async t => {
+  const options = await fixture(t), file = join(options.source, "settings.json");
+  const settings = JSON.parse(readFileSync(file, "utf8"));
+  for (const section of Object.keys(settings.schema.files)) settings.schema.files[section] = ` ${settings.schema.files[section]} `;
+  writeFileSync(file, JSON.stringify(settings));
+  const before = bytes(options.source);
+  assert.equal((await rehearseSchemaMigration({ ...options, plan })).ok, true);
+  assert.equal((await rehearseSchemaMigration({ ...options, plan })).resumed, true);
+  assert.equal(bytes(options.source), before);
+});
+
+test("declared workflow overlays and type transitions survive a real rehearsal", async t => {
+  for (const representation of ["workflows", "direct"]) await t.test(representation, async t => {
+    const options = await fixture(t), settingsFile = join(options.source, "settings.json");
+    const settings = JSON.parse(readFileSync(settingsFile, "utf8"));
+    settings.schema.type_workflows = [{ type: "Task", allowed_transitions: [["open", "closed"]] }];
+    writeFileSync(settingsFile, JSON.stringify(settings));
+    const workflow = { open_status: "in_progress" };
+    writeFileSync(join(options.source, "schema", "workflows.json"), JSON.stringify(representation === "direct" ? workflow : { workflows: workflow, type_workflows: [{ type: "Experiment", allowed_transitions: [["open", "closed"]] }] }));
+    assert.equal((await rehearseSchemaMigration({ ...options, plan })).ok, true);
+  });
+});
+
+test("input audit refuses partial and silently normalized schema contracts", async t => {
+  const cases: [string, unknown][] = [
+    ["fields", { fields: [{ key: "legacy_ref", type: "string", required: "yes" }] }],
+    ["fields", { fields: [{ key: "legacy_ref", type: "string", commands: ["erase"] }] }],
+    ["fields", { fields: [{ key: "legacy_ref", type: "string", unsupported: true }] }],
+    ["fields", { fields: [null] }],
+    ["fields", { fields: [3] }],
+    ["fields", { fields: [{ key: "legacy_ref", type: "string", value_schema: { type: "typo" } }] }],
+    ["statuses", { statuses: [{}] }],
+    ["statuses", { statuses: [{ id: "open", roles: ["unknown"] }] }],
+    ["statuses", { statuses: [{ id: "open", aliases: [4] }] }],
+    ["types", { definitions: [{ name: "" }] }],
+    ["types", { item_types: { definitions: [{ name: "Experiment", folder: "experiments", extra: true }] } }],
+    ["workflows", { workflow: { open_status: "invalid status" } }],
+    ["workflows", { workflow: { open_status: "missing" } }],
+    ["workflows", { workflow: { unsupported: "open" } }],
+    ["workflows", { workflow: { constructor: "open" } }],
+    ["workflows", { workflow: {}, type_workflows: [{ type: "Experiment", allowed_transitions: [["open"]] }] }],
+    ["workflows", { workflow: {}, type_workflows: [{ type: "Missing", allowed_transitions: [] }] }],
+    ["workflows", { workflow: {}, type_workflows: [{ type: "__proto__", allowed_transitions: [] }] }],
+    ["workflows", { workflow: {}, type_workflows: [{ type: "Experiment", allowed_transitions: [["open", "missing"]] }] }],
+    ["workflows", { workflow: {}, type_workflows: {} }],
+    ["workflows", { workflow: {}, type_workflows: [null] }],
+    ["workflows", { workflow: {}, type_workflows: [{}] }],
+    ["types", { definitions: [{ name: "Experiment", folder: "experiments", default_status: "missing" }] }],
+  ];
+  for (const [section, data] of cases) await t.test(`${section}: ${JSON.stringify(data)}`, async t => {
+    const options = await fixture(t);
+    writeFileSync(join(options.source, "schema", `${section}.json`), JSON.stringify(data));
+    // SDK may throw while interpreting malformed definitions; both boundaries
+    // must produce typed refusals, never a successful partial corpus.
+    await assertSourcePreservedRefusal(options);
+  });
+  for (const section of ["fields", "types", "statuses", "workflows"]) await t.test(`missing ${section}`, async t => {
+    const options = await fixture(t);
+    rmSync(join(options.source, "schema", `${section}.json`));
+    await assertSourcePreservedRefusal(options, "invalid_data");
+  });
+  for (const patch of [{ version: 2 }, { files: { unsupported: "schema/fields.json" } }, { unsupported: true }]) await t.test(JSON.stringify(patch), async t => {
+    const options = await fixture(t), file = join(options.source, "settings.json");
+    const settings = JSON.parse(readFileSync(file, "utf8")); Object.assign(settings.schema, patch);
+    writeFileSync(file, JSON.stringify(settings));
+    await assertSourcePreservedRefusal(options, "invalid_data");
+  });
+  for (const patch of [{ version: 2 }, { unsupported: true }, { constructor: "unsupported" }]) await t.test(`settings: ${JSON.stringify(patch)}`, async t => {
+    const options = await fixture(t), file = join(options.source, "settings.json");
+    writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, "utf8")), ...patch }));
+    await assertSourcePreservedRefusal(options, "invalid_data");
+  });
+});
+
+test("input audit rejects primitive plans, empty locations and malformed CLI values", async t => {
+  for (const value of [1, "x", true, [], { version: 1, steps: [4] }, { version: 1, steps: ["step"] }, { version: 1, steps: [false] }, { ...plan, unsupported: true }])
+    assert.throws(() => parseRehearsalPlan(value), refusal("invalid_plan"));
+  const options = await fixture(t);
+  for (const patch of [{ source: "" }, { source: 4 }, { workDir: " " }, { afterStep: 4 }]) await assert.rejects(rehearseSchemaMigration({ ...options, plan, ...patch } as Parameters<typeof rehearseSchemaMigration>[0]), refusal("invalid_plan"));
+  const planFile = join(options.root, "valid-plan.json"); writeFileSync(planFile, JSON.stringify(plan));
+  const validOptions = { plan: planFile, workDir: options.workDir };
+  for (const value of ["", " ", 4, null]) {
+    const command = await rehearsalCommand();
+    await assert.rejects(async () => command.run({ command: "ts-starter rehearse-schema", args: [], options: { ...validOptions, source: value }, global: {}, pm_root: options.source }), (error: unknown) => error instanceof Error && "code" in error && error.code === "invalid_plan");
+  }
+  const command = await rehearsalCommand();
+  for (const patch of [{ args: ["extra"] }, { options: { ...validOptions, dryRun: true } }, { options: { ...validOptions, plan: " " } }, { options: { ...validOptions, workDir: "" } }, { options: { ...validOptions, workDir: 4 } }]) {
+    await assert.rejects(async () => command.run({ command: "ts-starter rehearse-schema", args: [], options: validOptions, global: {}, pm_root: options.source, ...patch }), (error: unknown) => error instanceof Error && "code" in error && error.code === "invalid_plan");
+  }
+  assert.equal(existsSync(options.workDir), false);
+});
+
+test("input audit refuses edited scratch bytes and fabricated completed checkpoints", async t => {
+  for (const mutation of ["item", "settings", "schema", "completed", "affected", "journal"]) await t.test(mutation, async t => {
+    const options = await interruptedFixture(t), tracker = join(options.workDir, "tracker");
+    if (mutation === "completed" || mutation === "affected") {
+      const file = join(options.workDir, "rehearsal.json"), state = JSON.parse(readFileSync(file, "utf8"));
+      state[mutation] = mutation === "completed" ? plan.steps.length : 99;
+      writeFileSync(file, JSON.stringify(state));
+    } else if (mutation === "journal") {
+      const folder = join(tracker, "transactions", "sdk"), file = join(folder, readdirSync(folder)[0]);
+      const journal = JSON.parse(readFileSync(file, "utf8")); journal.status = "prepared"; writeFileSync(file, JSON.stringify(journal));
+      const checkpoint = join(options.workDir, "rehearsal.json"), state = JSON.parse(readFileSync(checkpoint, "utf8"));
+      state.completed = 1; state.affected = 2; writeFileSync(checkpoint, JSON.stringify(state));
+    } else {
+      const file = join(tracker, mutation === "item" ? "experiments/fixture-active.toon" : mutation === "schema" ? "schema/fields.json" : "settings.json");
+      writeFileSync(file, readFileSync(file, "utf8") + "\n");
+    }
+    await assertSourcePreservedRefusal(options);
+  });
+});
+
+test("input audit validates history consumed by migrations and isolates ambient configuration", async t => {
+  for (const file of ["fixture-active.jsonl", "_workspace.jsonl"]) for (const corruption of ["syntax", "chain"]) await t.test(`${file}: ${corruption}`, async t => {
+    const options = await fixture(t), target = join(options.source, "history", file);
+    const entries = readFileSync(target, "utf8").trim().split("\n").map(line => JSON.parse(line));
+    if (corruption === "chain") entries[0].after_hash = "0".repeat(64);
+    writeFileSync(target, corruption === "syntax" ? "{\n" : entries.map(entry => JSON.stringify(entry)).join("\n") + "\n");
+    await assertSourcePreservedRefusal(options);
+  });
+  const options = await fixture(t);
+  writeFileSync(join(options.source, "settings.json"), "{}");
+  const script = `import { rehearseSchemaMigration } from ${JSON.stringify(new URL("../rehearsal.ts", import.meta.url).href)}; try { console.log(JSON.stringify(await rehearseSchemaMigration(JSON.parse(process.argv[1])))); } catch (error) { console.log(JSON.stringify({ code: error.code, name: error.constructor.name })); process.exitCode = 2; }`;
+  const result = spawnSync(process.execPath, ["--input-type=module", "-e", script, JSON.stringify({ ...options, plan })], {
+    cwd: options.root, encoding: "utf8", env: { ...process.env, PM_PATH: "missing", PM_GLOBAL_PATH: "missing", PM_AUTHOR: "ambient-agent", HOME: options.root, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" },
+  });
+  assert.equal(result.status, 2, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), { code: "invalid_data", name: "RehearsalRefusal" });
+});
+
+test("input audit bounds schema mappings and malformed resume artifacts", async t => {
+  for (const value of ["", " ", 4, null]) await t.test(`schema path: ${JSON.stringify(value)}`, async t => {
+    const options = await fixture(t), file = join(options.source, "settings.json");
+    const settings = JSON.parse(readFileSync(file, "utf8")); settings.schema.files.fields = value;
+    writeFileSync(file, JSON.stringify(settings));
+    await assertSourcePreservedRefusal(options, "unsafe_storage");
+  });
+  for (const raw of ["{", "null", "[]", '{"completed":9007199254740992}']) await t.test(`checkpoint: ${raw}`, async t => {
+    const options = await interruptedFixture(t);
+    writeFileSync(join(options.workDir, "rehearsal.json"), raw);
+    await assertSourcePreservedRefusal(options);
+  });
+  for (const count of [-1, "two"]) await t.test(`core count: ${count}`, async t => {
+    const options = await fixture(t); await rehearseSchemaMigration({ ...options, plan });
+    const dir = join(options.workDir, "tracker", "transactions", "schema");
+    const file = join(dir, readdirSync(dir)[0]), stored = JSON.parse(readFileSync(file, "utf8"));
+    stored.plan.affected_item_count = count; writeFileSync(file, JSON.stringify(stored));
+    await assertSourcePreservedRefusal(options, "invalid_data");
+  });
+  for (const patch of ["schema_version", "migration_id", "request", "transactionId", "status", "stepIds", "retire-source", "completedStepIds"]) await t.test(`core evidence: ${patch}`, async t => {
+    const options = await fixture(t); await rehearseSchemaMigration({ ...options, plan });
+    const tracker = join(options.workDir, "tracker"), schema = ["schema_version", "migration_id", "request"].includes(patch);
+    const dir = join(tracker, "transactions", schema ? "schema" : "sdk"), file = join(dir, readdirSync(dir)[0]);
+    const data = JSON.parse(readFileSync(file, "utf8"));
+    if (patch === "migration_id") data.plan.migration_id = "wrong";
+    else if (patch === "request") data.plan.request.to = "Different";
+    else if (patch === "retire-source") data.stepIds = [];
+    else if (patch === "status") data.status = "prepared";
+    else delete data[patch];
+    writeFileSync(file, JSON.stringify(data));
+    await assertSourcePreservedRefusal(options, "invalid_data");
+  });
 });
 
 test("snapshot traversal bounds include directories as well as file bytes", async t => {

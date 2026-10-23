@@ -6,10 +6,10 @@ status: in_progress
 priority: 1
 tags[1]: "gh:unbraind/pm-ts-starter#151"
 created_at: "2026-10-23T19:59:52.634Z"
-updated_at: "2026-10-23T21:02:27.772Z"
+updated_at: "2026-10-23T22:03:21.066Z"
 author: codex-agent
 acceptance_criteria: An interrupted migration resumes once; Invalid old data yields field-level diagnostics; No original tracker is modified during rehearsal
-comments[13]{created_at,author,text}:
+comments[20]{created_at,author,text}:
   "2026-10-23T20:00:11.407Z",codex-agent,"Overlap rechecked: SDK schemaRenameField/schemaRenameType/runSchemaEvolutionMigration already own planning, collision checks, canonical item writes and durable transaction recovery. pm-presets upgrade owns settings/configuration. This feature adds an isolated data rehearsal and field diagnostics around those APIs, never a competing schema engine. Tracker search found no duplicate; backend conformance is separate."
   "2026-10-23T20:11:44.760Z",codex-agent,"Implemented typed SDK rehearsal and rehearse-schema command using core SDK schema migration operations, canonical item parsing, certified full lists, atomic checkpoints and SDK locks. Targeted contracts: 18 pass; rehearsal module measured 100% lines/branches/functions. Real public pm-review snapshot at 536af20d: 53 items, 112 files, 1877486 bytes; 2 steps, 44 affected item-operation pairs; replay unchanged; read-only source fingerprint f25019de926f51be6dd25de81335f088ca7ac2aee5ef50c6806892cb1c5495f7. First measured SDK rehearsal 4337 ms. Hard termination recovery retains the SDK 300-second lease; test simulates runtime lease expiry only."
   "2026-10-23T20:14:13.158Z",codex-agent,"Behavioral revert proof: disabled actual SDK writes by setting dryRun:true in executeRehearsal controls, then ran node --test --test-name-pattern old/new test/rehearsal.test.ts. Both real fixture regressions failed with legacy_ref/Experiment retained instead of external_ref/Investigation. Restored implementation and rebuilt. Installed packed CLI acceptance also passes against the read-only public tracker with Git absent from PATH. Command uses createPmCliExpectedError and native verification_errors for field diagnostics."
@@ -23,16 +23,57 @@ comments[13]{created_at,author,text}:
   "2026-10-23T20:52:03.705Z",codex-agent,"Final self-review added normalized plan-path consistency: safety checks and the actual filesystem read now use the identical resolved path. Its regression covers a symlink followed by parent traversal. Repeated all previous behavioral revert checks after the test setup refactor: all 8 still fail when reverted. Additional ninth proof: node --test --test-name-pattern=\"plan reads\" test/rehearsal.test.ts -> exit 1, 1 failing of 1 check when only plan-file reads/stat use the unchecked spelling again. All mutations restored. Full npm gate before this final path guard passed 247 checks with configured 100% lines/branches/functions; final linked test and both full gates are rerun on the complete implementation."
   "2026-10-23T20:56:11.708Z",codex-agent,"Concurrent stress uncovered an initialization race: a competing caller could win the SDK lease after the creator made the work directory but before its first checkpoint, and then all callers could refuse. Existing checkpoint-free scratch directories now refuse before lease acquisition. Deterministic behavioral revert proof: node --test --test-name-pattern=\"initializing scratch\" test/rehearsal.test.ts fails 1/1 when only that pre-lock guard is removed, because a competing caller creates lock storage. All ten production-behavior revert mutations now fail as intended. Refreshed the generated merge fence with the pinned CLI. Clean-HOME strict pm health passes; inherited global extension skew is environment-only. The pre-existing historical-provenance advisory is already recorded under pm-ts-starter-n4ee and no history records were rewritten."
   "2026-10-23T21:02:26.636Z",codex-agent,"Final validation: linked npm run build && npm run build:test && node --test test/rehearsal.test.ts passed 52/52 checks (selected linked command 1/1). Ten repeated concurrency tests passed with 60 same-directory callers. Final npm run release:check and bun run release:check each passed 249/249 checks, 0 failures/skips/cancellations, configured 100% lines/branches/functions across 8 sources, unchanged thresholds; statements are not independently measured. Both gates used a fresh HOME plus GIT_CONFIG_GLOBAL=/dev/null and GIT_CONFIG_NOSYSTEM=1. Production audit: 0 vulnerabilities. Duplication: 0% across 24 sources; docstring gate: 12 files, 35 declarations. Build/test typechecks, pack dry run, changelog, publish-attestation and release-date checks passed. Clean-environment strict tracker health passed after generated merge-fence refresh. Initial unisolated coverage encountered inherited npm allow-scripts configuration; clean-environment full gates passed. The initialization concurrency assertion failure was fixed, not waived as host load. All ten behavioral revert proofs are retained above, with production restored and dist rebuilt. Review disposition: 0 GitHub review threads; CodeRabbit review skipped with no review body or Outside diff range findings available; independent settings-fallback blocker fixed, plus self-review safety defects. Existing legacy provenance advisory remains tracked by pm-ts-starter-n4ee. No new CLI/SDK issue filed, thread reply/resolution, mention, merge, release or publish. Item stays in progress for orchestrator verification; release claim next."
-files[4]{path,scope}:
+  "2026-10-23T21:10:23.217Z",codex-agent,"Review round: remote head is current and includes main; GitHub reports zero review threads and no CodeRabbit review. The second read-only verdict reproduces a schema path escape because SDK trims file paths. Checking all rehearsal inputs and success paths, adding revert-failing regressions, then running unchanged npm and Bun release gates."
+  "2026-10-23T21:16:31.947Z",codex-agent,"Verified the second verdict: schema file paths require SDK-equivalent trimming before containment checks, both for initial copies and resumed scratch settings. Self-review also found primitive plan steps, ignored top-level plan keys, malformed CLI source values, lossy schema normalization and checkpoint-only completion claims. Added a schema input audit and durable scratch-byte/core-progress checks; regression and unchanged gate work is in progress."
+  "2026-10-23T21:24:45.407Z",codex-agent,"Input/success audit is documented in docs/schema-migration-rehearsal.md: SDK options, plan file and flags, settings and inline definitions, all four schema files, physical item corpus, histories, source/scratch entries, checkpoints, core journals and ambient environment. All refusals are asserted as typed exceptions or native nonzero CLI errors. Added immutable-source checks for each padded schema escape, preserved the first-round invalid-format regression, and added history syntax/hash refusals after reproducing malformed item history returning success. Existing scratch without the new observed-byte fingerprint must be restarted; incomplete unobserved core writes refuse conservatively. Initial full run exposed inherited npm allow-scripts configuration, so release gates use clean HOME and Git identity as required."
+  "2026-10-23T21:37:48.452Z",codex-agent,"Behavioral revert proofs completed in an isolated non-Git package copy using the pinned real SDK and source-importing tests (no dist rebuild required for these focused proofs). Baseline audit: 62/62 pass. Reverting only assertLocalSchema to the pre-review function: node --test --test-name-pattern=^trimmed test/rehearsal.test.ts -> 9 failures, 0 passes. Reverting only assertDefinitions to the prior field-only validator: --test-name-pattern=\"^input audit refuses partial\" -> 18 failures, 9 passes. Reverting parseRehearsalPlan: --test-name-pattern=\"^input audit rejects\" -> 1 failure. Reverting the registered CLI handler: same pattern -> 1 failure. Removing only assertProgress behavior: --test-name-pattern=\"^input audit refuses edited\" -> 7 failures. Removing only inspect history validation: --test-name-pattern=\"^input audit validates history\" -> 3 failures, 2 passes. Every mutation exited 1 with assertion failures and zero skips/cancellations; the original code was restored between experiments. An earlier combined baseline exceeded its local ceiling under load; the retry passed. All schema path sections and both initial/resume paths are covered. The first-round invalid item_format regression also remains in the suite."
+  "2026-10-23T21:40:56.921Z",codex-agent,"All six focused behavioral revert experiments are red as required; the unchanged isolated audit baseline is green. The linked path regression ran with nine dot-reporter successes and exit 0, but pm correctly refused to certify filtered dot output without a positive execution-count receipt. Replacing that linked reporter with spec and rerunning; this is a runner receipt-format limitation, not a regression failure. Final npm/Bun release checks remain pending."
+  "2026-10-23T21:45:00.393Z",codex-agent,"Pinned pm linked-test execution now passes with a positive receipt: node --test --test-name-pattern=^trimmed --test-reporter=spec test/rehearsal.test.ts, 9/9 tests passed, zero failures/skips/cancellations, runner exit 0. Automatic result tracking is disabled in this project, so this comment records the verified receipt without changing configuration. The first final npm attempt ran 325 tests with 324 passed; the generated Bun consumer exceeded its existing 5000 ms test ceiling under host load. All rehearsal tests passed. Two additional meaningful contract cases cover direct workflow documents and primitive field definitions; full unchanged release gates are being retried."
+  "2026-10-23T22:02:27.111Z",codex-agent,"Final validation for the retained implementation: npm run release:check and bun run release:check both passed 328/328 tests, 0 failures/skips/cancellations; all 8 configured sources measured 100% lines/branches/functions at unchanged thresholds. Duplication 0% across 24 sources; docstrings 36 declarations across 12 files; production audit 0 vulnerabilities; pack, changelog, attestation and release-date checks passed. Both gates used clean HOME, disabled global/system Git configuration and retained package caches only. The generated Bun consumer 5000 ms timeout passed on npm retry; the earlier installed CLI concurrency check and proof-baseline timeout passed on retry too. Strict tracker health passed with existing advisory findings retained; no configuration or history repairs were performed. An extra inherited-key hypothesis was rejected: removing its proposed guard left 35/35 audit tests green, and direct probes still produced typed refusals. The redundant guard and test were dropped, restoring the source/test implementation that passed both 328-test release gates. Six retained behavioral revert proofs remain recorded above. Rebuilt dist again after restoring that implementation."
+files[6]{path,scope}:
+  dist/index.js,project
+  dist/rehearsal.js,project
   index.ts,project
   package.json,project
   rehearsal.ts,project
   test/rehearsal.test.ts,project
-tests[4]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
-  node --test test/rehearsal.test.ts,project,codex-agent,"2026-10-23T20:14:11.449Z",local_mutation,feat/schema-migration-rehearsal
-  npm run typecheck,project,codex-agent,"2026-10-23T20:14:57.960Z",local_mutation,feat/schema-migration-rehearsal
-  npm run lint,project,codex-agent,"2026-10-23T20:14:57.960Z",local_mutation,feat/schema-migration-rehearsal
-  "npm run build && npm run build:test && node --test test/rehearsal.test.ts",project,codex-agent,"2026-10-23T20:42:39.341Z",local_mutation,feat/schema-migration-rehearsal
+tests[5]:
+  - command: node --test test/rehearsal.test.ts
+    scope: project
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-23T20:14:11.449Z"
+      source_kind: local_mutation
+      source_ref: feat/schema-migration-rehearsal
+  - command: npm run typecheck
+    scope: project
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-23T20:14:57.960Z"
+      source_kind: local_mutation
+      source_ref: feat/schema-migration-rehearsal
+  - command: npm run lint
+    scope: project
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-23T20:14:57.960Z"
+      source_kind: local_mutation
+      source_ref: feat/schema-migration-rehearsal
+  - command: "npm run build && npm run build:test && node --test test/rehearsal.test.ts"
+    scope: project
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-23T20:42:39.341Z"
+      source_kind: local_mutation
+      source_ref: feat/schema-migration-rehearsal
+  - command: node --test --test-name-pattern=^trimmed --test-reporter=spec test/rehearsal.test.ts
+    scope: project
+    timeout_seconds: 300
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-23T21:41:17.063Z"
+      source_kind: local_mutation
+      source_ref: feat/schema-migration-rehearsal
 docs[3]{path,scope}:
   docs/examples/schema-migration.json,project
   docs/schema-migration-rehearsal.md,project

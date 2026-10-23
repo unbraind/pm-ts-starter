@@ -366,6 +366,7 @@ const schemaRehearsalCommand = defineCommand({
     intent: "validate extension-owned item schema evolution safely",
     examples: ["pm ts-starter rehearse-schema --plan ./migration.json --work-dir ./scratch-rehearsal --json"],
     failure_hints: ["Keep the plan unchanged when resuming; choose private scratch storage outside Git."],
+    arguments: [],
     flags: [
         { long: "--source", value_name: "tracker", value_type: "string", description: "Read-only source tracker; defaults to the active tracker." },
         { long: "--plan", value_name: "file", value_type: "string", description: "Version 1 JSON migration plan." },
@@ -373,9 +374,12 @@ const schemaRehearsalCommand = defineCommand({
     ],
     async run(ctx) {
         try {
+            if (ctx.args.length || Object.keys(ctx.options).some(key => !["plan", "source", "workDir", "work-dir", "json"].includes(key)))
+                throw new RehearsalRefusal("invalid_plan", "Use only the documented rehearsal flags and no positional arguments.");
             const planFile = ctx.options["plan"], workDir = ctx.options["workDir"] ?? ctx.options["work-dir"];
-            if (typeof planFile !== "string" || typeof workDir !== "string")
-                throw new RehearsalRefusal("invalid_plan", "Provide --plan <file> and --work-dir <directory>.");
+            if (typeof planFile !== "string" || !planFile.trim() || typeof workDir !== "string" || !workDir.trim() ||
+                (ctx.options["source"] !== undefined && (typeof ctx.options["source"] !== "string" || !ctx.options["source"].trim())))
+                throw new RehearsalRefusal("invalid_plan", "Provide --plan <file>, --work-dir <directory> and a nonempty --source when supplied.");
             return await rehearseSchemaMigration({ source: typeof ctx.options["source"] === "string" ? ctx.options["source"] : ctx.pm_root, workDir, plan: readRehearsalPlan(planFile) });
         }
         catch (error) {
