@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, lstatSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, lstatSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createRequire } from "node:module";
 import { join, resolve } from "node:path";
@@ -20,6 +20,11 @@ const compiler = join(repo, "node_modules/typescript/bin/tsc");
 const minimumVersion = (JSON.parse(readFileSync(join(repo, "manifest.json"), "utf8")) as { pm_min_version: string }).pm_min_version;
 const currentVersion = "2026.10.24";
 
+/** Keep ignore-scripts installs independent of package-manager wrapper allowlist settings. */
+function installationEnv(): NodeJS.ProcessEnv {
+  return Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toLowerCase() !== "npm_config_allow_scripts"));
+}
+
 /** Reuse independently installed registry endpoints across the integration cases. */
 let published: { root: string; minimum: string; current: string } | undefined;
 after(() => { if (published) rmSync(published.root, { recursive: true, force: true }); });
@@ -29,7 +34,7 @@ function publishedSdks(): { root: string; minimum: string; current: string } {
   const root = mkdtempSync(join(tmpdir(), "sdk-published-test-"));
   published = { root, minimum: join(root, "minimum/node_modules/@unbrained/pm-cli"), current: join(root, "current/node_modules/@unbrained/pm-cli") };
   for (const [name, version] of [["minimum", minimumVersion], ["current", currentVersion]]) {
-    const install = spawnSync("npm", ["install", "--prefix", join(root, name!), "--ignore-scripts", "--no-package-lock", "--no-audit", "--no-fund", `@unbrained/pm-cli@${version}`], { encoding: "utf8", timeout: 120000 });
+    const install = spawnSync("npm", ["install", "--prefix", join(root, name!), "--ignore-scripts", "--no-package-lock", "--no-audit", "--no-fund", `@unbrained/pm-cli@${version}`], { encoding: "utf8", timeout: 120000, env: installationEnv() });
     assert.equal(install.status, 0, install.stderr);
   }
   return published;
@@ -93,28 +98,6 @@ test("resolution self-test rejects every SDK import mutation at both published b
   assert.throws(() => assertMutationDrift(blinded, mutations), /resolution self-test must reject/);
 });
 
-test("external declaration subpaths cannot fall through to a newer SDK or hide behind skipLibCheck", async t => {
-  const root = scratch(t), endpoints = publishedSdks();
-  const minimum = join(root, "minimum"); removeGraphExport(endpoints.minimum, minimum);
-  const project = join(root, "consumer"); mkdirSync(join(project, "node_modules/@unbrained"), { recursive: true });
-  writeFileSync(join(project, "package.json"), JSON.stringify({ type: "module" }));
-  symlinkSync(endpoints.current, join(project, "node_modules/@unbrained/pm-cli"), "junction");
-  for (const [name, subpath, expected] of [["removed", "graph", 1], ["nonexistent", "does-not-exist", 2],
-    ["quoted", "does'not-exist", 2], ["multiline", "does\nnot-exist", 2], ["delimiter", "does' from 'not-exist", 2]] as const) {
-    writeFileSync(join(project, "contract.d.ts"), `import * as sdk from ${JSON.stringify(`@unbrained/pm-cli/sdk/${subpath}`)}; export declare const api: typeof sdk;`);
-    const result = await checkSdkContracts({ minimum: { root: minimum, version: minimumVersion }, current: { root: endpoints.current, version: currentVersion }, compiler,
-      examples: [{ id: name, source: `import { api } from ${JSON.stringify(join(project, "contract.js").replaceAll("\\", "/"))}; export const use = api;` }] });
-    assert.equal(result.failed, expected);
-    assert.ok(result.rows.filter(row => !row.ok).every(row => row.codes.includes("TS2307")));
-    assert.equal(result.rows[1]!.ok, expected === 1);
-    if (expected === 2) {
-      const mutations = [{ id: name, code: "TS2307" }];
-      assertMutationDrift(result, mutations);
-
-    }
-  }
-});
-
 /** Hostile names retain their bytes across source literals, compiler ASTs and structured resolution. */
 const hostileSpecifiers = [
   ["single-quote", "@unbrained/pm-cli/sdk/'"],
@@ -135,86 +118,6 @@ const hostileSpecifiers = [
   ["raw-cr", "@unbrained/pm-cli/sdk/\rmissing"],
 ] as const;
 
-test("hostile specifier fuzz fails closed in consumers and external declarations at both SDK bounds", async t => {
-  const root = scratch(t), endpoints = publishedSdks();
-  const targets = { minimum: { root: endpoints.minimum, version: minimumVersion }, current: { root: endpoints.current, version: currentVersion } };
-  for (const location of ["consumer", "declaration"]) {
-    const examples = hostileSpecifiers.map(([id, specifier]) => {
-      const literal = id.startsWith("raw-") ? `"${specifier}"` : JSON.stringify(specifier);
-      const source = `import * as sdk from ${literal}; export declare const api: typeof sdk;`;
-      if (location === "consumer") return { id, source };
-      const declaration = join(root, `${id}.d.ts`);
-      writeFileSync(declaration, source);
-      return { id, source: `import { api } from ${JSON.stringify(declaration.replace(/\.d\.ts$/, ".js"))}; export const use = api;` };
-    });
-    const result = await checkSdkContracts({ ...targets, examples, compiler });
-    assert.equal(result.checks, 32); assert.equal(result.failed, 32, location);
-    for (const row of result.rows) {
-      assert.equal(row.ok, false, `${location}: ${row.example}: ${row.target}`);
-      assert.ok(row.codes.some(code => /^(TS2307|TS1002)$/.test(code)), `${location}: ${row.example}: requires a resolution or syntax code`);
-    }
-  }
-});
-
-test("external named-export drift is checked without skipLibCheck and detects a stubbed resolution probe", async t => {
-  const root = scratch(t), endpoints = publishedSdks();
-  const declaration = join(root, "contract.d.ts");
-  writeFileSync(declaration, 'import { absentPublicApi } from "@unbrained/pm-cli/sdk/authoring"; export declare const api: typeof absentPublicApi;');
-  const options = { minimum: { root: endpoints.minimum, version: minimumVersion }, current: { root: endpoints.current, version: currentVersion }, compiler,
-    examples: [{ id: "missing-external-export", source: `import { api } from ${JSON.stringify(declaration.replace(/\.d\.ts$/, ".js"))}; export const use = api;` }] };
-  const mutations = [{ id: "missing-external-export", code: "TS2305" }];
-  assertMutationDrift(await checkSdkContracts(options), mutations);
-  const stub = join(root, "blind-resolution.cjs");
-  writeFileSync(stub, `const {readFileSync} = require('node:fs'); const {spawnSync} = require('node:child_process');
-const args = process.argv.slice(2); const config = JSON.parse(readFileSync(args[args.indexOf('--project') + 1], 'utf8'));
-if (config.compilerOptions.skipLibCheck === false) process.exit(0);
-const result = spawnSync(process.execPath, [${JSON.stringify(compiler)}, ...args], {stdio: 'inherit'}); process.exit(result.status ?? 1);`);
-  const blinded = await checkSdkContracts({ ...options, compiler: stub });
-  assert.throws(() => assertMutationDrift(blinded, mutations), /resolution self-test must reject/);
-});
-
-test("external TS2724 and missing declaration targets fail closed with resolution codes", async t => {
-  const root = scratch(t), changed = join(root, "sdk"); cpSync(sdk, changed, { recursive: true });
-  const file = join(changed, "package.json");
-  const metadata = JSON.parse(readFileSync(file, "utf8")) as { exports: Record<string, unknown> };
-  metadata.exports["./sdk/untyped"] = "./dist/untyped.js";
-  writeFileSync(file, JSON.stringify(metadata)); writeFileSync(join(changed, "dist/untyped.js"), "export const value = 1;");
-  const examples = [
-    ["suggested-export", '@unbrained/pm-cli/sdk/authoring', "defineCommands", "TS2724"],
-    ["missing-declarations", '@unbrained/pm-cli/sdk/untyped', "value", "TS7016"],
-  ].map(([id, specifier, name, code]) => {
-    const declaration = join(root, `${id}.d.ts`);
-    writeFileSync(declaration, `import { ${name} } from ${JSON.stringify(specifier)}; export declare const api: typeof ${name};`);
-    return { id: id!, code: code!, source: `import { api } from ${JSON.stringify(declaration.replace(/\.d\.ts$/, ".js"))}; export const use = api;` };
-  });
-  const result = await checkSdkContracts({ minimum: { ...target, root: changed }, current: { ...target, root: changed }, compiler,
-    examples: examples.map(({ id, source }) => ({ id, source })) });
-  assertMutationDrift(result, examples);
-});
-
-test("native SDK exports honor string, conditional, wildcard, blocked and missing-file targets", async t => {
-  const root = join(scratch(t), "sdk"); cpSync(sdk, root, { recursive: true });
-  const file = join(root, "package.json");
-  const metadata = JSON.parse(readFileSync(file, "utf8")) as { exports: Record<string, unknown> };
-  Object.assign(metadata.exports, {
-    "./sdk/string": "./dist/sdk/authoring.d.ts",
-    "./sdk/conditional": { import: { types: "./dist/sdk/authoring.d.ts" } },
-    "./sdk/pattern/*": { types: "./dist/sdk/*.d.ts" },
-    "./sdk/blocked": null,
-    "./sdk/missing-file": { types: "./dist/sdk/does-not-exist.d.ts" },
-    "./sdk/quoted'alias": { types: "./dist/sdk/authoring.d.ts" },
-  });
-  writeFileSync(file, JSON.stringify(metadata));
-  const names = ["string", "conditional", "pattern/authoring", "blocked", "missing-file", "quoted'alias"];
-  const result = await checkSdkContracts({ minimum: { root, version: pinned }, current: { root, version: pinned }, compiler,
-    examples: names.map((name, index) => ({ id: `export-${index}`, source: `import * as sdk from "@unbrained/pm-cli/sdk/${name}"; export const api = sdk;` })) });
-  assert.equal(result.failed, 4); assert.equal(result.checks, 12);
-  for (const row of result.rows) {
-    const missing = ["export-3", "export-4"].includes(row.example);
-    assert.equal(row.ok, !missing);
-    if (missing) assert.ok(row.codes.includes("TS2307"));
-  }
-});
 /** Hash-equivalent exact file inventory for preservation assertions. */
 function bytes(root: string): string {
   const digest = createHash("sha256");
@@ -276,25 +179,12 @@ test("wrong SDK identity, unavailable packages and compiler crashes have typed s
   assert.equal(resolveSdkContractCompiler(), compiler);
 });
 
-test("unavailable or malformed structured graph tooling refuses certification with a safe code", async t => {
-  const root = scratch(t), toolchain = join(root, "toolchain"), api = join(toolchain, "node_modules/typescript");
-  mkdirSync(api, { recursive: true });
-  writeFileSync(join(api, "package.json"), JSON.stringify({ name: "typescript", exports: { "./unstable/async": "./api.cjs" } }));
-  const wrapper = join(toolchain, "compiler.cjs");
-  writeFileSync(wrapper, `const {spawnSync} = require('node:child_process');
-const result = spawnSync(process.execPath, [${JSON.stringify(compiler)}, ...process.argv.slice(2)], {stdio: 'inherit'}); process.exit(result.status ?? 1);`);
-  for (const body of ["module.exports = {};", "process.stdout.write('invalid-json'); process.exit(0);",
-    "process.stdout.write('{}'); process.exit(0);", "process.stdout.write('[1]'); process.exit(0);", "process.stdout.write('[null]'); process.exit(0);"]) {
-    writeFileSync(join(api, "api.cjs"), body);
-    await assert.rejects(checkSdkContracts({ minimum: target, current: target, compiler: wrapper, examples: [SDK_CONSUMER_EXAMPLES[0]!] }), refuses("compiler_unavailable"));
-  }
-});
-
 test("diagnostic output is bounded and never echoes source text or machine paths", async () => {
   const result = await checkSdkContracts({ minimum: target, current: target, examples: [{ id: "removed", source: Array.from({ length: 8 }, (_, index) => `const privateSecret${index}: string = ${index};`).join("\n") }] });
   assert.equal(result.failed, 2);
   assert.ok(result.rows.every(row => row.diagnostic_count === 8 && row.codes.length === 3));
-  assert.doesNotMatch(JSON.stringify(result), /privateSecret|consumer\.ts|sdk-consumer-test/);
+  assert.doesNotMatch(JSON.stringify(result), /privateSecret|sdk-consumer-test/);
+  assert.deepEqual(result.rows[0]!.diagnostics[0], { code: "TS2322", file: "consumer.ts", line: 1, column: 7 });
 });
 
 test("each overlapping caller boundary preserves peer success and foreign state on one plain tracker", async t => {
@@ -339,8 +229,13 @@ test("registered command supports both flag forms, typed refusals and nonzero dr
   const examples = join(root, "examples.json"); writeFileSync(examples, JSON.stringify([{ id: "authoring", source: SDK_CONSUMER_EXAMPLES[0]!.source }]));
   const success = await handler.run({ ...base, options: { ...options, examples } }) as { ok: boolean };
   assert.equal(success.ok, true);
+  const consumer = installedConsumer("npm", "current");
+  const ownConfig = consumerConfig(consumer, "nodenext", "esm").replace('"types": []', '"types": ["node"]');
+  writeFileSync(join(consumer, "tsconfig.json"), ownConfig);
+  writeFileSync(join(consumer, "consumer.mts"), SDK_CONSUMER_EXAMPLES[0]!.source);
+  assert.equal((await handler.run({ ...base, options: { minimumSdk: minimum, currentSdk: sdk, currentVersion: pinned, consumer } }) as {ok: boolean}).ok, true);
   assert.equal((await handler.run({ ...base, options: { "minimum-sdk": minimum, "current-sdk": sdk, "current-version": pinned, compiler } }) as { checks: number }).checks, 4);
-  for (const patch of [{}, { ...options, minimumSdk: true }, { ...options, currentSdk: true }, { ...options, currentVersion: true }, { ...options, compiler: true }, { ...options, examples: true }, { ...options, examples: "missing" }, { ...options, examples, unknown: true }]) {
+  for (const patch of [{}, { ...options, minimumSdk: true }, { ...options, currentSdk: true }, { ...options, currentVersion: true }, { ...options, compiler: true }, { ...options, examples: true }, { ...options, consumer: true }, { ...options, examples: "missing" }, { ...options, examples, unknown: true }]) {
     await assert.rejects(async () => handler.run({ ...base, options: patch }), error => error instanceof Error && error.name === "PmCliError" && "code" in error);
   }
   await assert.rejects(async () => handler.run({ ...base, options: null as unknown as typeof base.options }), error => error instanceof Error && error.name === "PmCliError");
@@ -355,33 +250,9 @@ test("registered command supports both flag forms, typed refusals and nonzero dr
   } finally { process.exitCode = saved; }
 });
 
-test("absolute declaration imports report newer-only SDK APIs as minimum drift", async t => {
-  const root = scratch(t), endpoints = publishedSdks();
-  // Model an emitted package installed beside the current SDK. Its absolute
-  // import must not make the minimum check inherit that newer dependency.
-  const project = join(root, "consumer");
-  mkdirSync(join(project, "node_modules/@unbrained"), { recursive: true });
-  writeFileSync(join(project, "package.json"), JSON.stringify({ private: true, type: "module" }));
-  symlinkSync(endpoints.current, join(project, "node_modules/@unbrained/pm-cli"), "junction");
-  const declaration = join(project, "contract.d.ts");
-  writeFileSync(declaration, 'import * as sdk from "@unbrained/pm-cli/sdk"; export declare const publicSdk: typeof sdk;\n');
-  const resolved = createRequire(declaration).resolve("@unbrained/pm-cli/package.json");
-  assert.equal(JSON.parse(readFileSync(resolved, "utf8")).version, currentVersion);
-  const result = await checkSdkContracts({
-    minimum: { root: endpoints.minimum, version: minimumVersion },
-    current: { root: endpoints.current, version: currentVersion }, compiler,
-    examples: [{ id: "newer-only", source: `import { publicSdk } from ${JSON.stringify(join(project, "contract.js").replaceAll("\\", "/"))};
-export const lease = publicSdk.acquireLockLease;` }],
-  });
-  assert.equal(result.ok, false); assert.equal(result.failed, 1);
-  assert.deepEqual(result.rows.map(row => [row.target, row.sdk, row.ok, row.codes]), [
-    ["minimum", minimumVersion, false, ["TS2551"]], ["current", currentVersion, true, []],
-  ]);
-});
-
 test("packed npm and Bun consumers resolve each exact SDK bound and compile emitted contracts without git", async t => {
   const root = scratch(t), endpoints = publishedSdks();
-  const pack = spawnSync("npm", ["pack", "--ignore-scripts", "--json", "--pack-destination", root], { cwd: repo, encoding: "utf8", timeout: 30000 });
+  const pack = spawnSync("npm", ["pack", "--ignore-scripts", "--json", "--pack-destination", root], { cwd: repo, encoding: "utf8", timeout: 30000, env: installationEnv() });
   assert.equal(pack.status, 0, pack.stderr);
   const tarball = join(root, (JSON.parse(pack.stdout) as { filename: string }[])[0]!.filename);
   const noGit = join(root, "no-git"); mkdirSync(noGit);
@@ -390,13 +261,19 @@ test("packed npm and Bun consumers resolve each exact SDK bound and compile emit
     const project = join(root, `${runtime}-${bound}`); mkdirSync(project);
     writeFileSync(join(project, "package.json"), JSON.stringify({ private: true, type: "module" }));
     const install = spawnSync(runtime, runtime === "npm"
-      ? ["install", "--ignore-scripts", "--no-audit", "--no-fund", "--no-package-lock", tarball, `@unbrained/pm-cli@${version}`]
-      : ["add", "--ignore-scripts", tarball, `@unbrained/pm-cli@${version}`], { cwd: project, encoding: "utf8", timeout: 120000 });
+      ? ["install", "--ignore-scripts", "--no-audit", "--no-fund", "--no-package-lock", tarball, `@unbrained/pm-cli@${version}`, "typescript@7.0.2", "@types/node@26.6.5"]
+      : ["add", "--ignore-scripts", tarball, `@unbrained/pm-cli@${version}`, "typescript@7.0.2", "@types/node@26.6.5"], { cwd: project, encoding: "utf8", timeout: 120000, env: installationEnv() });
     assert.equal(install.status, 0, install.stderr);
     const emitted = join(project, "node_modules/pm-ts-starter/dist/index.js").replaceAll("\\", "/");
-    const options = { minimum: { root: endpoints.minimum, version: minimumVersion }, current: { root: endpoints.current, version: currentVersion }, compiler,
-      examples: [...SDK_CONSUMER_EXAMPLES, { id: "emitted-contract", source: `import { checkSdkContracts, type SdkContractMatrix, type SdkContractOptions } from ${JSON.stringify(emitted)};
-export async function consume(options: SdkContractOptions): Promise<SdkContractMatrix> { return checkSdkContracts(options); }` }] };
+    const ownMinimum = join(installedConsumer(runtime as "npm" | "bun", "minimum"), "node_modules/@unbrained/pm-cli");
+    const ownCurrent = join(installedConsumer(runtime as "npm" | "bun", "current"), "node_modules/@unbrained/pm-cli");
+    const options = { minimum: { root: ownMinimum, version: minimumVersion }, current: { root: ownCurrent, version: currentVersion }, consumer: project };
+    for (const example of SDK_CONSUMER_EXAMPLES) writeFileSync(join(project, `${example.id}.ts`), example.source);
+    writeFileSync(join(project, "emitted-consumer.ts"), `import { checkSdkContracts, type SdkContractMatrix, type SdkContractOptions } from "pm-ts-starter";
+export async function consume(options: SdkContractOptions): Promise<SdkContractMatrix> { return checkSdkContracts(options); }`);
+    writeFileSync(join(project, "tsconfig.json"), JSON.stringify({ compilerOptions: { strict: true, skipLibCheck: false,
+      module: "NodeNext", moduleResolution: "NodeNext", target: "ES2022", types: ["node"] },
+      files: ["authoring.ts", "complete-read.ts", "emitted-consumer.ts"] }));
     const entry = join(project, "consumer.mjs");
     writeFileSync(entry, `import {checkSdkContracts} from 'pm-ts-starter';
 import {createRequire} from 'node:module'; import {readFileSync} from 'node:fs';
@@ -413,8 +290,8 @@ console.log(JSON.stringify({sdkVersion, resolved, sdkEntry, matrix: await checkS
     const installedSdk = join(project, "node_modules/@unbrained/pm-cli");
     assert.equal(receipt.resolved, join(installedSdk, "package.json"));
     assert.ok(receipt.sdkEntry.startsWith(`${installedSdk}/`));
-    assert.equal(receipt.matrix.ok, true); assert.equal(receipt.matrix.checks, 6);
-    assert.deepEqual(receipt.matrix.rows.map(row => row.sdk), [minimumVersion, minimumVersion, minimumVersion, currentVersion, currentVersion, currentVersion]);
+    assert.equal(receipt.matrix.ok, true); assert.equal(receipt.matrix.checks, 2);
+    assert.deepEqual(receipt.matrix.rows.map(row => row.sdk), [minimumVersion, currentVersion]);
     if (runtime === "npm" && bound === "current") {
       const tracker = join(project, "tracker");
       await new PmClient({ pmRoot: tracker, noExtensions: true, author: "fixture" }).init("packed");
@@ -438,4 +315,270 @@ console.log(JSON.stringify({sdkVersion, resolved, sdkEntry, matrix: await checkS
     assert.equal(noGitRun.status, 0, `${runtime} ${bound}: ${noGitRun.error?.message ?? noGitRun.stderr}`);
     assert.equal(JSON.parse(noGitRun.stdout).matrix.ok, true);
   }
+});
+
+/** Exact npm and Bun installations used as consumer-owned toolchains, without Git. */
+const installedConsumers = new Map<string, string>();
+const tscConsumerRoots = new Set<string>();
+after(() => { for (const root of tscConsumerRoots) rmSync(root, { recursive: true, force: true }); });
+/** Install and runtime-verify each consumer's own exact SDK and compiler. */
+function installedConsumer(runtime: "npm" | "bun", bound: "minimum" | "current"): string {
+  const key = `${runtime}-${bound}`;
+  const cached = installedConsumers.get(key);
+  if (cached) return cached;
+  const root = mkdtempSync(join(tmpdir(), "sdk-owned-consumer-"));
+  tscConsumerRoots.add(root);
+  const version = bound === "minimum" ? minimumVersion : currentVersion;
+  writeFileSync(join(root, "package.json"), JSON.stringify({ private: true, type: "module" }));
+  const packages = [`@unbrained/pm-cli@${version}`, "typescript@7.0.2", "@types/node@26.6.5"];
+  const result = spawnSync(runtime, runtime === "npm" ? ["install", "--ignore-scripts", "--no-audit", "--no-fund", ...packages]
+    : ["add", "--ignore-scripts", ...packages], { cwd: root, encoding: "utf8", timeout: 120000, env: installationEnv() });
+  assert.equal(result.status, 0, result.stderr);
+  const verify = spawnSync(runtime === "npm" ? process.execPath : "bun", ["--input-type=module", "-e", `
+import {createRequire} from 'node:module'; import {readFileSync} from 'node:fs';
+const require = createRequire(process.cwd() + '/package.json');
+console.log(JSON.stringify({path:require.resolve('@unbrained/pm-cli/package.json'), version:JSON.parse(readFileSync(require.resolve('@unbrained/pm-cli/package.json'))).version, compiler:require.resolve('typescript/package.json')}));`], { cwd: root, encoding: "utf8" });
+  assert.equal(verify.status, 0, verify.stderr);
+  const receipt = JSON.parse(verify.stdout) as { path: string; version: string; compiler: string };
+  assert.equal(receipt.version, version);
+  assert.equal(receipt.path, join(root, "node_modules/@unbrained/pm-cli/package.json"));
+  assert.equal(receipt.compiler, join(root, "node_modules/typescript/package.json"));
+  installedConsumers.set(key, root);
+  return root;
+}
+
+/** A real installed compiler runs the independent oracle in the very same isolated cwd. */
+function instrumentOracle(project: string, receipt: string, t: TestContext): void {
+  const bin = join(project, "node_modules/typescript/bin");
+  writeFileSync(join(bin, "plain-tsc"), readFileSync(join(bin, "tsc")));
+  // Bun may hardlink installed files to its cache: detach before instrumenting.
+  unlinkSync(join(bin, "tsc"));
+  t.after(() => writeFileSync(join(bin, "tsc"), readFileSync(join(bin, "plain-tsc"))));
+  writeFileSync(join(bin, "tsc"), `import {spawnSync} from 'node:child_process';
+import {appendFileSync,readFileSync} from 'node:fs'; import {createRequire} from 'node:module';
+const plain = new URL('./plain-tsc', import.meta.url).pathname;
+const oracle = spawnSync(process.execPath, [plain,'--project','tsconfig.json','--noEmit','--pretty','false'], {encoding:'utf8'});
+const require = createRequire(process.cwd() + '/package.json');
+const sdk = require.resolve('@unbrained/pm-cli/package.json');
+appendFileSync(${JSON.stringify(receipt)}, JSON.stringify({cwd:process.cwd(),sdk,version:JSON.parse(readFileSync(sdk)).version,config:readFileSync('tsconfig.json','utf8'),sources:JSON.parse(readFileSync('tsconfig.json')).files.map(file => readFileSync(file,'utf8')),status:oracle.status,output:oracle.stdout}) + '\\n');
+const checked = spawnSync(process.execPath, [plain,...process.argv.slice(2)], {stdio:'inherit'});
+process.exit(checked.status ?? 1);`);
+}
+
+/** A declaration fixture makes each compiler resolution rule distinguishable from Node resolution. */
+function declarationLayout(root: string, version: string, layout: string): string {
+  mkdirSync(join(root, "sdk"), { recursive: true });
+  const good = 'export declare const api: {common: number; onlyImport: number}; export declare const onlyImport: number;';
+  const bad = 'export declare const api: {common: number};';
+  writeFileSync(join(root, "import.d.ts"), good);
+  writeFileSync(join(root, "require.d.cts"), bad);
+  writeFileSync(join(root, "fallback.d.ts"), good);
+  writeFileSync(join(root, "selected.d.ts"), bad);
+  writeFileSync(join(root, "sdk/index.js"), 'exports.api = {common: 1};');
+  const metadata: Record<string, unknown> = { name: "@unbrained/pm-cli", version, types: "./fallback.d.ts" };
+  if (layout === "typesVersions") metadata.typesVersions = { ">=7.0": { "*": ["selected.d.ts"] } };
+  else metadata.exports = { "./package.json": "./package.json", "./sdk": layout === "types"
+    ? { import: { types: "./import.d.ts", default: "./sdk/index.js" }, require: { types: "./require.d.cts", default: "./sdk/index.js" } }
+    : { "types@>=7.0": "./selected.d.ts", types: "./fallback.d.ts", default: "./sdk/index.js" } };
+  writeFileSync(join(root, "package.json"), JSON.stringify(metadata));
+  return root;
+}
+
+/** Retain the consumer's own complete configuration byte for byte, including skipLibCheck false. */
+function consumerConfig(project: string, resolution: string, mode: string): string {
+  const config = JSON.stringify({ compilerOptions: { strict: true, skipLibCheck: false, target: "ES2022", types: [],
+    moduleResolution: resolution, module: resolution === "bundler" ? "Preserve" : resolution === "node16" ? "Node16" : "NodeNext" },
+    files: [`consumer.${mode === "esm" ? "mts" : "cts"}`] }, null, 2);
+  writeFileSync(join(project, "tsconfig.json"), config);
+  return config;
+}
+
+/** Compare every checker row with the plain compiler and the preserved project bytes. */
+function compareOracle(matrix: SdkContractMatrix, receipt: string, source: string, config: string): void {
+  const records = readFileSync(receipt, "utf8").trim().split("\n").map(line => JSON.parse(line) as {
+    cwd: string; sdk: string; version: string; config: string; sources: string[]; status: number; output: string;
+  });
+  assert.equal(records.length, matrix.rows.length);
+  for (const [index, row] of matrix.rows.entries()) {
+    const oracle = records[index]!;
+    assert.notEqual(oracle.cwd, source, "compile in an isolated copy");
+    assert.equal(oracle.sdk, join(oracle.cwd, "node_modules/@unbrained/pm-cli/package.json"));
+    assert.equal(oracle.version, row.sdk, "runtime resolution must find this bound's own installation");
+    assert.equal(oracle.config, config, "copy the consumer tsconfig unchanged");
+    assert.deepEqual(oracle.sources, (JSON.parse(config) as {files: string[]}).files.map(file => readFileSync(join(source, file), "utf8")), "copy consumer sources unchanged");
+    assert.equal(row.ok, oracle.status === 0, `${row.target}: ${oracle.output}`);
+    assert.equal(row.diagnostic_count, (oracle.output.match(/error TS\d+:/g) ?? []).length);
+  }
+}
+
+test("differential compiler matrix covers node16 nodenext bundler, ESM import CJS require, types types@ typesVersions and both bounds", async t => {
+  const root = scratch(t);
+  let rows = 0, drift = 0;
+  for (const runtime of ["npm", "bun"] as const) {
+    // Both installed endpoints are independently verified under this package manager.
+    const project = installedConsumer(runtime, "minimum");
+    installedConsumer(runtime, "current");
+    const receipt = join(root, `${runtime}.jsonl`);
+    instrumentOracle(project, receipt, t);
+    for (const layout of ["types", "types@", "typesVersions"]) {
+      const minimum = { root: declarationLayout(join(root, `${runtime}-${layout}-min`), minimumVersion, layout), version: minimumVersion };
+      const current = { root: declarationLayout(join(root, `${runtime}-${layout}-cur`), currentVersion, layout), version: currentVersion };
+      for (const resolution of ["node16", "nodenext", "bundler"]) for (const mode of ["esm", "cjs"]) {
+        const config = consumerConfig(project, resolution, mode);
+        for (const control of ["common", "onlyImport"]) {
+          const source = mode === "esm" ? `import {api${control === "onlyImport" ? ", onlyImport" : ""}} from "@unbrained/pm-cli/sdk"; export const use = api.${control};`
+            : `import sdk = require("@unbrained/pm-cli/sdk"); ${control === "onlyImport" ? 'import {onlyImport} from "@unbrained/pm-cli/sdk";' : ""} export const use = sdk.api.${control};`;
+          writeFileSync(join(project, `consumer.${mode === "esm" ? "mts" : "cts"}`), source);
+          writeFileSync(receipt, "");
+          const matrix = await checkSdkContracts({ minimum, current, consumer: project });
+          compareOracle(matrix, receipt, project, config);
+          const expected = control === "common" || (layout === "types" && mode === "esm");
+          assert.equal(matrix.ok, expected, `${runtime}/${layout}/${resolution}/${mode}/${control}`);
+          if (!expected) for (const row of matrix.rows) {
+            assert.ok(row.codes.includes("TS2339"), row.codes.join(","));
+            assert.ok(row.codes.includes("TS2305"), row.codes.join(","));
+            assert.ok(row.diagnostics.every(diagnostic => diagnostic.line > 0 && diagnostic.column > 0));
+          }
+          rows += matrix.checks; drift += matrix.failed;
+        }
+      }
+    }
+  }
+  assert.equal(rows, 144); assert.equal(drift, 60);
+  t.diagnostic(`Differential matrix: ${rows}/${rows} compiler verdicts agree; ${drift} drift, ${rows - drift} clean.`);
+});
+
+test("differential hostile specifiers in consumer and external declarations preserve every earlier row at both bounds", async t => {
+  const root = scratch(t), project = installedConsumer("npm", "current");
+  const receipt = join(root, "hostile.jsonl"); instrumentOracle(project, receipt, t);
+  const config = consumerConfig(project, "nodenext", "esm");
+  const minimum = { root: declarationLayout(join(root, "min"), minimumVersion, "types"), version: minimumVersion };
+  const current = { root: declarationLayout(join(root, "cur"), currentVersion, "types"), version: currentVersion };
+  let rows = 0;
+  for (const location of ["consumer", "declaration"]) for (const [id, specifier] of hostileSpecifiers) {
+    const literal = id.startsWith("raw-") ? `"${specifier}"` : JSON.stringify(specifier);
+    const source = `import * as sdk from ${literal}; export declare const api: typeof sdk;`;
+    writeFileSync(join(project, "contract.d.mts"), source);
+    writeFileSync(join(project, "consumer.mts"), location === "consumer" ? source : 'import {api} from "./contract.mjs"; export const use = api;');
+    writeFileSync(receipt, "");
+    const matrix = await checkSdkContracts({ minimum, current, consumer: project });
+    compareOracle(matrix, receipt, project, config);
+    assert.equal(matrix.failed, 2, `${location}/${id}`);
+    assert.ok(matrix.rows.every(row => row.codes.some(code => /^(TS2307|TS1002)$/.test(code))));
+    rows += matrix.checks;
+  }
+  assert.equal(rows, 64);
+  t.diagnostic(`Hostile differential: ${rows}/${rows} compiler verdicts agree.`);
+});
+
+test("all compiler errors drift, including external TS2304 hidden by a consumer skipLibCheck true", async t => {
+  const project = installedConsumer("bun", "current");
+  const config = consumerConfig(project, "nodenext", "esm").replace('"skipLibCheck": false', '"skipLibCheck": true');
+  writeFileSync(join(project, "tsconfig.json"), config);
+  writeFileSync(join(project, "contract.d.mts"), "export declare const value: AbsentType;");
+  writeFileSync(join(project, "consumer.mts"), 'import {value} from "./contract.mjs"; export const use = value;');
+  // The product must override only this compiler flag; the source/config bytes survive.
+  const minimum = { root: join(installedConsumer("npm", "minimum"), "node_modules/@unbrained/pm-cli"), version: minimumVersion };
+  const current = { root: join(project, "node_modules/@unbrained/pm-cli"), version: currentVersion };
+  const before = bytes(project);
+  const matrix = await checkSdkContracts({ minimum, current, consumer: project });
+  assert.equal(matrix.failed, 2);
+  for (const row of matrix.rows) {
+    assert.deepEqual(row.codes, ["TS2304"]);
+    assert.deepEqual(row.diagnostics, [{ code: "TS2304", file: "contract.d.mts", line: 1, column: 29 }]);
+  }
+  assert.equal(bytes(project), before);
+  t.diagnostic("Consumer sources, configuration and installed packages are unchanged.");
+});
+
+test("project inputs refuse ambiguous options and missing compilers; diagnostics retain safe locations without code filtering", async t => {
+  const root = scratch(t);
+  for (const patch of [{ consumer: 1 }, { consumer: " " }, { consumer: root, examples: SDK_CONSUMER_EXAMPLES }, { consumer: root, compiler }]) {
+    await assert.rejects(checkSdkContracts({ minimum: target, current: target, ...patch } as SdkContractOptions), refuses("invalid_input"));
+  }
+  mkdirSync(join(root, ".git"));
+  writeFileSync(join(root, ".git", "sentinel"), "foreign state");
+  writeFileSync(join(root, "tsconfig.json"), JSON.stringify({ files: ["consumer.ts"] }));
+  await assert.rejects(checkSdkContracts({ minimum: target, current: target, consumer: root }), refuses("compiler_unavailable"));
+  const stub = join(root, "diagnostics.cjs");
+  const output = `error TS5099: private configuration text\n${join(root, "secret.ts")}(2,3): error TS9999: private source text\nconsumer.ts(4,5): error TS2322: private source text\n`;
+  writeFileSync(stub, `process.stdout.write(${JSON.stringify(output)}); process.exit(1);`);
+  const matrix = await checkSdkContracts({ minimum: target, current: target, compiler: stub, examples: [SDK_CONSUMER_EXAMPLES[0]!] });
+  assert.equal(matrix.failed, 2);
+  assert.deepEqual(matrix.rows[0]!.diagnostics, [
+    {code: "TS5099", file: "<config>", line: 0, column: 0},
+    {code: "TS9999", file: "<external>", line: 2, column: 3},
+    {code: "TS2322", file: "consumer.ts", line: 4, column: 5},
+  ]);
+  assert.doesNotMatch(JSON.stringify(matrix), /private source|secret|private configuration/);
+});
+
+test("review reproductions require and versioned types declarations report TS2339 and TS2305 instead of false success", async t => {
+  const root = scratch(t);
+  for (const layout of ["types", "types@"]) await t.test(layout, async () => {
+    const project = join(root, layout);
+    const rootSdk = declarationLayout(join(project, "node_modules/@unbrained/pm-cli"), pinned, layout);
+    const contract = join(project, "contract.d.cts");
+    writeFileSync(contract, 'import sdk = require("@unbrained/pm-cli/sdk"); import {onlyImport} from "@unbrained/pm-cli/sdk"; export declare const use: typeof sdk.api.onlyImport;');
+    const matrix = await checkSdkContracts({ minimum: { root: rootSdk, version: pinned }, current: { root: rootSdk, version: pinned }, compiler,
+      examples: [{ id: "review", source: `import {use} from ${JSON.stringify(contract.replace(/\.d\.cts$/, ".cjs"))}; export const value = use;` }] });
+    assert.equal(matrix.failed, 2, `${layout}: both selected bounds must reject the consumer`);
+    for (const row of matrix.rows) {
+      assert.ok(row.codes.includes("TS2305"), `${layout}: ${row.codes}`);
+      assert.ok(row.codes.includes("TS2339"), `${layout}: ${row.codes}`);
+    }
+  });
+});
+
+test("native SDK exports honor string, conditional, wildcard, blocked and missing-file targets", async t => {
+  const root = join(scratch(t), "sdk"); cpSync(sdk, root, { recursive: true });
+  const file = join(root, "package.json");
+  const metadata = JSON.parse(readFileSync(file, "utf8")) as { exports: Record<string, unknown> };
+  Object.assign(metadata.exports, {
+    "./sdk/string": "./dist/sdk/authoring.d.ts",
+    "./sdk/conditional": { import: { types: "./dist/sdk/authoring.d.ts" } },
+    "./sdk/pattern/*": { types: "./dist/sdk/*.d.ts" },
+    "./sdk/blocked": null,
+    "./sdk/missing-file": { types: "./dist/sdk/does-not-exist.d.ts" },
+    "./sdk/quoted'alias": { types: "./dist/sdk/authoring.d.ts" },
+  });
+  writeFileSync(file, JSON.stringify(metadata));
+  const names = ["string", "conditional", "pattern/authoring", "blocked", "missing-file", "quoted'alias"];
+  const result = await checkSdkContracts({ minimum: { root, version: pinned }, current: { root, version: pinned }, compiler,
+    examples: names.map((name, index) => ({ id: `export-${index}`, source: `import * as sdk from "@unbrained/pm-cli/sdk/${name}"; export const api = sdk;` })) });
+  assert.equal(result.failed, 4); assert.equal(result.checks, 12);
+  for (const row of result.rows) {
+    const missing = ["export-3", "export-4"].includes(row.example);
+    assert.equal(row.ok, !missing);
+    if (missing) assert.ok(row.codes.includes("TS2307"));
+  }
+});
+
+test("copied external declarations resolve newer-only real SDK APIs as minimum drift under npm and Bun", async t => {
+  const root = scratch(t);
+  for (const runtime of ["npm", "bun"] as const) {
+    const project = installedConsumer(runtime, "current");
+    const config = consumerConfig(project, "nodenext", "esm").replace('"types": []', '"types": ["node"]');
+    writeFileSync(join(project, "tsconfig.json"), config);
+    writeFileSync(join(project, "contract.d.mts"), 'import * as sdk from "@unbrained/pm-cli/sdk"; export declare const publicSdk: typeof sdk;');
+    writeFileSync(join(project, "consumer.mts"), 'import {publicSdk} from "./contract.mjs"; export const lease = publicSdk.acquireLockLease;');
+    const receipt = join(root, `${runtime}.jsonl`); instrumentOracle(project, receipt, t);
+    const matrix = await checkSdkContracts({
+      minimum: { root: join(installedConsumer(runtime, "minimum"), "node_modules/@unbrained/pm-cli"), version: minimumVersion },
+      current: { root: join(project, "node_modules/@unbrained/pm-cli"), version: currentVersion }, consumer: project,
+    });
+    compareOracle(matrix, receipt, project, config);
+    assert.equal(matrix.failed, 1);
+    assert.deepEqual(matrix.rows.map(row => [row.target, row.ok, row.codes]), [["minimum", false, ["TS2551"]], ["current", true, []]]);
+  }
+});
+
+test("an inline compiler installation without ambient Node types reports TS2688 rather than ignoring environment errors", async t => {
+  const root = scratch(t), modules = join(root, "node_modules");
+  mkdirSync(modules);
+  for (const name of ["typescript", "@typescript"]) symlinkSync(join(repo, "node_modules", name), join(modules, name), "junction");
+  const matrix = await checkSdkContracts({ minimum: target, current: target, compiler: join(modules, "typescript/bin/tsc"),
+    examples: [{ id: "ambient", source: "export const value = 1;" }] });
+  assert.equal(matrix.failed, 2);
+  assert.ok(matrix.rows.every(row => row.codes.includes("TS2688")));
 });

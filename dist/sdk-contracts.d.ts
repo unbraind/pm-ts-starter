@@ -22,7 +22,9 @@ export interface SdkContractOptions {
     current: SdkContractTarget;
     /** Author-controlled public API usage, or the shipped starter examples. */
     examples?: readonly SdkConsumerExample[];
-    /** TypeScript's executable JS entry; defaults to the locally installed compiler. */
+    /** Self-contained consumer directory, including its own tsconfig and installed TypeScript. */
+    consumer?: string;
+    /** Compiler for inline examples only; project consumers always use their own compiler. */
     compiler?: string;
     /** Optional progress observer, also useful when checking overlapping callers. */
     onProgress?: (phase: SdkContractPhase) => void;
@@ -35,18 +37,31 @@ export interface SdkContractRow {
     sdk: string;
     /** Consumer identity from the input. */
     example: string;
-    /** True only when consumer and selected-exports resolution checks succeed. */
+    /** True only when the consumer compiler reports no errors. */
     ok: boolean;
     /** Full diagnostic count, including diagnostics omitted from the sample. */
     diagnostic_count: number;
     /** At most three compiler diagnostic codes. */
     codes: string[];
+    /** At most three diagnostics with project-relative locations; no raw messages. */
+    diagnostics: SdkContractDiagnostic[];
 }
-/** Native TOON/JSON-compatible matrix with no paths, source text or tracker content. */
+/** A compiler error without source text or machine-specific paths. */
+export interface SdkContractDiagnostic {
+    /** TypeScript diagnostic code. */
+    code: string;
+    /** Project-relative source file, or a safe external/configuration marker. */
+    file: string;
+    /** One-based source line; zero for configuration errors. */
+    line: number;
+    /** One-based source column; zero for configuration errors. */
+    column: number;
+}
+/** Native TOON/JSON-compatible matrix with no machine paths, source text or tracker content. */
 export interface SdkContractMatrix {
     /** Artifact schema version. */
     version: 1;
-    /** All selected-target consumer and resolution checks succeeded. */
+    /** All selected-target consumer compilations succeeded. */
     ok: boolean;
     /** Number of independent target/example compilations. */
     checks: number;

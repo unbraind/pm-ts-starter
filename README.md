@@ -248,51 +248,51 @@ pm ts-starter sdk-contracts \
 Omit `--json` for native compact TOON. The result has `ok`, `checks`, `failed`,
 `rows` and `remedy`; a drift matrix exits nonzero while retaining the matrix.
 Each row identifies the endpoint, verified version and example, with the full
-error count and at most three TypeScript codes. Raw source text and machine
+error count and at most three TypeScript codes and locations. Raw source text and machine
 paths never appear in these diagnostics. `invalid_input`, `sdk_unavailable` and
 `compiler_unavailable` are typed refusals with retry guidance.
 
-The default examples exercise typed authoring composition and certified complete
-tracker reads. Use `--examples docs/examples/sdk-contracts.json` for your own
+Pass `--consumer ./consumer` to check a self-contained consumer project. Its sources,
+package metadata, dependencies and tsconfig are copied into an exclusive directory
+for each bound. Each copy contains the selected SDK as a physical package in its
+own node_modules; links are dereferenced so resolution cannot follow a package
+back to the original installation. The consumer's own installed TypeScript runs
+`tsc --project tsconfig.json --noEmit --skipLibCheck false --pretty false`.
+The tsconfig and sources are copied unchanged. Project mode cannot be combined
+with `--examples` or `--compiler`. Include the project's dependencies and compiler
+in its node_modules before running the checker; use relative imports within the
+self-contained project.
+
+The default inline examples exercise typed authoring composition and certified
+complete tracker reads. Use `--examples docs/examples/sdk-contracts.json` for a
 JSON array of `{id, source}` consumers (1–16 examples, each at most 64 KiB).
-The checker compiles but never executes consumer source. Removing a public API
-used by one example fails that example; changing unrelated APIs is outside the
-examples' declared coverage. This is a signature/use-site check: implement runtime
-behavior assertions separately. Consumer code remains strict; a separate declaration
-probe uses `skipLibCheck: false` and retains missing-module, missing-export,
-missing-types and syntax diagnostic codes. Unrelated dependency implementation
-and ambient environment errors are outside this use-site contract. Each tooling
-invocation is limited to 30 seconds and 8 MiB of private output. The compiler must
-provide TypeScript 7's structured declaration-graph API, either beside the supplied
-compiler entry or in the extension's installation; unavailable or malformed graph
-output produces `compiler_unavailable`, never success.
-The checker uses the supplied local SDK artifacts and verifies package name/version;
-it does not authenticate registry provenance or resolve a moving `latest` tag.
-Refresh the explicit current endpoint in your release job.
+Inline mode creates a strict NodeNext consumer with Node ambient types and copies
+the selected compiler installation into it. The checker compiles consumer source
+without executing it.
 
-SDK specifiers come from the compiler's parsed AST imports across the full
-external declaration graph. Node resolves each specifier beside the selected SDK
-under the `types` condition using its real `exports` map; only resolved existing
-files are rebound. An unresolved specifier immediately reports TS2307. The final
-probe checks the rebound graph for TS2307/TS2305/TS2724-class and syntax errors,
-including imports hidden by the consumer's `skipLibCheck`. Compiler diagnostics
-use `--pretty false` and codes anchored to diagnostic lines. No resolution traces
-are requested or parsed, no declarations are synthesized, and an SDK subpath
-cannot inherit another installation's exports.
+The verdict is the consumer compiler's diagnostics. Every error is drift,
+including errors in external declarations and ambient dependencies. There is no
+AST graph walker, custom module or exports resolver, declaration rebinding,
+`paths` injection, diagnostic code allowlist, or second resolution probe.
+TypeScript alone selects import/require conditions, versioned `types@` conditions
+and typesVersions. Each row retains the full diagnostic count, at most three
+codes, and corresponding project-relative file/line/column locations. External
+locations use a safe marker; source text and raw compiler messages stay private.
+Each invocation is bounded to 30 seconds and 8 MiB. Compiler failures without
+usable diagnostics produce `compiler_unavailable`.
 
-The resolution self-test checks eight mutations at both published bounds:
-nonexistent and removed subpaths and a misspelled package (TS2307), missing
-named and type-only exports (TS2305), a type export used as a value (TS2693),
-a type-only import used as a value (TS1361), and a default import substituted
-for a namespace import (TS1192).
-Original consumers and a valid namespace control must pass. The self-tests
-must reject both a compiler that accepts every import and a stubbed resolution
-probe that silently accepts missing exports in external declarations.
-The fuzz table checks 16 hostile names in both consumers and external declarations
-at both bounds (64 failure rows): single/double quotes, trace delimiter and forged
-code text, escaped and raw newlines/CR, spaces, backslashes, Unicode, `..`, trailing
-slash and an empty specifier. Every row must fail with a code. Valid quoted exports
-remain supported. Malformed structured graph output also fails with a safe code.
+The differential suite covers node16, nodenext and bundler resolution, ESM imports
+and CJS requires, exports types conditions, versioned types conditions and
+typesVersions, at both SDK bounds. npm and Bun consumers install their own exact
+SDKs and compilers and verify resolution at runtime. Each isolated copy also runs
+plain `tsc --noEmit`, comparing all 144 matrix verdicts (84 clean, 60 drift),
+including the review's TS2339/TS2305 cases. Another 64 differential rows retain
+all 16 hostile specifiers in consumer and external declarations at both bounds.
+Consumer source and tsconfig bytes must match the originals. The existing eight
+import mutation controls and an intentionally blind compiler remain regression
+controls. API examples only cover the signatures they use; runtime behavior needs
+separate assertions. The checker verifies package name/version, while registry
+provenance remains the provisioner's responsibility.
 
 The exported `checkSdkContracts`, `SdkContractOptions`, `SdkContractMatrix` and
 `SdkContractRefusal` provide the same contract for TypeScript callers:
@@ -311,7 +311,7 @@ Every call allocates its own disposable directory, releases it last, and removes
 only that allocation. It ignores all tracker records because none are inputs to
 compiler checks; foreign state remains owned by its writer. Concurrent callers
 share no claims, leases, checkpoints, budgets, outboxes or caches. The optional
-`onProgress` observer reports allocation, target linking, each compilation and
+`onProgress` observer reports allocation, target installation, each compilation and
 cleanup. The regression suite injects successful peers at every such boundary
 on one plain tracker and verifies preservation.
 
