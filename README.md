@@ -260,13 +260,25 @@ used by one example fails that example; changing unrelated APIs is outside the
 examples' declared coverage. This is a signature/use-site check: implement runtime
 behavior assertions separately. Dependency declaration bodies use `skipLibCheck`;
 consumer code remains strict. A compiler invocation is limited to 30 seconds and
-256 KiB output. The checker uses the supplied local SDK artifacts and verifies
-package name/version; it does not authenticate registry provenance or resolve a
+8 MiB of private resolution output. The checker uses the supplied local SDK
+artifacts and verifies package name/version; it does not authenticate registry provenance or resolve a
 moving `latest` tag. Refresh the explicit current endpoint in your release job.
 SDK imports inside external package declarations are bound to each selected
-SDK's public type exports, even when the example imports that package by an
-absolute path. An SDK subpath without a public type export cannot fall back to
-another installed SDK.
+SDK's real `exports` map, even when the example imports that package by an
+absolute path. TypeScript resolves namespace probes beside the selected SDK
+without path mappings; only successfully resolved declarations are rebound.
+Unresolved probes report TS2307, including imports hidden in dependency
+declarations by `skipLibCheck`. No empty declarations are generated, and an SDK
+subpath cannot inherit another installation's exports.
+
+The resolution self-test checks eight mutations at both published bounds:
+nonexistent and removed subpaths and a misspelled package (TS2307), missing
+named and type-only exports (TS2305), a type export used as a value (TS2693),
+a type-only import used as a value (TS1361), and a default import substituted
+for a namespace import (TS1192).
+Original consumers and a valid namespace control must pass. The self-tests
+must reject both a compiler that accepts every import and a stubbed resolution
+probe that silently accepts unresolved imports in external declarations.
 
 The exported `checkSdkContracts`, `SdkContractOptions`, `SdkContractMatrix` and
 `SdkContractRefusal` provide the same contract for TypeScript callers:

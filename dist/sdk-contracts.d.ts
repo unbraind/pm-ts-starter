@@ -35,7 +35,7 @@ export interface SdkContractRow {
     sdk: string;
     /** Consumer identity from the input. */
     example: string;
-    /** True only when the real compiler exits successfully. */
+    /** True only when consumer and selected-exports resolution checks succeed. */
     ok: boolean;
     /** Full diagnostic count, including diagnostics omitted from the sample. */
     diagnostic_count: number;
@@ -46,7 +46,7 @@ export interface SdkContractRow {
 export interface SdkContractMatrix {
     /** Artifact schema version. */
     version: 1;
-    /** All real compiler invocations succeeded. */
+    /** All selected-target consumer and resolution checks succeeded. */
     ok: boolean;
     /** Number of independent target/example compilations. */
     checks: number;

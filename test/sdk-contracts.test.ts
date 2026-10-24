@@ -10,7 +10,7 @@ import test, { after, type TestContext } from "node:test";
 import { PmClient } from "@unbrained/pm-cli/sdk";
 import { createExtensionTestHarness } from "@unbrained/pm-cli/sdk/testing";
 import extension from "../index.ts";
-import { checkSdkContracts, parseSdkConsumerExamples, resolveSdkContractCompiler, SDK_CONSUMER_EXAMPLES, SdkContractRefusal, type SdkContractOptions } from "../sdk-contracts.ts";
+import { checkSdkContracts, parseSdkConsumerExamples, resolveSdkContractCompiler, SDK_CONSUMER_EXAMPLES, SdkContractRefusal, type SdkContractOptions, type SdkContractMatrix } from "../sdk-contracts.ts";
 
 const repo = resolve(import.meta.dirname, "..");
 const sdk = join(repo, "node_modules/@unbrained/pm-cli");
@@ -41,6 +41,108 @@ function scratch(t: TestContext): string {
   t.after(() => rmSync(root, { recursive: true, force: true }));
   return root;
 }
+/** Check every negative control, so an always-green resolver cannot certify itself. */
+function assertMutationDrift(matrix: SdkContractMatrix, mutations: readonly { id: string; code: string }[]): void {
+  assert.equal(matrix.ok, false, "resolution self-test must reject mutated consumers");
+  assert.equal(matrix.checks, mutations.length * 2);
+  assert.equal(matrix.failed, mutations.length * 2);
+  for (const bound of ["minimum", "current"]) for (const mutation of mutations) {
+    const row = matrix.rows.find(row => row.target === bound && row.example === mutation.id)!;
+    assert.equal(row.ok, false, `${bound}: ${mutation.id}`);
+    assert.ok(row.codes.includes(mutation.code), `${bound}: ${mutation.id}: ${row.codes.join(",")}`);
+  }
+}
+/** Remove a public subpath from a copied SDK while preserving its declaration file. */
+function removeGraphExport(source: string, destination: string): void {
+  cpSync(source, destination, { recursive: true });
+  const file = join(destination, "package.json");
+  const metadata = JSON.parse(readFileSync(file, "utf8")) as { exports: Record<string, unknown> };
+  delete metadata.exports["./sdk/graph"];
+  writeFileSync(file, JSON.stringify(metadata));
+}
+
+test("resolution self-test rejects every SDK import mutation at both published bounds", async t => {
+  const root = scratch(t), endpoints = publishedSdks();
+  const targets = { minimum: { root: join(root, "minimum"), version: minimumVersion }, current: { root: join(root, "current"), version: currentVersion } };
+  for (const bound of ["minimum", "current"] as const) {
+    // Keep the real declaration on disk: exports, rather than file presence,
+    // decides whether a selected SDK ships a public subpath.
+    removeGraphExport(endpoints[bound], targets[bound].root);
+  }
+  const mutations = [
+    { id: "nonexistent-subpath", code: "TS2307", source: 'import * as sdk from "@unbrained/pm-cli/sdk/does-not-exist"; export const api = sdk;' },
+    { id: "removed-subpath", code: "TS2307", source: 'import * as sdk from "@unbrained/pm-cli/sdk/graph"; export const api = sdk;' },
+    { id: "misspelled-package", code: "TS2307", source: 'import * as sdk from "@unbrained/pm-clii/sdk"; export const api = sdk;' },
+    { id: "missing-named-export", code: "TS2305", source: 'import { absentPublicApi } from "@unbrained/pm-cli/sdk/authoring"; export const api = absentPublicApi;' },
+    { id: "missing-type-export", code: "TS2305", source: 'import type { AbsentPublicType } from "@unbrained/pm-cli/sdk"; export type Api = AbsentPublicType;' },
+    { id: "wrong-export-kind", code: "TS2693", source: 'import { ExtensionCommandSdk } from "@unbrained/pm-cli/sdk/authoring"; export const api = ExtensionCommandSdk;' },
+    { id: "type-import-as-value", code: "TS1361", source: 'import type { PmClient } from "@unbrained/pm-cli/sdk"; export const api = PmClient;' },
+    { id: "default-vs-namespace", code: "TS1192", source: 'import sdk from "@unbrained/pm-cli/sdk/authoring"; export const api = sdk;' },
+  ];
+  const examples = mutations.map(({ id, source }) => ({ id, source }));
+  const result = await checkSdkContracts({ ...targets, examples, compiler });
+  assertMutationDrift(result, mutations);
+  const good = await checkSdkContracts({ ...targets, compiler, examples: [...SDK_CONSUMER_EXAMPLES,
+    { id: "namespace-control", source: 'import * as sdk from "@unbrained/pm-cli/sdk/authoring"; export const api = sdk.defineCommand;' },
+  ] });
+  assert.equal(good.ok, true); assert.equal(good.checks, 6); assert.equal(good.failed, 0);
+  // Exercise the self-test itself against an intentionally stubbed compiler
+  // that accepts every import, including the namespace-import blind spot.
+  const stub = join(root, "blind-compiler.cjs"); writeFileSync(stub, "process.exit(0);\n");
+  const blinded = await checkSdkContracts({ ...targets, examples, compiler: stub });
+  assert.throws(() => assertMutationDrift(blinded, mutations), /resolution self-test must reject/);
+});
+
+test("external declaration subpaths cannot fall through to a newer SDK or hide behind skipLibCheck", async t => {
+  const root = scratch(t), endpoints = publishedSdks();
+  const minimum = join(root, "minimum"); removeGraphExport(endpoints.minimum, minimum);
+  const project = join(root, "consumer"); mkdirSync(join(project, "node_modules/@unbrained"), { recursive: true });
+  writeFileSync(join(project, "package.json"), JSON.stringify({ type: "module" }));
+  symlinkSync(endpoints.current, join(project, "node_modules/@unbrained/pm-cli"), "junction");
+  const blindResolver = join(root, "blind-resolver.cjs");
+  writeFileSync(blindResolver, `const {readFileSync} = require('node:fs'); const {spawnSync} = require('node:child_process');
+const args = process.argv.slice(2); const config = JSON.parse(readFileSync(args[args.indexOf('--project') + 1], 'utf8'));
+if (config.files[0] === 'resolution.ts') process.exit(0);
+const result = spawnSync(process.execPath, [${JSON.stringify(compiler)}, ...args], {stdio: 'inherit'}); process.exit(result.status ?? 1);`);
+  for (const [name, subpath, expected] of [["removed", "graph", 1], ["nonexistent", "does-not-exist", 2]] as const) {
+    writeFileSync(join(project, "contract.d.ts"), `import * as sdk from "@unbrained/pm-cli/sdk/${subpath}"; export declare const api: typeof sdk;`);
+    const result = await checkSdkContracts({ minimum: { root: minimum, version: minimumVersion }, current: { root: endpoints.current, version: currentVersion }, compiler,
+      examples: [{ id: name, source: `import { api } from ${JSON.stringify(join(project, "contract.js").replaceAll("\\", "/"))}; export const use = api;` }] });
+    assert.equal(result.failed, expected);
+    assert.ok(result.rows.filter(row => !row.ok).every(row => row.codes.includes("TS2307")));
+    assert.equal(result.rows[1]!.ok, expected === 1);
+    if (expected === 2) {
+      const mutations = [{ id: name, code: "TS2307" }];
+      assertMutationDrift(result, mutations);
+      const blinded = await checkSdkContracts({ minimum: { root: minimum, version: minimumVersion }, current: { root: endpoints.current, version: currentVersion }, compiler: blindResolver,
+        examples: [{ id: name, source: `import { api } from ${JSON.stringify(join(project, "contract.js").replaceAll("\\", "/"))}; export const use = api;` }] });
+      assert.throws(() => assertMutationDrift(blinded, mutations), /resolution self-test must reject/);
+    }
+  }
+});
+
+test("native SDK exports honor string, conditional, wildcard, blocked and missing-file targets", async t => {
+  const root = join(scratch(t), "sdk"); cpSync(sdk, root, { recursive: true });
+  const file = join(root, "package.json");
+  const metadata = JSON.parse(readFileSync(file, "utf8")) as { exports: Record<string, unknown> };
+  Object.assign(metadata.exports, {
+    "./sdk/string": "./dist/sdk/authoring.d.ts",
+    "./sdk/conditional": { import: { types: "./dist/sdk/authoring.d.ts" } },
+    "./sdk/pattern/*": { types: "./dist/sdk/*.d.ts" },
+    "./sdk/blocked": null,
+    "./sdk/missing-file": { types: "./dist/sdk/does-not-exist.d.ts" },
+  });
+  writeFileSync(file, JSON.stringify(metadata));
+  const names = ["string", "conditional", "pattern/authoring", "blocked", "missing-file"];
+  const result = await checkSdkContracts({ minimum: { root, version: pinned }, current: { root, version: pinned }, compiler,
+    examples: names.map((name, index) => ({ id: `export-${index}`, source: `import * as sdk from "@unbrained/pm-cli/sdk/${name}"; export const api = sdk;` })) });
+  assert.equal(result.failed, 4); assert.equal(result.checks, 10);
+  for (const row of result.rows) {
+    const missing = ["export-3", "export-4"].includes(row.example);
+    assert.equal(row.ok, !missing);
+    if (missing) assert.ok(row.codes.includes("TS2307"));
+  }
+});
 /** Hash-equivalent exact file inventory for preservation assertions. */
 function bytes(root: string): string {
   const digest = createHash("sha256");
@@ -93,7 +195,7 @@ test("wrong SDK identity, unavailable packages and compiler crashes have typed s
   }
   writeFileSync(join(root, "package.json"), JSON.stringify({ name: "foreign", version: pinned }));
   await assert.rejects(checkSdkContracts({ minimum: { ...target, root }, current: target }), refuses("sdk_unavailable"));
-  for (const body of ["process.exit(3)", "process.kill(process.pid, 'SIGTERM')", "process.stdout.write('x'.repeat(300000))"]) {
+  for (const body of ["process.exit(3)", "process.kill(process.pid, 'SIGTERM')", "process.stdout.write('x'.repeat(9000000))"]) {
     const bad = join(root, "compiler.cjs"); writeFileSync(bad, body);
     await assert.rejects(checkSdkContracts({ minimum: target, current: target, compiler: bad }), refuses("compiler_unavailable"));
   }

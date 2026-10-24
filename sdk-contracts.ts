@@ -42,7 +42,7 @@ export interface SdkContractRow {
   sdk: string;
   /** Consumer identity from the input. */
   example: string;
-  /** True only when the real compiler exits successfully. */
+  /** True only when consumer and selected-exports resolution checks succeed. */
   ok: boolean;
   /** Full diagnostic count, including diagnostics omitted from the sample. */
   diagnostic_count: number;
@@ -53,7 +53,7 @@ export interface SdkContractRow {
 export interface SdkContractMatrix {
   /** Artifact schema version. */
   version: 1;
-  /** All real compiler invocations succeeded. */
+  /** All selected-target consumer and resolution checks succeeded. */
   ok: boolean;
   /** Number of independent target/example compilations. */
   checks: number;
@@ -118,16 +118,44 @@ function targetRoot(target: SdkContractTarget): string {
     throw new SdkContractRefusal("sdk_unavailable", "Install the exact declared SDK versions in separate directories and pass their package roots; package name and version must match. Registry provenance remains the provisioner's responsibility.");
   }
 }
-/** Bind SDK imports from every declaration, including absolute external package imports. */
-function sdkDeclarationPaths(root: string, unavailable: string): Record<string, string[]> {
-  const metadata = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { exports: Record<string, { types?: string } | string> };
-  const paths: Record<string, string[]> = { "@unbrained/pm-cli/*": [unavailable] };
-  for (const [subpath, entry] of Object.entries(metadata.exports)) {
-    if (typeof entry === "object" && typeof entry.types === "string") {
-      paths[`@unbrained/pm-cli${subpath.slice(1)}`] = [resolve(root, entry.types)];
+/** Run the selected compiler; resolution traces stay private and bounded. */
+function compileConsumer(project: string, compiler: string, file: string, paths: Record<string, string[]> = {}) {
+  writeFileSync(join(project, "tsconfig.json"), JSON.stringify({ compilerOptions: {
+    paths, strict: true, noEmit: true, skipLibCheck: true, target: "ES2022", module: "NodeNext", moduleResolution: "NodeNext", types: [],
+  }, files: [file] }));
+  const result = spawnSync(process.execPath, [resolve(compiler), "--project", join(project, "tsconfig.json"), "--pretty", "false", "--traceResolution"], {
+    cwd: project, encoding: "utf8", timeout: 30000, maxBuffer: 8 * 1024 * 1024,
+    env: { ...process.env, NODE_OPTIONS: "", GIT_CEILING_DIRECTORIES: dirname(dirname(project)) },
+  });
+  const codes = [...result.stdout.matchAll(/error (TS\d+):/g)].map(match => match[1]!);
+  if (result.error || result.signal || result.status === null || (result.status !== 0 && codes.length === 0)) throw new SdkContractRefusal("compiler_unavailable", "Provide a working TypeScript JavaScript compiler entry; each compilation must finish within 30 seconds and 8 MiB of private resolution output.");
+  return { codes, trace: result.stdout };
+}
+/** Collect SDK imports actually encountered by TypeScript, including external declarations. */
+function sdkSpecifiers(trace: string): string[] {
+  return [...new Set([...trace.matchAll(/======== Resolving module '(@unbrained\/pm-cli(?:\/[^']*)?)' from /g)].map(match => match[1]!))];
+}
+/** Resolve each import natively through the selected installation's exports before rebinding. */
+function compileBoundConsumer(project: string, compiler: string): string[] {
+  let compiled = compileConsumer(project, compiler, "consumer.ts");
+  const paths: Record<string, string[]> = {};
+  const checked = new Set<string>();
+  const resolutionCodes: string[] = [];
+  for (;;) {
+    const pending = sdkSpecifiers(compiled.trace).filter(specifier => !checked.has(specifier));
+    if (!pending.length) return [...compiled.codes, ...resolutionCodes];
+    // Namespace probes force unresolved imports in skipLibCheck declarations to
+    // become real TS2307 diagnostics in a checked source file. No declarations
+    // are synthesized, and the probe has no paths mapping or outside imports.
+    writeFileSync(join(project, "resolution.ts"), pending.map((specifier, index) => `import * as sdk${index} from ${JSON.stringify(specifier)}; export { sdk${index} };`).join("\n"));
+    const native = compileConsumer(project, compiler, "resolution.ts");
+    resolutionCodes.push(...native.codes);
+    for (const specifier of pending) checked.add(specifier);
+    for (const match of native.trace.matchAll(/======== Module name '(@unbrained\/pm-cli(?:\/[^']*)?)' was successfully resolved to '([^'\r\n]+)'/g)) {
+      paths[match[1]!] = [match[2]!];
     }
+    compiled = compileConsumer(project, compiler, "consumer.ts", paths);
   }
-  return paths;
 }
 /** Locate a compiler only when the caller did not supply one; omit-dev installs get a remedy. */
 export function resolveSdkContractCompiler(from: string = import.meta.url): string {
@@ -147,8 +175,6 @@ export async function checkSdkContracts(options: SdkContractOptions): Promise<Sd
   try {
     options.onProgress?.("allocated");
     writeFileSync(join(scratch, "package.json"), JSON.stringify({ type: "module" }));
-    const unavailable = join(scratch, "unavailable.d.ts");
-    writeFileSync(unavailable, "export {};\n");
     for (const target of ["minimum", "current"] as const) {
       const project = join(scratch, target);
       mkdirSync(join(project, "node_modules", "@unbrained"), { recursive: true });
@@ -156,17 +182,8 @@ export async function checkSdkContracts(options: SdkContractOptions): Promise<Sd
       options.onProgress?.("linked");
       for (const example of examples) {
         writeFileSync(join(project, "consumer.ts"), example.source);
-        writeFileSync(join(project, "tsconfig.json"), JSON.stringify({ compilerOptions: {
-          paths: sdkDeclarationPaths(targets[target].root, unavailable),
-          strict: true, noEmit: true, skipLibCheck: true, target: "ES2022", module: "NodeNext", moduleResolution: "NodeNext", types: [],
-        }, files: ["consumer.ts"] }));
-        const result = spawnSync(process.execPath, [resolve(compiler), "--project", join(project, "tsconfig.json"), "--pretty", "false"], {
-          cwd: project, encoding: "utf8", timeout: 30000, maxBuffer: 256 * 1024,
-          env: { ...process.env, NODE_OPTIONS: "", GIT_CEILING_DIRECTORIES: dirname(scratch) },
-        });
-        const codes = [...result.stdout.matchAll(/error (TS\d+):/g)].map(match => match[1]!);
-        if (result.error || result.signal || result.status === null || (result.status !== 0 && codes.length === 0)) throw new SdkContractRefusal("compiler_unavailable", "Provide a working TypeScript JavaScript compiler entry; each compilation must finish within 30 seconds and 256 KiB of output.");
-        rows.push({ target, sdk: targets[target].version, example: example.id, ok: result.status === 0, diagnostic_count: codes.length, codes: codes.slice(0, 3) });
+        const codes = compileBoundConsumer(project, compiler);
+        rows.push({ target, sdk: targets[target].version, example: example.id, ok: codes.length === 0, diagnostic_count: codes.length, codes: codes.slice(0, 3) });
         options.onProgress?.("compiled");
       }
     }
