@@ -258,18 +258,27 @@ JSON array of `{id, source}` consumers (1–16 examples, each at most 64 KiB).
 The checker compiles but never executes consumer source. Removing a public API
 used by one example fails that example; changing unrelated APIs is outside the
 examples' declared coverage. This is a signature/use-site check: implement runtime
-behavior assertions separately. Dependency declaration bodies use `skipLibCheck`;
-consumer code remains strict. A compiler invocation is limited to 30 seconds and
-8 MiB of private resolution output. The checker uses the supplied local SDK
-artifacts and verifies package name/version; it does not authenticate registry provenance or resolve a
-moving `latest` tag. Refresh the explicit current endpoint in your release job.
-SDK imports inside external package declarations are bound to each selected
-SDK's real `exports` map, even when the example imports that package by an
-absolute path. TypeScript resolves namespace probes beside the selected SDK
-without path mappings; only successfully resolved declarations are rebound.
-Unresolved probes report TS2307, including imports hidden in dependency
-declarations by `skipLibCheck`. No empty declarations are generated, and an SDK
-subpath cannot inherit another installation's exports.
+behavior assertions separately. Consumer code remains strict; a separate declaration
+probe uses `skipLibCheck: false` and retains missing-module, missing-export,
+missing-types and syntax diagnostic codes. Unrelated dependency implementation
+and ambient environment errors are outside this use-site contract. Each tooling
+invocation is limited to 30 seconds and 8 MiB of private output. The compiler must
+provide TypeScript 7's structured declaration-graph API, either beside the supplied
+compiler entry or in the extension's installation; unavailable or malformed graph
+output produces `compiler_unavailable`, never success.
+The checker uses the supplied local SDK artifacts and verifies package name/version;
+it does not authenticate registry provenance or resolve a moving `latest` tag.
+Refresh the explicit current endpoint in your release job.
+
+SDK specifiers come from the compiler's parsed AST imports across the full
+external declaration graph. Node resolves each specifier beside the selected SDK
+under the `types` condition using its real `exports` map; only resolved existing
+files are rebound. An unresolved specifier immediately reports TS2307. The final
+probe checks the rebound graph for TS2307/TS2305/TS2724-class and syntax errors,
+including imports hidden by the consumer's `skipLibCheck`. Compiler diagnostics
+use `--pretty false` and codes anchored to diagnostic lines. No resolution traces
+are requested or parsed, no declarations are synthesized, and an SDK subpath
+cannot inherit another installation's exports.
 
 The resolution self-test checks eight mutations at both published bounds:
 nonexistent and removed subpaths and a misspelled package (TS2307), missing
@@ -278,10 +287,12 @@ a type-only import used as a value (TS1361), and a default import substituted
 for a namespace import (TS1192).
 Original consumers and a valid namespace control must pass. The self-tests
 must reject both a compiler that accepts every import and a stubbed resolution
-probe that silently accepts unresolved imports in external declarations.
-External-declaration controls also cover apostrophes, multiline specifiers and
-delimiter-like text, plus a valid quoted export, so trace parsing cannot silently
-drop those SDK imports.
+probe that silently accepts missing exports in external declarations.
+The fuzz table checks 16 hostile names in both consumers and external declarations
+at both bounds (64 failure rows): single/double quotes, trace delimiter and forged
+code text, escaped and raw newlines/CR, spaces, backslashes, Unicode, `..`, trailing
+slash and an empty specifier. Every row must fail with a code. Valid quoted exports
+remain supported. Malformed structured graph output also fails with a safe code.
 
 The exported `checkSdkContracts`, `SdkContractOptions`, `SdkContractMatrix` and
 `SdkContractRefusal` provide the same contract for TypeScript callers:

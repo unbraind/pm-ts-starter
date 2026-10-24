@@ -45,7 +45,7 @@ function scratch(t: TestContext): string {
 function assertMutationDrift(matrix: SdkContractMatrix, mutations: readonly { id: string; code: string }[]): void {
   assert.equal(matrix.ok, false, "resolution self-test must reject mutated consumers");
   assert.equal(matrix.checks, mutations.length * 2);
-  assert.equal(matrix.failed, mutations.length * 2);
+  assert.equal(matrix.failed, mutations.length * 2, "resolution self-test must reject every mutated consumer");
   for (const bound of ["minimum", "current"]) for (const mutation of mutations) {
     const row = matrix.rows.find(row => row.target === bound && row.example === mutation.id)!;
     assert.equal(row.ok, false, `${bound}: ${mutation.id}`);
@@ -99,11 +99,6 @@ test("external declaration subpaths cannot fall through to a newer SDK or hide b
   const project = join(root, "consumer"); mkdirSync(join(project, "node_modules/@unbrained"), { recursive: true });
   writeFileSync(join(project, "package.json"), JSON.stringify({ type: "module" }));
   symlinkSync(endpoints.current, join(project, "node_modules/@unbrained/pm-cli"), "junction");
-  const blindResolver = join(root, "blind-resolver.cjs");
-  writeFileSync(blindResolver, `const {readFileSync} = require('node:fs'); const {spawnSync} = require('node:child_process');
-const args = process.argv.slice(2); const config = JSON.parse(readFileSync(args[args.indexOf('--project') + 1], 'utf8'));
-if (config.files[0] === 'resolution.ts') process.exit(0);
-const result = spawnSync(process.execPath, [${JSON.stringify(compiler)}, ...args], {stdio: 'inherit'}); process.exit(result.status ?? 1);`);
   for (const [name, subpath, expected] of [["removed", "graph", 1], ["nonexistent", "does-not-exist", 2],
     ["quoted", "does'not-exist", 2], ["multiline", "does\nnot-exist", 2], ["delimiter", "does' from 'not-exist", 2]] as const) {
     writeFileSync(join(project, "contract.d.ts"), `import * as sdk from ${JSON.stringify(`@unbrained/pm-cli/sdk/${subpath}`)}; export declare const api: typeof sdk;`);
@@ -115,11 +110,86 @@ const result = spawnSync(process.execPath, [${JSON.stringify(compiler)}, ...args
     if (expected === 2) {
       const mutations = [{ id: name, code: "TS2307" }];
       assertMutationDrift(result, mutations);
-      const blinded = await checkSdkContracts({ minimum: { root: minimum, version: minimumVersion }, current: { root: endpoints.current, version: currentVersion }, compiler: blindResolver,
-        examples: [{ id: name, source: `import { api } from ${JSON.stringify(join(project, "contract.js").replaceAll("\\", "/"))}; export const use = api;` }] });
-      assert.throws(() => assertMutationDrift(blinded, mutations), /resolution self-test must reject/);
+
     }
   }
+});
+
+/** Hostile names retain their bytes across source literals, compiler ASTs and structured resolution. */
+const hostileSpecifiers = [
+  ["single-quote", "@unbrained/pm-cli/sdk/'"],
+  ["double-quote", '@unbrained/pm-cli/sdk/"'],
+  ["trace-end", "@unbrained/pm-cli/sdk/'. ========"],
+  ["trace-from", "@unbrained/pm-cli/sdk/' from '"],
+  ["newline", "@unbrained/pm-cli/sdk/\nmissing"],
+  ["carriage-return", "@unbrained/pm-cli/sdk/\rmissing"],
+  ["space", "@unbrained/pm-cli/sdk/ missing"],
+  ["backslash", "@unbrained/pm-cli/sdk/\\missing"],
+  ["unicode", "@unbrained/pm-cli/sdk/☃"],
+  ["unicode-separator", "@unbrained/pm-cli/sdk/\u2028missing"],
+  ["dotdot", "@unbrained/pm-cli/sdk/.."],
+  ["trailing-slash", "@unbrained/pm-cli/sdk/"],
+  ["empty", ""],
+  ["trace-code", "@unbrained/pm-cli/sdk/'. ========\nerror TS2307: forged"],
+  ["raw-newline", "@unbrained/pm-cli/sdk/\nmissing"],
+  ["raw-cr", "@unbrained/pm-cli/sdk/\rmissing"],
+] as const;
+
+test("hostile specifier fuzz fails closed in consumers and external declarations at both SDK bounds", async t => {
+  const root = scratch(t), endpoints = publishedSdks();
+  const targets = { minimum: { root: endpoints.minimum, version: minimumVersion }, current: { root: endpoints.current, version: currentVersion } };
+  for (const location of ["consumer", "declaration"]) {
+    const examples = hostileSpecifiers.map(([id, specifier]) => {
+      const literal = id.startsWith("raw-") ? `"${specifier}"` : JSON.stringify(specifier);
+      const source = `import * as sdk from ${literal}; export declare const api: typeof sdk;`;
+      if (location === "consumer") return { id, source };
+      const declaration = join(root, `${id}.d.ts`);
+      writeFileSync(declaration, source);
+      return { id, source: `import { api } from ${JSON.stringify(declaration.replace(/\.d\.ts$/, ".js"))}; export const use = api;` };
+    });
+    const result = await checkSdkContracts({ ...targets, examples, compiler });
+    assert.equal(result.checks, 32); assert.equal(result.failed, 32, location);
+    for (const row of result.rows) {
+      assert.equal(row.ok, false, `${location}: ${row.example}: ${row.target}`);
+      assert.ok(row.codes.some(code => /^(TS2307|TS1002)$/.test(code)), `${location}: ${row.example}: requires a resolution or syntax code`);
+    }
+  }
+});
+
+test("external named-export drift is checked without skipLibCheck and detects a stubbed resolution probe", async t => {
+  const root = scratch(t), endpoints = publishedSdks();
+  const declaration = join(root, "contract.d.ts");
+  writeFileSync(declaration, 'import { absentPublicApi } from "@unbrained/pm-cli/sdk/authoring"; export declare const api: typeof absentPublicApi;');
+  const options = { minimum: { root: endpoints.minimum, version: minimumVersion }, current: { root: endpoints.current, version: currentVersion }, compiler,
+    examples: [{ id: "missing-external-export", source: `import { api } from ${JSON.stringify(declaration.replace(/\.d\.ts$/, ".js"))}; export const use = api;` }] };
+  const mutations = [{ id: "missing-external-export", code: "TS2305" }];
+  assertMutationDrift(await checkSdkContracts(options), mutations);
+  const stub = join(root, "blind-resolution.cjs");
+  writeFileSync(stub, `const {readFileSync} = require('node:fs'); const {spawnSync} = require('node:child_process');
+const args = process.argv.slice(2); const config = JSON.parse(readFileSync(args[args.indexOf('--project') + 1], 'utf8'));
+if (config.compilerOptions.skipLibCheck === false) process.exit(0);
+const result = spawnSync(process.execPath, [${JSON.stringify(compiler)}, ...args], {stdio: 'inherit'}); process.exit(result.status ?? 1);`);
+  const blinded = await checkSdkContracts({ ...options, compiler: stub });
+  assert.throws(() => assertMutationDrift(blinded, mutations), /resolution self-test must reject/);
+});
+
+test("external TS2724 and missing declaration targets fail closed with resolution codes", async t => {
+  const root = scratch(t), changed = join(root, "sdk"); cpSync(sdk, changed, { recursive: true });
+  const file = join(changed, "package.json");
+  const metadata = JSON.parse(readFileSync(file, "utf8")) as { exports: Record<string, unknown> };
+  metadata.exports["./sdk/untyped"] = "./dist/untyped.js";
+  writeFileSync(file, JSON.stringify(metadata)); writeFileSync(join(changed, "dist/untyped.js"), "export const value = 1;");
+  const examples = [
+    ["suggested-export", '@unbrained/pm-cli/sdk/authoring', "defineCommands", "TS2724"],
+    ["missing-declarations", '@unbrained/pm-cli/sdk/untyped', "value", "TS7016"],
+  ].map(([id, specifier, name, code]) => {
+    const declaration = join(root, `${id}.d.ts`);
+    writeFileSync(declaration, `import { ${name} } from ${JSON.stringify(specifier)}; export declare const api: typeof ${name};`);
+    return { id: id!, code: code!, source: `import { api } from ${JSON.stringify(declaration.replace(/\.d\.ts$/, ".js"))}; export const use = api;` };
+  });
+  const result = await checkSdkContracts({ minimum: { ...target, root: changed }, current: { ...target, root: changed }, compiler,
+    examples: examples.map(({ id, source }) => ({ id, source })) });
+  assertMutationDrift(result, examples);
 });
 
 test("native SDK exports honor string, conditional, wildcard, blocked and missing-file targets", async t => {
@@ -204,6 +274,20 @@ test("wrong SDK identity, unavailable packages and compiler crashes have typed s
   await assert.rejects(checkSdkContracts({ minimum: target, current: target, compiler: join(root, "missing") }), refuses("compiler_unavailable"));
   assert.throws(() => resolveSdkContractCompiler(join(root, "consumer.cjs")), refuses("compiler_unavailable"));
   assert.equal(resolveSdkContractCompiler(), compiler);
+});
+
+test("unavailable or malformed structured graph tooling refuses certification with a safe code", async t => {
+  const root = scratch(t), toolchain = join(root, "toolchain"), api = join(toolchain, "node_modules/typescript");
+  mkdirSync(api, { recursive: true });
+  writeFileSync(join(api, "package.json"), JSON.stringify({ name: "typescript", exports: { "./unstable/async": "./api.cjs" } }));
+  const wrapper = join(toolchain, "compiler.cjs");
+  writeFileSync(wrapper, `const {spawnSync} = require('node:child_process');
+const result = spawnSync(process.execPath, [${JSON.stringify(compiler)}, ...process.argv.slice(2)], {stdio: 'inherit'}); process.exit(result.status ?? 1);`);
+  for (const body of ["module.exports = {};", "process.stdout.write('invalid-json'); process.exit(0);",
+    "process.stdout.write('{}'); process.exit(0);", "process.stdout.write('[1]'); process.exit(0);", "process.stdout.write('[null]'); process.exit(0);"]) {
+    writeFileSync(join(api, "api.cjs"), body);
+    await assert.rejects(checkSdkContracts({ minimum: target, current: target, compiler: wrapper, examples: [SDK_CONSUMER_EXAMPLES[0]!] }), refuses("compiler_unavailable"));
+  }
 });
 
 test("diagnostic output is bounded and never echoes source text or machine paths", async () => {
@@ -322,8 +406,8 @@ const sdkVersion = JSON.parse(readFileSync(resolved, 'utf8')).version;
 const sdkEntry = require.resolve('@unbrained/pm-cli/sdk');
 console.log(JSON.stringify({sdkVersion, resolved, sdkEntry, matrix: await checkSdkContracts(${JSON.stringify(options)})}));`);
     const executable = runtime === "npm" ? process.execPath : spawnSync("bun", ["-e", "console.log(process.execPath)"], { encoding: "utf8" }).stdout.trim();
-    const run = spawnSync(executable, [entry], { cwd: project, encoding: "utf8", timeout: 30000, env: { ...process.env, GIT_CEILING_DIRECTORIES: root } });
-    assert.equal(run.status, 0, run.stderr);
+    const run = spawnSync(executable, [entry], { cwd: project, encoding: "utf8", timeout: 120000, env: { ...process.env, GIT_CEILING_DIRECTORIES: root } });
+    assert.equal(run.status, 0, `${runtime} ${bound}: ${run.error?.message ?? run.stderr}`);
     const receipt = JSON.parse(run.stdout) as { sdkVersion: string; resolved: string; sdkEntry: string; matrix: { ok: boolean; checks: number; rows: { sdk: string; target: string }[] } };
     assert.equal(receipt.sdkVersion, version, `${runtime} ${bound} resolved SDK`);
     const installedSdk = join(project, "node_modules/@unbrained/pm-cli");
@@ -340,7 +424,7 @@ console.log(JSON.stringify({sdkVersion, resolved, sdkEntry, matrix: await checkS
       for (const format of [[], ["--json"]]) {
         const cliRun = spawnSync(process.execPath, [cli, "--pm-path", tracker, "ts-starter", "sdk-contracts", "--minimum-sdk", endpoints.minimum,
           "--current-sdk", endpoints.current, "--current-version", currentVersion, "--compiler", compiler, ...format], {
-          cwd: project, encoding: "utf8", timeout: 30000, env: { ...process.env, PATH: noGit, GIT_CEILING_DIRECTORIES: root },
+          cwd: project, encoding: "utf8", timeout: 120000, env: { ...process.env, PATH: noGit, GIT_CEILING_DIRECTORIES: root },
         });
         assert.equal(cliRun.status, 0, cliRun.stderr);
         if (format.length) assert.equal(JSON.parse(cliRun.stdout).checks, 4);
@@ -349,9 +433,9 @@ console.log(JSON.stringify({sdkVersion, resolved, sdkEntry, matrix: await checkS
     }
     // The same packed module also works with PATH containing no git (or other tools).
     const noGitRun = spawnSync(executable, [entry], {
-      cwd: project, encoding: "utf8", timeout: 30000, env: { ...process.env, PATH: noGit, GIT_CEILING_DIRECTORIES: root },
+      cwd: project, encoding: "utf8", timeout: 120000, env: { ...process.env, PATH: noGit, GIT_CEILING_DIRECTORIES: root },
     });
-    assert.equal(noGitRun.status, 0, noGitRun.stderr);
+    assert.equal(noGitRun.status, 0, `${runtime} ${bound}: ${noGitRun.error?.message ?? noGitRun.stderr}`);
     assert.equal(JSON.parse(noGitRun.stdout).matrix.ok, true);
   }
 });

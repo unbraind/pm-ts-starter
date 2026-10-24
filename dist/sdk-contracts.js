@@ -4,6 +4,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSyn
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 /** Actionable input/tooling refusals, distinct from a valid matrix with API drift. */
 export class SdkContractRefusal extends Error {
     /** Stable refusal discriminator. */
@@ -62,55 +63,108 @@ function targetRoot(target) {
         throw new SdkContractRefusal("sdk_unavailable", "Install the exact declared SDK versions in separate directories and pass their package roots; package name and version must match. Registry provenance remains the provisioner's responsibility.");
     }
 }
-/** Run the selected compiler; resolution traces stay private and bounded. */
-function compileConsumer(project, compiler, file, paths = {}) {
+/** Run the selected compiler, retaining only diagnostic codes anchored to diagnostic lines. */
+function compileConsumer(project, compiler, file, paths = {}, skipLibCheck = true) {
     writeFileSync(join(project, "tsconfig.json"), JSON.stringify({ compilerOptions: {
-            paths, strict: true, noEmit: true, skipLibCheck: true, target: "ES2022", module: "NodeNext", moduleResolution: "NodeNext", types: [],
+            paths, strict: true, noEmit: true, skipLibCheck, target: "ES2022", module: "NodeNext", moduleResolution: "NodeNext", types: [],
         }, files: [file] }));
-    const result = spawnSync(process.execPath, [resolve(compiler), "--project", join(project, "tsconfig.json"), "--pretty", "false", "--traceResolution"], {
+    const result = spawnSync(process.execPath, [resolve(compiler), "--project", join(project, "tsconfig.json"), "--pretty", "false"], {
         cwd: project, encoding: "utf8", timeout: 30000, maxBuffer: 8 * 1024 * 1024,
         env: { ...process.env, NODE_OPTIONS: "", GIT_CEILING_DIRECTORIES: dirname(dirname(project)) },
     });
-    const codes = [...result.stdout.matchAll(/error (TS\d+):/g)].map(match => match[1]);
+    const codes = [...result.stdout.matchAll(/^(?:[^\r\n]*\(\d+,\d+\): |)error (TS\d+):/gm)].map(match => match[1]);
     if (result.error || result.signal || result.status === null || (result.status !== 0 && codes.length === 0))
-        throw new SdkContractRefusal("compiler_unavailable", "Provide a working TypeScript JavaScript compiler entry; each compilation must finish within 30 seconds and 8 MiB of private resolution output.");
-    return { codes, trace: result.stdout };
+        throw new SdkContractRefusal("compiler_unavailable", "Provide a working TypeScript JavaScript compiler entry; each compilation must finish within 30 seconds and 8 MiB of private diagnostic output.");
+    return codes;
 }
-/** Collect SDK imports actually encountered by TypeScript, including external declarations. */
-function sdkSpecifiers(trace) {
-    const specifiers = trace.split("======== Resolving module '").slice(1).map(record => {
-        const header = record.slice(0, record.indexOf("'. ========"));
-        return header.slice(0, header.lastIndexOf("' from '"));
+/** Refuse failed or malformed structured tooling output without exposing private output. */
+function toolStrings(result) {
+    try {
+        if (result.status !== 0)
+            throw new Error("unavailable graph");
+        const values = JSON.parse(result.stdout);
+        if (!Array.isArray(values) || values.some(value => typeof value !== "string" && value !== null))
+            throw new Error("unparsed graph");
+        return values;
+    }
+    catch {
+        throw new SdkContractRefusal("compiler_unavailable", "Provide working structured compiler and exports resolvers; every module specifier must parse within 30 seconds and 8 MiB before certification.");
+    }
+}
+/** Read module specifiers from compiler ASTs, including the entire external declaration graph. */
+function sdkSpecifiers(project, compiler) {
+    try {
+        const require = createRequire(import.meta.url);
+        const apiPath = require.resolve("typescript/unstable/async", { paths: [dirname(resolve(compiler)), dirname(fileURLToPath(import.meta.url))] });
+        const reader = join(project, "imports.mjs");
+        writeFileSync(reader, `import {createRequire} from 'node:module';
+const {API} = createRequire(import.meta.url)(${JSON.stringify(apiPath)});
+const api = new API({cwd: process.cwd()});
+try {
+  const snapshot = await api.updateSnapshot({openProjects: [process.argv[2]]});
+  try {
+    const program = snapshot.getProject(process.argv[2]).program;
+    const files = await program.getSourceFileNames();
+    const sources = await Promise.all(files.map(file => program.getSourceFile(file)));
+    const specifiers = sources.flatMap(source => [...source.imports, ...source.moduleAugmentations].map(node => {
+      if (typeof node.text !== 'string') throw new Error('unparsed specifier');
+      return node.text;
+    }));
+    console.log(JSON.stringify([...new Set(specifiers.filter(name => name === '@unbrained/pm-cli' || name.startsWith('@unbrained/pm-cli/')))]));
+  } finally { await snapshot.dispose(); }
+} finally { await api.close(); }`);
+        const result = spawnSync(process.execPath, [reader, join(project, "tsconfig.json")], {
+            cwd: project, encoding: "utf8", timeout: 30000, maxBuffer: 8 * 1024 * 1024, env: { ...process.env, NODE_OPTIONS: "" },
+        });
+        const specifiers = toolStrings(result);
+        if (specifiers.includes(null))
+            throw new Error("unparsed module specifier");
+        return specifiers;
+    }
+    catch {
+        throw new SdkContractRefusal("compiler_unavailable", "Provide a TypeScript compiler with the structured declaration-graph API; every module specifier must parse within 30 seconds and 8 MiB before certification.");
+    }
+}
+/** Resolve exports structurally under Node's types condition; JSON preserves every specifier byte. */
+function selectedExports(project, specifiers) {
+    const resolver = join(project, "resolve.mjs");
+    writeFileSync(resolver, `import {existsSync} from 'node:fs'; import {fileURLToPath} from 'node:url';
+const specifiers = JSON.parse(process.argv[2]);
+console.log(JSON.stringify(specifiers.map(specifier => { try {
+  const file = fileURLToPath(import.meta.resolve(specifier)); return existsSync(file) ? file : null;
+} catch { return null; } })));`);
+    const result = spawnSync(process.execPath, ["--conditions=types", resolver, JSON.stringify(specifiers)], {
+        cwd: project, encoding: "utf8", timeout: 30000, maxBuffer: 8 * 1024 * 1024, env: { ...process.env, NODE_OPTIONS: "" },
     });
-    return [...new Set(specifiers.filter(specifier => specifier === "@unbrained/pm-cli" || specifier.startsWith("@unbrained/pm-cli/")))];
+    return toolStrings(result);
 }
-/** Resolve each import natively through the selected installation's exports before rebinding. */
+/** Bind every discovered SDK import to selected exports, then check declaration resolution without skipLibCheck. */
 function compileBoundConsumer(project, compiler) {
-    let compiled = compileConsumer(project, compiler, "consumer.ts");
+    let codes = compileConsumer(project, compiler, "consumer.ts");
     const paths = {};
     const checked = new Set();
     const resolutionCodes = [];
     for (;;) {
-        const pending = sdkSpecifiers(compiled.trace).filter(specifier => !checked.has(specifier));
-        if (!pending.length)
-            return [...compiled.codes, ...resolutionCodes];
-        // Namespace probes force unresolved imports in skipLibCheck declarations to
-        // become real TS2307 diagnostics in a checked source file. No declarations
-        // are synthesized, and the probe has no paths mapping or outside imports.
-        writeFileSync(join(project, "resolution.ts"), pending.map((specifier, index) => `import * as sdk${index} from ${JSON.stringify(specifier)}; export { sdk${index} };`).join("\n"));
-        const native = compileConsumer(project, compiler, "resolution.ts");
-        resolutionCodes.push(...native.codes);
-        for (const specifier of pending)
-            checked.add(specifier);
-        for (const specifier of pending) {
-            const marker = `======== Module name '${specifier}' was successfully resolved to '`;
-            const start = native.trace.indexOf(marker);
-            if (start < 0)
-                continue;
-            const tail = native.trace.slice(start + marker.length).split("'. ========", 1)[0];
-            paths[specifier] = [tail.split("' with Package ID '", 1)[0]];
+        const pending = sdkSpecifiers(project, compiler).filter(specifier => !checked.has(specifier));
+        if (!pending.length) {
+            writeFileSync(join(project, "resolution.ts"), 'export * from "./consumer.js";');
+            const graph = compileConsumer(project, compiler, "resolution.ts", paths, false);
+            // Dependency environment/type-implementation errors are outside this use-site
+            // contract. Missing modules, missing exports and syntax errors always drift.
+            return [...codes, ...resolutionCodes, ...graph.filter(code => /^(?:TS1\d+|TS230[567]|TS2459|TS2460|TS2497|TS261[34]|TS2688|TS269[34]|TS2724|TS283[45]|TS2846|TS5\d+|TS6\d+|TS7016)$/.test(code))];
         }
-        compiled = compileConsumer(project, compiler, "consumer.ts", paths);
+        const resolved = selectedExports(project, pending);
+        for (const [index, specifier] of pending.entries()) {
+            checked.add(specifier);
+            const file = resolved[index];
+            if (typeof file !== "string")
+                resolutionCodes.push("TS2307");
+            else
+                paths[specifier] = [file];
+        }
+        if (resolutionCodes.length)
+            return [...codes, ...resolutionCodes];
+        codes = compileConsumer(project, compiler, "consumer.ts", paths);
     }
 }
 /** Locate a compiler only when the caller did not supply one; omit-dev installs get a remedy. */
