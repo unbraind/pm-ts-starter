@@ -263,6 +263,10 @@ consumer code remains strict. A compiler invocation is limited to 30 seconds and
 256 KiB output. The checker uses the supplied local SDK artifacts and verifies
 package name/version; it does not authenticate registry provenance or resolve a
 moving `latest` tag. Refresh the explicit current endpoint in your release job.
+SDK imports inside external package declarations are bound to each selected
+SDK's public type exports, even when the example imports that package by an
+absolute path. An SDK subpath without a public type export cannot fall back to
+another installed SDK.
 
 The exported `checkSdkContracts`, `SdkContractOptions`, `SdkContractMatrix` and
 `SdkContractRefusal` provide the same contract for TypeScript callers:
@@ -290,5 +294,8 @@ on one plain tracker and verifies preservation.
 SDK compiler checks work in plain directories and non-git trackers, including
 with no `git` executable on `PATH`. The command never invokes git or reads a
 tracker. Packed npm and Bun consumer tests compile the emitted package declarations
-against the two published SDK endpoints. Repository changelog/tag workflows still
+against the two published SDK endpoints. Each runtime installs a separate consumer
+with the exact manifest minimum or selected current SDK and asserts the version
+resolved from the emitted package at runtime. A newer-only SDK API fails the
+minimum compilation while passing the current one. Repository changelog/tag workflows still
 need git. See [the consumer example](docs/examples/sdk-contracts.json).

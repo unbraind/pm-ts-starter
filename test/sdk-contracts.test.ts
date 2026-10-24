@@ -2,8 +2,9 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, lstatSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, lstatSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { createRequire } from "node:module";
 import { join, resolve } from "node:path";
 import test, { after, type TestContext } from "node:test";
 import { PmClient } from "@unbrained/pm-cli/sdk";
@@ -16,6 +17,8 @@ const sdk = join(repo, "node_modules/@unbrained/pm-cli");
 const pinned = JSON.parse(readFileSync(join(sdk, "package.json"), "utf8")).version as string;
 const target = { root: sdk, version: pinned };
 const compiler = join(repo, "node_modules/typescript/bin/tsc");
+const minimumVersion = (JSON.parse(readFileSync(join(repo, "manifest.json"), "utf8")) as { pm_min_version: string }).pm_min_version;
+const currentVersion = "2026.10.24";
 
 /** Reuse independently installed registry endpoints across the integration cases. */
 let published: { root: string; minimum: string; current: string } | undefined;
@@ -25,7 +28,7 @@ function publishedSdks(): { root: string; minimum: string; current: string } {
   if (published) return published;
   const root = mkdtempSync(join(tmpdir(), "sdk-published-test-"));
   published = { root, minimum: join(root, "minimum/node_modules/@unbrained/pm-cli"), current: join(root, "current/node_modules/@unbrained/pm-cli") };
-  for (const [name, version] of [["minimum", "2026.10.17"], ["current", "2026.10.24"]]) {
+  for (const [name, version] of [["minimum", minimumVersion], ["current", currentVersion]]) {
     const install = spawnSync("npm", ["install", "--prefix", join(root, name!), "--ignore-scripts", "--no-package-lock", "--no-audit", "--no-fund", `@unbrained/pm-cli@${version}`], { encoding: "utf8", timeout: 120000 });
     assert.equal(install.status, 0, install.stderr);
   }
@@ -164,31 +167,67 @@ test("registered command supports both flag forms, typed refusals and nonzero dr
   } finally { process.exitCode = saved; }
 });
 
-test("packed npm and Bun consumers validate the emitted public contract against both published SDKs without git", async t => {
+test("absolute declaration imports report newer-only SDK APIs as minimum drift", async t => {
+  const root = scratch(t), endpoints = publishedSdks();
+  // Model an emitted package installed beside the current SDK. Its absolute
+  // import must not make the minimum check inherit that newer dependency.
+  const project = join(root, "consumer");
+  mkdirSync(join(project, "node_modules/@unbrained"), { recursive: true });
+  writeFileSync(join(project, "package.json"), JSON.stringify({ private: true, type: "module" }));
+  symlinkSync(endpoints.current, join(project, "node_modules/@unbrained/pm-cli"), "junction");
+  const declaration = join(project, "contract.d.ts");
+  writeFileSync(declaration, 'import * as sdk from "@unbrained/pm-cli/sdk"; export declare const publicSdk: typeof sdk;\n');
+  const resolved = createRequire(declaration).resolve("@unbrained/pm-cli/package.json");
+  assert.equal(JSON.parse(readFileSync(resolved, "utf8")).version, currentVersion);
+  const result = await checkSdkContracts({
+    minimum: { root: endpoints.minimum, version: minimumVersion },
+    current: { root: endpoints.current, version: currentVersion }, compiler,
+    examples: [{ id: "newer-only", source: `import { publicSdk } from ${JSON.stringify(join(project, "contract.js").replaceAll("\\", "/"))};
+export const lease = publicSdk.acquireLockLease;` }],
+  });
+  assert.equal(result.ok, false); assert.equal(result.failed, 1);
+  assert.deepEqual(result.rows.map(row => [row.target, row.sdk, row.ok, row.codes]), [
+    ["minimum", minimumVersion, false, ["TS2551"]], ["current", currentVersion, true, []],
+  ]);
+});
+
+test("packed npm and Bun consumers resolve each exact SDK bound and compile emitted contracts without git", async t => {
   const root = scratch(t), endpoints = publishedSdks();
   const pack = spawnSync("npm", ["pack", "--ignore-scripts", "--json", "--pack-destination", root], { cwd: repo, encoding: "utf8", timeout: 30000 });
   assert.equal(pack.status, 0, pack.stderr);
   const tarball = join(root, (JSON.parse(pack.stdout) as { filename: string }[])[0]!.filename);
   const noGit = join(root, "no-git"); mkdirSync(noGit);
-  for (const runtime of ["npm", "bun"]) {
-    const project = join(root, runtime); mkdirSync(project);
+  for (const runtime of ["npm", "bun"]) for (const bound of ["minimum", "current"] as const) {
+    const version = bound === "minimum" ? minimumVersion : currentVersion;
+    const project = join(root, `${runtime}-${bound}`); mkdirSync(project);
     writeFileSync(join(project, "package.json"), JSON.stringify({ private: true, type: "module" }));
     const install = spawnSync(runtime, runtime === "npm"
-      ? ["install", "--ignore-scripts", "--no-audit", "--no-fund", "--no-package-lock", tarball, "@unbrained/pm-cli@2026.10.24"]
-      : ["add", "--ignore-scripts", tarball, "@unbrained/pm-cli@2026.10.24"], { cwd: project, encoding: "utf8", timeout: 120000 });
+      ? ["install", "--ignore-scripts", "--no-audit", "--no-fund", "--no-package-lock", tarball, `@unbrained/pm-cli@${version}`]
+      : ["add", "--ignore-scripts", tarball, `@unbrained/pm-cli@${version}`], { cwd: project, encoding: "utf8", timeout: 120000 });
     assert.equal(install.status, 0, install.stderr);
     const emitted = join(project, "node_modules/pm-ts-starter/dist/index.js").replaceAll("\\", "/");
-    const options = { minimum: { root: endpoints.minimum, version: "2026.10.17" }, current: { root: endpoints.current, version: "2026.10.24" }, compiler,
+    const options = { minimum: { root: endpoints.minimum, version: minimumVersion }, current: { root: endpoints.current, version: currentVersion }, compiler,
       examples: [...SDK_CONSUMER_EXAMPLES, { id: "emitted-contract", source: `import { checkSdkContracts, type SdkContractMatrix, type SdkContractOptions } from ${JSON.stringify(emitted)};
 export async function consume(options: SdkContractOptions): Promise<SdkContractMatrix> { return checkSdkContracts(options); }` }] };
     const entry = join(project, "consumer.mjs");
-    writeFileSync(entry, `import {checkSdkContracts} from 'pm-ts-starter'; console.log(JSON.stringify(await checkSdkContracts(${JSON.stringify(options)})));`);
+    writeFileSync(entry, `import {checkSdkContracts} from 'pm-ts-starter';
+import {createRequire} from 'node:module'; import {readFileSync} from 'node:fs';
+const require = createRequire(${JSON.stringify(emitted)});
+const resolved = require.resolve('@unbrained/pm-cli/package.json');
+const sdkVersion = JSON.parse(readFileSync(resolved, 'utf8')).version;
+const sdkEntry = require.resolve('@unbrained/pm-cli/sdk');
+console.log(JSON.stringify({sdkVersion, resolved, sdkEntry, matrix: await checkSdkContracts(${JSON.stringify(options)})}));`);
     const executable = runtime === "npm" ? process.execPath : spawnSync("bun", ["-e", "console.log(process.execPath)"], { encoding: "utf8" }).stdout.trim();
     const run = spawnSync(executable, [entry], { cwd: project, encoding: "utf8", timeout: 30000, env: { ...process.env, GIT_CEILING_DIRECTORIES: root } });
     assert.equal(run.status, 0, run.stderr);
-    const receipt = JSON.parse(run.stdout) as { ok: boolean; checks: number };
-    assert.equal(receipt.ok, true); assert.equal(receipt.checks, 6);
-    if (runtime === "npm") {
+    const receipt = JSON.parse(run.stdout) as { sdkVersion: string; resolved: string; sdkEntry: string; matrix: { ok: boolean; checks: number; rows: { sdk: string; target: string }[] } };
+    assert.equal(receipt.sdkVersion, version, `${runtime} ${bound} resolved SDK`);
+    const installedSdk = join(project, "node_modules/@unbrained/pm-cli");
+    assert.equal(receipt.resolved, join(installedSdk, "package.json"));
+    assert.ok(receipt.sdkEntry.startsWith(`${installedSdk}/`));
+    assert.equal(receipt.matrix.ok, true); assert.equal(receipt.matrix.checks, 6);
+    assert.deepEqual(receipt.matrix.rows.map(row => row.sdk), [minimumVersion, minimumVersion, minimumVersion, currentVersion, currentVersion, currentVersion]);
+    if (runtime === "npm" && bound === "current") {
       const tracker = join(project, "tracker");
       await new PmClient({ pmRoot: tracker, noExtensions: true, author: "fixture" }).init("packed");
       const cli = join(project, "node_modules/@unbrained/pm-cli/dist/cli.js");
@@ -196,7 +235,7 @@ export async function consume(options: SdkContractOptions): Promise<SdkContractM
       assert.equal(activated.status, 0, activated.stderr);
       for (const format of [[], ["--json"]]) {
         const cliRun = spawnSync(process.execPath, [cli, "--pm-path", tracker, "ts-starter", "sdk-contracts", "--minimum-sdk", endpoints.minimum,
-          "--current-sdk", endpoints.current, "--current-version", "2026.10.24", "--compiler", compiler, ...format], {
+          "--current-sdk", endpoints.current, "--current-version", currentVersion, "--compiler", compiler, ...format], {
           cwd: project, encoding: "utf8", timeout: 30000, env: { ...process.env, PATH: noGit, GIT_CEILING_DIRECTORIES: root },
         });
         assert.equal(cliRun.status, 0, cliRun.stderr);
@@ -209,6 +248,6 @@ export async function consume(options: SdkContractOptions): Promise<SdkContractM
       cwd: project, encoding: "utf8", timeout: 30000, env: { ...process.env, PATH: noGit, GIT_CEILING_DIRECTORIES: root },
     });
     assert.equal(noGitRun.status, 0, noGitRun.stderr);
-    assert.equal(JSON.parse(noGitRun.stdout).ok, true);
+    assert.equal(JSON.parse(noGitRun.stdout).matrix.ok, true);
   }
 });
