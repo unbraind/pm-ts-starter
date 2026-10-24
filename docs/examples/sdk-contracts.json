@@ -1,0 +1,10 @@
+[
+  {
+    "id": "author-command",
+    "source": "import { defineCommand } from '@unbrained/pm-cli/sdk/authoring';\nexport const command = defineCommand({ name: 'example count', description: 'Typed public SDK usage', run(ctx) { const root: string = ctx.pm_root; return { root }; } });\n"
+  },
+  {
+    "id": "certified-read",
+    "source": "import { PmClient, certifyCompleteListResult } from '@unbrained/pm-cli/sdk';\nexport async function count(pmRoot: string): Promise<number> { const result = await new PmClient({ pmRoot, noExtensions: true }).listAllComplete(); certifyCompleteListResult(result); return result.items.length; }\n"
+  }
+]

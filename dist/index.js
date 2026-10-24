@@ -45,6 +45,8 @@ import { generateBackendProject } from "./backend-project.js";
 import { createPmCliExpectedError } from "@unbrained/pm-cli/sdk";
 import { assertIndependentRehearsalSource, rehearseSchemaMigration, readRehearsalPlan, RehearsalRefusal } from "./rehearsal.js";
 export * from "./rehearsal.js";
+import { checkSdkContracts, parseSdkConsumerExamples, SdkContractRefusal } from "./sdk-contracts.js";
+export * from "./sdk-contracts.js";
 export * from "./backend.js";
 export * from "./backend-project.js";
 // ---------------------------------------------------------------------------
@@ -358,6 +360,45 @@ const infoCommand = defineCommand({
         };
         console.error(JSON.stringify(info, null, 2));
         return info;
+    },
+});
+const sdkContractsCommand = defineCommand({
+    name: "ts-starter sdk-contracts",
+    description: "Compile consumer examples against exact minimum and current SDK installations.",
+    intent: "detect public SDK API drift in author-controlled consumers",
+    examples: ["pm ts-starter sdk-contracts --minimum-sdk ./sdk-min --current-sdk ./sdk-current --current-version 2026.10.24 --json"],
+    failure_hints: ["Provision published SDKs independently; pass --compiler when TypeScript is not installed locally."],
+    arguments: [],
+    flags: [
+        { long: "--minimum-sdk", value_name: "directory", value_type: "string", description: "Installed package root matching this extension's declared SDK floor." },
+        { long: "--current-sdk", value_name: "directory", value_type: "string", description: "Installed current published SDK package root." },
+        { long: "--current-version", value_name: "version", value_type: "string", description: "Exact current published SDK version." },
+        { long: "--compiler", value_name: "file", value_type: "string", description: "TypeScript executable JavaScript entry; defaults to the local compiler." },
+        { long: "--examples", value_name: "file", value_type: "string", description: "JSON array of id/source consumers; defaults to shipped public API examples." },
+    ],
+    async run(ctx) {
+        try {
+            const allowed = ["minimumSdk", "minimum-sdk", "currentSdk", "current-sdk", "currentVersion", "current-version", "compiler", "examples", "json"];
+            if (ctx.args.length || Object.keys(ctx.options).some(key => !allowed.includes(key)))
+                throw new SdkContractRefusal("invalid_input", "Use documented sdk-contracts flags without positional arguments.");
+            const minimum = ctx.options["minimumSdk"] ?? ctx.options["minimum-sdk"];
+            const current = ctx.options["currentSdk"] ?? ctx.options["current-sdk"];
+            const version = ctx.options["currentVersion"] ?? ctx.options["current-version"];
+            const compiler = ctx.options["compiler"], examples = ctx.options["examples"];
+            if (typeof minimum !== "string" || typeof current !== "string" || typeof version !== "string" ||
+                (compiler !== undefined && typeof compiler !== "string") || (examples !== undefined && typeof examples !== "string"))
+                throw new SdkContractRefusal("invalid_input", "Provide --minimum-sdk, --current-sdk and --current-version; optional --compiler and --examples take file names.");
+            const matrix = await checkSdkContracts({ minimum: { root: minimum, version: SDK_TARGET }, current: { root: current, version }, compiler,
+                examples: examples === undefined ? undefined : parseSdkConsumerExamples(JSON.parse(readFileSync(examples, "utf8"))) });
+            // Preserve the full typed matrix on stdout while making drift fail automation.
+            if (!matrix.ok)
+                process.exitCode = 1;
+            return matrix;
+        }
+        catch (error) {
+            const refusal = error instanceof SdkContractRefusal ? error : new SdkContractRefusal("invalid_input", "Provide readable JSON examples and accessible SDK installations; retry with the documented flags.");
+            throw createPmCliExpectedError(refusal.remedy, { context: { code: refusal.code, required: refusal.remedy, nextSteps: [refusal.remedy] } });
+        }
     },
 });
 const schemaRehearsalCommand = defineCommand({
@@ -873,6 +914,7 @@ const commandsBlueprint = defineExtensionBlueprint({
         setupCommand,
         backendProjectCommand,
         schemaRehearsalCommand,
+        sdkContractsCommand,
     ],
     commandOverrides: { list: listCommandOverride },
     flags: { list: listFlags },

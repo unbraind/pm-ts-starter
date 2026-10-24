@@ -20,7 +20,8 @@
     "CHANGELOG.md",
     "backend.ts",
     "docs/schema-migration-rehearsal.md",
-    "docs/examples/schema-migration.json"
+    "docs/examples/schema-migration.json",
+    "docs/examples/sdk-contracts.json"
   ],
   "scripts": {
     "build": "tsc",
