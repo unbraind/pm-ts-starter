@@ -62,6 +62,17 @@ function targetRoot(target) {
         throw new SdkContractRefusal("sdk_unavailable", "Install the exact declared SDK versions in separate directories and pass their package roots; package name and version must match. Registry provenance remains the provisioner's responsibility.");
     }
 }
+/** Bind SDK imports from every declaration, including absolute external package imports. */
+function sdkDeclarationPaths(root, unavailable) {
+    const metadata = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+    const paths = { "@unbrained/pm-cli/*": [unavailable] };
+    for (const [subpath, entry] of Object.entries(metadata.exports)) {
+        if (typeof entry === "object" && typeof entry.types === "string") {
+            paths[`@unbrained/pm-cli${subpath.slice(1)}`] = [resolve(root, entry.types)];
+        }
+    }
+    return paths;
+}
 /** Locate a compiler only when the caller did not supply one; omit-dev installs get a remedy. */
 export function resolveSdkContractCompiler(from = import.meta.url) {
     try {
@@ -81,6 +92,8 @@ export async function checkSdkContracts(options) {
     try {
         options.onProgress?.("allocated");
         writeFileSync(join(scratch, "package.json"), JSON.stringify({ type: "module" }));
+        const unavailable = join(scratch, "unavailable.d.ts");
+        writeFileSync(unavailable, "export {};\n");
         for (const target of ["minimum", "current"]) {
             const project = join(scratch, target);
             mkdirSync(join(project, "node_modules", "@unbrained"), { recursive: true });
@@ -89,6 +102,7 @@ export async function checkSdkContracts(options) {
             for (const example of examples) {
                 writeFileSync(join(project, "consumer.ts"), example.source);
                 writeFileSync(join(project, "tsconfig.json"), JSON.stringify({ compilerOptions: {
+                        paths: sdkDeclarationPaths(targets[target].root, unavailable),
                         strict: true, noEmit: true, skipLibCheck: true, target: "ES2022", module: "NodeNext", moduleResolution: "NodeNext", types: [],
                     }, files: ["consumer.ts"] }));
                 const result = spawnSync(process.execPath, [resolve(compiler), "--project", join(project, "tsconfig.json"), "--pretty", "false"], {
