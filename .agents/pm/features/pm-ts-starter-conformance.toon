@@ -2,13 +2,18 @@ id: pm-ts-starter-conformance
 title: Generate deployable typed backend conformance extensions
 description: "Generate a small production TypeScript extension with directory and injected remote read adapters, executable receipt contract tests, bounded agent output and typed unsupported-operation refusals with remedies."
 type: Feature
-status: in_progress
+status: closed
 priority: 1
 tags: []
 created_at: "2026-10-21T20:34:15.483Z"
-updated_at: "2026-10-22T10:24:30.767Z"
+updated_at: "2026-10-24T23:15:28.934Z"
+closed_at: "2026-10-24T21:49:23.341Z"
+completed_at: "2026-10-22T12:23:30.000Z"
 author: codex-agent
 acceptance_criteria: "Generated npm and Bun consumers pass without Git; Contract tests fail when one receipt invariant is removed; Validate a read-only public fleet tracker copy without Git and report measured counts; Typed SDK and CLI, TOON and JSON output, README and example, unchanged npm and Bun CI release gates pass"
+resolution: "Generated typed extensions run packed npm/Bun consumers without Git, enforce receipt invariants under behavioral reverts and retain compact public-copy validation."
+expected_result: "Generated npm and Bun consumers pass without Git; Contract tests fail when one receipt invariant is removed; Validate a read-only public fleet tracker copy without Git and report measured counts; Typed SDK and CLI, TOON and JSON output, README and example, unchanged npm and Bun CI release gates pass"
+actual_result: "https://github.com/unbraind/pm-ts-starter/pull/148, merged 2026-10-22T12:23:30Z, merge add3eb513b93702f3e1e93ca744b0b512a9d8fc6: Generated typed extensions run packed npm/Bun consumers without Git, enforce receipt invariants under behavioral reverts and retain compact public-copy validation."
 comments[15]{created_at,author,text}:
   "2026-10-21T20:34:19.732Z",codex-agent,"Overlap checked against pinned core sdk/extension/scaffold and pm-starter main: core creates a skeleton; starter setup returns an inert scaffold plan and laboratory examples. Neither generates a deployable typed directory/remote adapter with executable receipt contracts. This feature owns that narrow project generator. Reconciliation PR 147 items are excluded. Keep the pinned SDK unchanged; run focused checks locally and both full release gates in CI due to CPU saturation."
   "2026-10-21T20:41:18.346Z",codex-agent,"Implemented a standalone nine-file TypeScript project generator, typed directory and injected remote adapters, SDK complete-list certification, compact summaries and fail-before-provider write refusals. Public read-only validation used unbraind/pm-ts-starter main e5d15d4964ccddf5b3af2a1a127c7793cf899408: 163 files remained hash-identical; directory Node and native Bun each certified 78 items in 288-byte JSON; remote boundary also certified 78. Git absent from PATH and discovery ceiling set. No deployed remote-service acceptance is claimed."
@@ -67,4 +72,5 @@ tests[4]:
 docs[2]{path,scope}:
   docs/backend-conformance.md,project
   README.md,project
+close_reason: "https://github.com/unbraind/pm-ts-starter/pull/148, merged 2026-10-22T12:23:30Z, merge add3eb513b93702f3e1e93ca744b0b512a9d8fc6: Generated typed extensions run packed npm/Bun consumers without Git, enforce receipt invariants under behavioral reverts and retain compact public-copy validation."
 body: ""

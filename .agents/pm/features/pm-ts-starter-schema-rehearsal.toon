@@ -2,13 +2,18 @@ id: pm-ts-starter-schema-rehearsal
 title: Rehearse extension item schema migrations without changing source trackers
 description: "Repeatable extension-owned item-data rehearsal using SDK schema migration operations on an isolated copy, with resumable steps and field-level diagnostics."
 type: Feature
-status: in_progress
+status: closed
 priority: 1
 tags[1]: "gh:unbraind/pm-ts-starter#151"
 created_at: "2026-10-23T19:59:52.634Z"
-updated_at: "2026-10-23T22:41:24.835Z"
+updated_at: "2026-10-24T23:15:28.179Z"
+closed_at: "2026-10-24T21:49:23.213Z"
+completed_at: "2026-10-23T22:54:21.000Z"
 author: codex-agent
 acceptance_criteria: An interrupted migration resumes once; Invalid old data yields field-level diagnostics; No original tracker is modified during rehearsal
+resolution: Schema rehearsals diagnose invalid fields and resume interrupted migrations once while preserving every original tracker byte.
+expected_result: An interrupted migration resumes once; Invalid old data yields field-level diagnostics; No original tracker is modified during rehearsal
+actual_result: "https://github.com/unbraind/pm-ts-starter/pull/151, merged 2026-10-23T22:54:21Z, merge 9004a752c29e6e5ed0c8a41b614e67346251f7f8: Schema rehearsals diagnose invalid fields and resume interrupted migrations once while preserving every original tracker byte."
 comments[28]{created_at,author,text}:
   "2026-10-23T20:00:11.407Z",codex-agent,"Overlap rechecked: SDK schemaRenameField/schemaRenameType/runSchemaEvolutionMigration already own planning, collision checks, canonical item writes and durable transaction recovery. pm-presets upgrade owns settings/configuration. This feature adds an isolated data rehearsal and field diagnostics around those APIs, never a competing schema engine. Tracker search found no duplicate; backend conformance is separate."
   "2026-10-23T20:11:44.760Z",codex-agent,"Implemented typed SDK rehearsal and rehearse-schema command using core SDK schema migration operations, canonical item parsing, certified full lists, atomic checkpoints and SDK locks. Targeted contracts: 18 pass; rehearsal module measured 100% lines/branches/functions. Real public pm-review snapshot at 536af20d: 53 items, 112 files, 1877486 bytes; 2 steps, 44 affected item-operation pairs; replay unchanged; read-only source fingerprint f25019de926f51be6dd25de81335f088ca7ac2aee5ef50c6806892cb1c5495f7. First measured SDK rehearsal 4337 ms. Hard termination recovery retains the SDK 300-second lease; test simulates runtime lease expiry only."
@@ -102,4 +107,5 @@ docs[3]{path,scope}:
   docs/examples/schema-migration.json,project
   docs/schema-migration-rehearsal.md,project
   README.md,project
+close_reason: "https://github.com/unbraind/pm-ts-starter/pull/151, merged 2026-10-23T22:54:21Z, merge 9004a752c29e6e5ed0c8a41b614e67346251f7f8: Schema rehearsals diagnose invalid fields and resume interrupted migrations once while preserving every original tracker byte."
 body: ""
