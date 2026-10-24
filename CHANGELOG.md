@@ -4,9 +4,9 @@
 
 ### Added
 
-- Compile consumer examples against minimum and current SDK contracts ([pm-ts-starter-sdk-contract-drift](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/features/pm-ts-starter-sdk-contract-drift.toon))
-- Generate deployable typed backend conformance extensions ([pm-ts-starter-conformance](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/features/pm-ts-starter-conformance.toon))
 - Rehearse extension item schema migrations without changing source trackers ([pm-ts-starter-schema-rehearsal](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/features/pm-ts-starter-schema-rehearsal.toon))
+- Generate deployable typed backend conformance extensions ([pm-ts-starter-conformance](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/features/pm-ts-starter-conformance.toon))
+- Compile consumer examples against minimum and current SDK contracts ([pm-ts-starter-sdk-contract-drift](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/features/pm-ts-starter-sdk-contract-drift.toon))
 
 ## 2026.10.24 - 2026-10-24
 
