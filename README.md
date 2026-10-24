@@ -223,3 +223,72 @@ The typed SDK exports `rehearseSchemaMigration`, `parseRehearsalPlan`, and
 `RehearsalRefusal`. See the [guide and SDK example](docs/schema-migration-rehearsal.md)
 and [JSON plan](docs/examples/schema-migration.json). This feature works without Git
 and requires a directory tracker; export remote data explicitly before rehearsal.
+
+## SDK contract drift compiler checks
+
+`pm ts-starter sdk-contracts` compiles real author-controlled consumers against
+this extension's declared minimum SDK and an explicitly selected current published
+SDK. It checks public signatures and the return shapes used by each example.
+Dependabot still owns dependency bumps; installation/pin acceptance remains a
+separate gate. No versions or tracker records are changed by this command.
+
+Provision exact published SDKs independently (retain your registry integrity
+receipts), then pass their package roots:
+
+```sh
+npm install --prefix ./sdk-min --ignore-scripts --no-package-lock @unbrained/pm-cli@2026.10.17
+npm install --prefix ./sdk-current --ignore-scripts --no-package-lock @unbrained/pm-cli@2026.10.24
+pm ts-starter sdk-contracts \
+  --minimum-sdk ./sdk-min/node_modules/@unbrained/pm-cli \
+  --current-sdk ./sdk-current/node_modules/@unbrained/pm-cli \
+  --current-version 2026.10.24 \
+  --compiler ./node_modules/typescript/bin/tsc --json
+```
+
+Omit `--json` for native compact TOON. The result has `ok`, `checks`, `failed`,
+`rows` and `remedy`; a drift matrix exits nonzero while retaining the matrix.
+Each row identifies the endpoint, verified version and example, with the full
+error count and at most three TypeScript codes. Raw source text and machine
+paths never appear in these diagnostics. `invalid_input`, `sdk_unavailable` and
+`compiler_unavailable` are typed refusals with retry guidance.
+
+The default examples exercise typed authoring composition and certified complete
+tracker reads. Use `--examples docs/examples/sdk-contracts.json` for your own
+JSON array of `{id, source}` consumers (1–16 examples, each at most 64 KiB).
+The checker compiles but never executes consumer source. Removing a public API
+used by one example fails that example; changing unrelated APIs is outside the
+examples' declared coverage. This is a signature/use-site check: implement runtime
+behavior assertions separately. Dependency declaration bodies use `skipLibCheck`;
+consumer code remains strict. A compiler invocation is limited to 30 seconds and
+256 KiB output. The checker uses the supplied local SDK artifacts and verifies
+package name/version; it does not authenticate registry provenance or resolve a
+moving `latest` tag. Refresh the explicit current endpoint in your release job.
+
+The exported `checkSdkContracts`, `SdkContractOptions`, `SdkContractMatrix` and
+`SdkContractRefusal` provide the same contract for TypeScript callers:
+
+```ts
+import { checkSdkContracts, type SdkContractMatrix } from "pm-ts-starter";
+const matrix: SdkContractMatrix = await checkSdkContracts({
+  minimum: { root: "./sdk-min/node_modules/@unbrained/pm-cli", version: "2026.10.17" },
+  current: { root: "./sdk-current/node_modules/@unbrained/pm-cli", version: "2026.10.24" },
+  compiler: "./node_modules/typescript/bin/tsc",
+});
+if (!matrix.ok) process.exitCode = 1;
+```
+
+Every call allocates its own disposable directory, releases it last, and removes
+only that allocation. It ignores all tracker records because none are inputs to
+compiler checks; foreign state remains owned by its writer. Concurrent callers
+share no claims, leases, checkpoints, budgets, outboxes or caches. The optional
+`onProgress` observer reports allocation, target linking, each compilation and
+cleanup. The regression suite injects successful peers at every such boundary
+on one plain tracker and verifies preservation.
+
+### Without git
+
+SDK compiler checks work in plain directories and non-git trackers, including
+with no `git` executable on `PATH`. The command never invokes git or reads a
+tracker. Packed npm and Bun consumer tests compile the emitted package declarations
+against the two published SDK endpoints. Repository changelog/tag workflows still
+need git. See [the consumer example](docs/examples/sdk-contracts.json).
