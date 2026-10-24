@@ -104,8 +104,9 @@ test("external declaration subpaths cannot fall through to a newer SDK or hide b
 const args = process.argv.slice(2); const config = JSON.parse(readFileSync(args[args.indexOf('--project') + 1], 'utf8'));
 if (config.files[0] === 'resolution.ts') process.exit(0);
 const result = spawnSync(process.execPath, [${JSON.stringify(compiler)}, ...args], {stdio: 'inherit'}); process.exit(result.status ?? 1);`);
-  for (const [name, subpath, expected] of [["removed", "graph", 1], ["nonexistent", "does-not-exist", 2]] as const) {
-    writeFileSync(join(project, "contract.d.ts"), `import * as sdk from "@unbrained/pm-cli/sdk/${subpath}"; export declare const api: typeof sdk;`);
+  for (const [name, subpath, expected] of [["removed", "graph", 1], ["nonexistent", "does-not-exist", 2],
+    ["quoted", "does'not-exist", 2], ["multiline", "does\nnot-exist", 2], ["delimiter", "does' from 'not-exist", 2]] as const) {
+    writeFileSync(join(project, "contract.d.ts"), `import * as sdk from ${JSON.stringify(`@unbrained/pm-cli/sdk/${subpath}`)}; export declare const api: typeof sdk;`);
     const result = await checkSdkContracts({ minimum: { root: minimum, version: minimumVersion }, current: { root: endpoints.current, version: currentVersion }, compiler,
       examples: [{ id: name, source: `import { api } from ${JSON.stringify(join(project, "contract.js").replaceAll("\\", "/"))}; export const use = api;` }] });
     assert.equal(result.failed, expected);
@@ -131,12 +132,13 @@ test("native SDK exports honor string, conditional, wildcard, blocked and missin
     "./sdk/pattern/*": { types: "./dist/sdk/*.d.ts" },
     "./sdk/blocked": null,
     "./sdk/missing-file": { types: "./dist/sdk/does-not-exist.d.ts" },
+    "./sdk/quoted'alias": { types: "./dist/sdk/authoring.d.ts" },
   });
   writeFileSync(file, JSON.stringify(metadata));
-  const names = ["string", "conditional", "pattern/authoring", "blocked", "missing-file"];
+  const names = ["string", "conditional", "pattern/authoring", "blocked", "missing-file", "quoted'alias"];
   const result = await checkSdkContracts({ minimum: { root, version: pinned }, current: { root, version: pinned }, compiler,
     examples: names.map((name, index) => ({ id: `export-${index}`, source: `import * as sdk from "@unbrained/pm-cli/sdk/${name}"; export const api = sdk;` })) });
-  assert.equal(result.failed, 4); assert.equal(result.checks, 10);
+  assert.equal(result.failed, 4); assert.equal(result.checks, 12);
   for (const row of result.rows) {
     const missing = ["export-3", "export-4"].includes(row.example);
     assert.equal(row.ok, !missing);

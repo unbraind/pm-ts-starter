@@ -78,7 +78,11 @@ function compileConsumer(project, compiler, file, paths = {}) {
 }
 /** Collect SDK imports actually encountered by TypeScript, including external declarations. */
 function sdkSpecifiers(trace) {
-    return [...new Set([...trace.matchAll(/======== Resolving module '(@unbrained\/pm-cli(?:\/[^']*)?)' from /g)].map(match => match[1]))];
+    const specifiers = trace.split("======== Resolving module '").slice(1).map(record => {
+        const header = record.slice(0, record.indexOf("'. ========"));
+        return header.slice(0, header.lastIndexOf("' from '"));
+    });
+    return [...new Set(specifiers.filter(specifier => specifier === "@unbrained/pm-cli" || specifier.startsWith("@unbrained/pm-cli/")))];
 }
 /** Resolve each import natively through the selected installation's exports before rebinding. */
 function compileBoundConsumer(project, compiler) {
@@ -98,8 +102,13 @@ function compileBoundConsumer(project, compiler) {
         resolutionCodes.push(...native.codes);
         for (const specifier of pending)
             checked.add(specifier);
-        for (const match of native.trace.matchAll(/======== Module name '(@unbrained\/pm-cli(?:\/[^']*)?)' was successfully resolved to '([^'\r\n]+)'/g)) {
-            paths[match[1]] = [match[2]];
+        for (const specifier of pending) {
+            const marker = `======== Module name '${specifier}' was successfully resolved to '`;
+            const start = native.trace.indexOf(marker);
+            if (start < 0)
+                continue;
+            const tail = native.trace.slice(start + marker.length).split("'. ========", 1)[0];
+            paths[specifier] = [tail.split("' with Package ID '", 1)[0]];
         }
         compiled = compileConsumer(project, compiler, "consumer.ts", paths);
     }

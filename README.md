@@ -279,6 +279,9 @@ for a namespace import (TS1192).
 Original consumers and a valid namespace control must pass. The self-tests
 must reject both a compiler that accepts every import and a stubbed resolution
 probe that silently accepts unresolved imports in external declarations.
+External-declaration controls also cover apostrophes, multiline specifiers and
+delimiter-like text, plus a valid quoted export, so trace parsing cannot silently
+drop those SDK imports.
 
 The exported `checkSdkContracts`, `SdkContractOptions`, `SdkContractMatrix` and
 `SdkContractRefusal` provide the same contract for TypeScript callers:
