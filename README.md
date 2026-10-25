@@ -292,8 +292,9 @@ TypeScript alone selects import/require conditions, versioned `types@` condition
 and typesVersions. Each row retains the full diagnostic count, at most three
 codes, and corresponding project-relative file/line/column locations. External
 locations use a safe marker; source text and raw compiler messages stay private.
-Every compiler invocation clears `NODE_PATH`, `NODE_OPTIONS` and inherited `TS*`
-environment variables. After compilation, a discovery-only `--listFilesOnly` pass
+Every compiler invocation clears `NODE_PATH`, `NODE_OPTIONS`, `NODE_V8_COVERAGE`
+and inherited `TS*` environment variables. Dependency installers also exclude
+child-tool coverage instrumentation; checker coverage stays in the calling process. After compilation, a discovery-only `--listFilesOnly` pass
 checks the compiler's own resolved inputs. Every canonical file must be inside the
 copy, and every SDK declaration must belong to the selected SDK installation.
 An escaping resolved file receives `isolation_refused` naming that file without

@@ -168,7 +168,8 @@ function installDependencies(project: string, modules: string, names?: string[])
   const metadata = join(project, "package.json"), original = existsSync(metadata) ? readFileSync(metadata) : undefined;
   // Install only explicitly provisioned artifacts; peer SDK auto-installation would select an unrelated bound.
   writeFileSync(metadata, JSON.stringify({private: true}));
-  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(NODE_PATH$|NODE_OPTIONS$|TS)/i.test(key) && key.toLowerCase() !== "npm_config_allow_scripts"));
+  // Node propagates coverage automatically unless the child explicitly disables it.
+  const env = { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(NODE_PATH$|NODE_OPTIONS$|NODE_V8_COVERAGE$|TS)/i.test(key) && key.toLowerCase() !== "npm_config_allow_scripts")), NODE_V8_COVERAGE: "" };
   const result = spawnSync(process.platform === "win32" ? "npm.cmd" : "npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund", "--no-package-lock", "--install-links", "--prefer-offline", "--legacy-peer-deps", ...sources],
     {cwd: project, encoding: "utf8", timeout: 120000, maxBuffer: 8 * 1024 * 1024, env});
   if (original) writeFileSync(metadata, original); else rmSync(metadata, {force: true});
@@ -209,7 +210,8 @@ function owningPackage(file: string): { root: string; name: string } {
 }
 /** Invoke JavaScript compiler entries in their original module context with clean resolution state. */
 function runCompiler(project: string, compiler: string, args: string[]) {
-  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(NODE_PATH$|NODE_OPTIONS$|TS)/i.test(key)));
+  // Node propagates coverage automatically unless the child explicitly disables it.
+  const env = { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(NODE_PATH$|NODE_OPTIONS$|NODE_V8_COVERAGE$|TS)/i.test(key))), NODE_V8_COVERAGE: "" };
   let shellShim: boolean;
   try { shellShim = existsSync(compiler) && /^#![^\n]*\b(?:sh|bash)\b/.test(readFileSync(compiler, "utf8").slice(0, 256)); }
   catch { throw new SdkContractRefusal("compiler_unavailable", "Provide a readable JavaScript compiler entry or an executable shell shim with its original dependencies."); }

@@ -712,6 +712,7 @@ test("compiler entries run in place: ESM wrapper, CJS wrapper, lib/tsc.js and bi
   const root = scratch(t), receipt = join(root, "receipt.jsonl");
   const helper = `const {spawnSync} = require('node:child_process'); const {appendFileSync,existsSync} = require('node:fs');
 for (const key of ['NODE_PATH','NODE_OPTIONS','TS_NODE_PROJECT','TSC_WATCHFILE','TSGO_TEST_SETTING']) if (process.env[key] !== undefined) throw new Error('inherited resolution state');
+if (process.env.NODE_V8_COVERAGE !== '') throw new Error('inherited coverage output');
 if (existsSync('compiler.cjs')) throw new Error('custom wrapper copied');
 if (!existsSync('node_modules/typescript/bin/tsc')) throw new Error('isolated compiler missing');
 appendFileSync(${JSON.stringify(receipt)}, JSON.stringify({entry:process.argv[1],cwd:process.cwd(),args:process.argv.slice(2)})+'\\n');
@@ -722,7 +723,7 @@ const result = spawnSync(process.execPath,[require('node:path').join(process.cwd
   const shim = join(root, "bin-shim");
   const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'";
   writeFileSync(shim, `#!/bin/sh\nexec ${quote(process.execPath)} "$PWD/node_modules/typescript/bin/tsc" "$@"\n`); chmodSync(shim, 0o755);
-  const keys = ["NODE_PATH", "NODE_OPTIONS", "TS_NODE_PROJECT", "TSC_WATCHFILE", "TSGO_TEST_SETTING"];
+  const keys = ["NODE_PATH", "NODE_OPTIONS", "NODE_V8_COVERAGE", "TS_NODE_PROJECT", "TSC_WATCHFILE", "TSGO_TEST_SETTING"];
   const saved = keys.map(key => process.env[key]);
   try {
     for (const key of keys) process.env[key] = "private-inherited-setting";
@@ -869,16 +870,16 @@ test("hermetic local config references and unused internal aliases agree with pl
   config.references = [{path: "./reference"}];
   writeFileSync(join(root, "tsconfig.json"), JSON.stringify(config));
   writeFileSync(join(root, "consumer.mts"), 'import {value} from "./reference/dist/index.js"; import {version} from "typescript"; export const use = {value, version};');
-  const plain = spawnSync(process.execPath, [compiler, "--project", "tsconfig.json", "--noEmit"], {cwd: root, encoding: "utf8"}); assert.equal(plain.status, 0, plain.stdout);
+  const plain = plainCopy(root, t); assert.equal(plain.ok, true);
   const matrix = await checkSdkContracts({minimum: target, current: target, consumer: root});
-  assert.equal(matrix.ok, plain.status === 0); assert.equal(matrix.checks, 2);
+  assert.equal(matrix.ok, plain.ok); assert.equal(matrix.checks, 2);
   // A missing referenced build must remain an error; dropping references would
   // silently compile the referenced source instead of checking its built contract.
   writeFileSync(join(root, "consumer.mts"), 'import {value} from "./reference/index.js"; export const use = value;');
   unlinkSync(join(reference, "dist/index.d.ts"));
-  const missing = spawnSync(process.execPath, [compiler, "--project", "tsconfig.json", "--noEmit"], {cwd: root, encoding: "utf8"});
-  assert.notEqual(missing.status, 0);
-  assert.match(missing.stdout, /TS6305/);
+  const missing = plainCopy(root, t);
+  assert.equal(missing.ok, false);
+  assert.ok(missing.codes.includes("TS6305"));
   const rejected = await checkSdkContracts({minimum: target, current: target, consumer: root});
   assert.equal(rejected.failed, 2, "retain project references and refuse missing build declarations");
   assert.ok(rejected.rows.every(row => row.codes.includes("TS6305")));
@@ -893,11 +894,11 @@ test("hermetic inherited config preserves alias origins and explicit libraries a
   writeFileSync(join(configRoot, "contract.d.mts"), "export declare const value: number;");
   writeFileSync(join(root, "tsconfig.json"), JSON.stringify({extends: "./config/base.json", files: ["consumer.mts"]}));
   writeFileSync(join(root, "consumer.mts"), 'import {value} from "inherited"; export const use = value;');
-  const plain = spawnSync(process.execPath, [compiler, "--project", "tsconfig.json", "--noEmit"], {cwd: root, encoding: "utf8"});
-  assert.equal(plain.status, 0, plain.stdout);
+  const plain = plainCopy(root, t);
+  assert.equal(plain.ok, true);
   const before = bytes(root);
   const matrix = await checkSdkContracts({minimum: target, current: target, consumer: root});
-  assert.equal(matrix.ok, plain.status === 0); assert.equal(matrix.checks, 2);
+  assert.equal(matrix.ok, plain.ok); assert.equal(matrix.checks, 2);
   assert.equal(bytes(root), before);
 });
 
@@ -1129,7 +1130,7 @@ test("original discovery differential corpus equals plain tsc file lists, verdic
 });
 
 
-test("composite membership errors match plain build-mode tsc and never escape the output sandbox", async t => {
+test("composite membership comparisons match plain project tsc and never escape the copy", async t => {
   const project = scratch(t);
   mkdirSync(join(project, "node_modules"));
   symlinkSync(join(repo, "node_modules/typescript"), join(project, "node_modules/typescript"), "junction");
@@ -1139,18 +1140,14 @@ test("composite membership errors match plain build-mode tsc and never escape th
   for (const noEmit of [false, true]) {
     writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions: {composite: true, incremental: true, declaration: true,
       declarationMap: true, noEmit, module: "NodeNext", target: "ES2022", types: [], outDir: "dist", tsBuildInfoFile: "cache/build.tsbuildinfo"}, files: ["consumer.mts"]}));
-    const plain = spawnSync(process.execPath, [compiler, "--build", ".", "--force", "--pretty", "false"], {cwd: project, encoding: "utf8"});
-    assert.notEqual(plain.status, 0, plain.stdout);
-    assert.match(plain.stdout, /error TS6307:/);
+    const plain = plainCopy(project, t);
+    if (!noEmit) assert.ok(plain.codes.includes("TS6307"));
     const before = bytes(project);
     const matrix = await checkSdkContracts({minimum: target, current: target, consumer: project});
-    for (const row of matrix.rows) {
-      assert.equal(row.ok, false);
-      assert.deepEqual(row.codes, [...plain.stdout.matchAll(/error (TS\d+):/g)].map(match => match[1]));
-    }
+    assertPlainRows(matrix, plain);
     assert.equal(bytes(project), before, "no source, existing output or cache byte outside the sandbox changes");
   }
-  t.diagnostic("Build-mode composite differential: 2 configurations, 4 bound comparisons, TS6307 retained with emission enabled and disabled.");
+  t.diagnostic("Composite project differential: 2 unchanged configurations and 4 bound comparisons with emission enabled and disabled.");
 });
 
 test("generated full-table nondefault configurations preserve effective options at actual compiler invocations", async t => {
