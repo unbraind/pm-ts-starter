@@ -261,8 +261,10 @@ runs in place, with its working directory set to the isolated consumer, using
 `--noEmit --skipLibCheck false --pretty false`. Compiler executables are neither
 copied nor renamed; TypeScript declaration files and package metadata remain
 available when the consumer imports its public types. The original tsconfig and
-sources are copied unchanged; a private effective config adds the exact discovered library declarations as roots
-and uses `noLib` to prevent fallback to the external compiler installation.
+sources are copied unchanged; a private config extends the original configuration
+to preserve inherited alias origins. It adds the exact discovered library
+declarations as roots and uses `noLib` with a cleared `lib` override to prevent
+fallback to the external compiler installation.
 Project mode cannot be combined
 with `--examples` or `--compiler`. Include the project's dependencies and compiler
 in its node_modules before running the checker; use relative imports within the

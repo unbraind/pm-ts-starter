@@ -7,12 +7,12 @@ status: in_progress
 priority: 1
 tags[1]: "gh:unbraind/pm-ts-starter#154"
 created_at: "2026-10-24T13:07:42.652Z"
-updated_at: "2026-10-25T00:03:00.788Z"
+updated_at: "2026-10-25T00:12:56.407Z"
 assignee: codex-agent
 claim_principal: codex-agent
 author: codex-agent
 acceptance_criteria: Exact manifest minimum and explicit current SDK resolve inside separate packed npm and Bun consumers; a newer-only public API passes current and fails minimum; reverting only consumer provisioning fails the regression.
-comments[35]{created_at,author,text}:
+comments[36]{created_at,author,text}:
   "2026-10-24T13:07:46.558Z",codex-agent,"Scope: correct the packed-consumer compatibility gate added by PR 153. Use separate npm and Bun consumer installations per bound, select the minimum from manifest.json and current release 2026.10.24, and prove the actual resolver result from each consumer. Add a real newer-only SDK API use through emitted declarations, retaining the fixed compiler examples and no-git checks. Repository dependency pins remain unchanged; full npm and Bun release gates will run locally and in CI."
   "2026-10-24T13:07:47.361Z",codex-agent,"Implementation: each compiler project maps the selected SDK public type exports through TypeScript paths, including imports reached through absolute external declarations. Unexported SDK subpaths resolve to an empty declaration rather than falling through to a foreign installation. Packed acceptance now installs npm and Bun consumers separately for each exact bound and verifies package metadata and SDK entry resolution at runtime. Regression uses real acquireLockLease, absent in the manifest minimum and present in 2026.10.24. Typecheck, test typecheck, lint, docstring gate and zero-duplication gate passed."
   "2026-10-24T13:07:47.949Z",codex-agent,"Fail-on-revert proof: restored only checkSdkContracts to its origin/main implementation, leaving the new regression and helper intact. node --test --test-name-pattern='absolute declaration imports report newer-only SDK APIs as minimum drift' test/sdk-contracts.test.ts failed 1/1: expected matrix.ok=false, got true, because the minimum inherited acquireLockLease from the external consumer's current SDK. Restored the fixed function immediately. Before revert the complete targeted suite passed 8/8 with 100% sdk-contracts.ts lines, branches and functions. Running the registered targeted suite again after restoration. Local strict tracker health passes after provisioning the same pm-github version as CI; an existing provenance advisory remains untouched."
@@ -48,6 +48,7 @@ comments[35]{created_at,author,text}:
   "2026-10-24T23:59:00.111Z",codex-agent,"Isolation revert proof: restored the reviewed compileConsumer behavior and bypassed isolateInline relocation while retaining the new tests and in-place compiler change. node --test --test-name-pattern=\"absolute-import inline\" test/sdk-contracts.test.ts failed 1/1: expected one failed bound, observed zero, because the absolute external declaration resolved its original newer SDK and falsely passed minimum. Restored the fixed source in finally and verified SHA256 equality before the independent compiler proof. Supplemental broad local coverage was stopped after sustained disk I/O waits; it is incomplete evidence. CI npm and Bun release gates remain the required full-gate evidence."
   "2026-10-25T00:00:56.497Z",codex-agent,"Compiler-entry revert proof: replaced only inlineConsumer with its reviewed copy/rename implementation, retaining hermetic checks and all tests. node --test --test-name-pattern=\"compiler entries run\" test/sdk-contracts.test.ts failed all five entry subtests (ESM wrapper, CJS wrapper, lib entry, executable shell shim, JavaScript bin shim); Node counted 6 failures including the parent. The original relative dependencies or module context were lost. Restored the fixed source in finally and verified SHA256 equality. Both classes now have independent behavioral revert receipts."
   "2026-10-25T00:03:00.777Z",codex-agent,"Fixed-source local validation: PM-linked round-4 regressions pass 12/12 and boundary/review regressions pass 8/8, with zero failures, skips or cancellations. Absolute imports cover d.mts, d.cts and d.ts, both quote styles and preserved module kinds; minimum rejects newer-only acquireLockLease and current accepts it. In-place compiler coverage includes ESM, CJS, lib/tsc.js, executable shell and JavaScript bin shims with inherited resolution variables cleared. Added missing-reference refusal, nested SDK provenance, malformed/changed file-list refusals, nested absolute relocation, triple-slash references, bounded external graphs, local project references and a public TypeScript declaration dependency. The local reference/public-types scenario also agrees with plain tsc. Merged main at 4267351 without conflicts, regenerated the changelog inside the merge, and verified strict tracker health; only the existing provenance advisory remains. CI full gates are pending."
+  "2026-10-25T00:12:56.395Z",codex-agent,"Configuration-context follow-up: a flattened effective config changed the origin of aliases inherited from a nested config. The private noLib config now extends the original tsconfig and clears only lib, preserving native inheritance and project references. Alias targets with baseUrl are validated relative to that effective base. Added a plain-tsc differential case for an inherited alias plus explicit libraries and a malformed path-list refusal. The configuration/review group passes 5/5 with no failures or skips; original consumer bytes remain unchanged. Typecheck, test typecheck, lint, build and 0% duplication pass. The initial CI source head is superseded by this context-preservation fix; final full-gate evidence will use the updated head."
 files[10]{path,scope}:
   dist/index.d.ts.map,project
   dist/index.js,project
@@ -59,7 +60,7 @@ files[10]{path,scope}:
   index.ts,project
   sdk-contracts.ts,project
   test/sdk-contracts.test.ts,project
-tests[6]:
+tests[7]:
   - command: node --test --experimental-test-coverage --test-coverage-include=sdk-contracts.ts test/sdk-contracts.test.ts
     scope: project
     timeout_seconds: 3600
@@ -110,6 +111,14 @@ tests[6]:
     provenance:
       author: codex-agent
       created_at: "2026-10-25T00:00:59.336Z"
+      source_kind: local_mutation
+      source_ref: fix/min-sdk-drift-check
+  - command: "node --test --test-name-pattern=\"hermetic inherited config|hermetic local config|review reproductions\" test/sdk-contracts.test.ts"
+    scope: project
+    timeout_seconds: 600
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-25T00:10:42.277Z"
       source_kind: local_mutation
       source_ref: fix/min-sdk-drift-check
 docs[1]{path,scope}:

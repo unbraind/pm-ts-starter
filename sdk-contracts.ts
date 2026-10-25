@@ -203,7 +203,7 @@ function isolatedConfig(project: string, compiler: string): { compilerOptions: R
   try { config = JSON.parse(runCompiler(project, compiler, ["--project", "tsconfig.json", "--showConfig"]).stdout) as typeof config; }
   catch (error) { if (error instanceof SdkContractRefusal) throw error; isolationRefusal(); }
   const options = config.compilerOptions ?? {};
-  const paths = [options.baseUrl ?? ".", options.rootDir ?? ".", ...Object.values(options.paths ?? {}).flat(),
+  const paths = [options.baseUrl ?? ".", options.rootDir ?? ".", ...Object.values(options.paths ?? {}).flat().map(path => typeof path === "string" ? resolve(project, (options.baseUrl ?? ".") as string, path) : path),
     ...((options.typeRoots ?? []) as string[]), ...((options.rootDirs ?? []) as string[]), ...((options.types ?? []) as string[]).filter(value => isAbsolute(value) || value.startsWith(".")),
     ...(config.files ?? []), ...(config.references ?? []).map(entry => entry.path)];
   if (paths.some(path => typeof path !== "string" || !inside(project, resolve(project, path))) || !config.files?.length) isolationRefusal();
@@ -245,10 +245,8 @@ function prepareCompilation(project: string, compiler: string, installed: string
     libraries.push(relative(project, destination));
   }
   // Explicit roots retain the compiler's exact library set while noLib prevents fallback to its installation.
-  delete config.compilerOptions.lib;
-  config.compilerOptions.noLib = true;
   config.files.push(...libraries);
-  writeFileSync(join(project, ".sdk-contract.json"), JSON.stringify(config));
+  writeFileSync(join(project, ".sdk-contract.json"), JSON.stringify({ ...config, extends: "./tsconfig.json", compilerOptions: { noLib: true, lib: null } }));
   verifyCompilation(project, compiler, installed);
   return ".sdk-contract.json";
 }

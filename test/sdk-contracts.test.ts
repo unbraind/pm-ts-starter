@@ -678,10 +678,10 @@ test("hermetic project refuses outside imports, reference paths, config aliases 
 test("hermetic provenance fails closed on empty, forged and post-compilation external file lists", async t => {
   const root = scratch(t), entry = join(root, "compiler.cjs"), external = join(root, "external.d.ts");
   writeFileSync(external, "export declare const value: number;");
-  for (const mode of ["empty", "forged", "missing", "indented", "post", "config", "diagnostics"]) {
+  for (const mode of ["empty", "forged", "missing", "indented", "post", "config", "config-path", "diagnostics"]) {
     writeFileSync(entry, `const {spawnSync}=require('node:child_process'); const {existsSync,writeFileSync}=require('node:fs');
 const marker = require('node:path').join(process.cwd(),'checked');
-if (${JSON.stringify(mode)} === 'config' && process.argv.includes('--showConfig')) {process.stdout.write('{}'); process.exit(0);}
+if (['config','config-path'].includes(${JSON.stringify(mode)}) && process.argv.includes('--showConfig')) {process.stdout.write(${JSON.stringify(mode === 'config-path' ? JSON.stringify({compilerOptions: {paths: {unused: [7]}}, files: ['consumer.ts']}) : '{}')}); process.exit(0);}
 if (${JSON.stringify(mode)} === 'diagnostics' && process.argv.includes('--noEmit')) {process.stdout.write('noise error TS9999:'); process.exit(1);}
 if (process.argv.includes('--listFilesOnly') && (!['post','config','diagnostics'].includes(${JSON.stringify(mode)}) || existsSync(marker))) {
   process.stdout.write(${mode === "indented" ? `require("node:path").join(process.cwd(),"consumer.ts") + ${JSON.stringify(`\n  ${external}\n`)}` : JSON.stringify(mode === "empty" ? "" : mode === "forged" ? `unstructured ${external}\n` : mode === "missing" ? `${external}.missing\n` : `${external}\n`)}); process.exit(0);
@@ -741,4 +741,21 @@ test("hermetic local config references and unused internal aliases agree with pl
   const plain = spawnSync(process.execPath, [compiler, "--project", "tsconfig.json", "--noEmit"], {cwd: root, encoding: "utf8"}); assert.equal(plain.status, 0, plain.stdout);
   const matrix = await checkSdkContracts({minimum: target, current: target, consumer: root});
   assert.equal(matrix.ok, plain.status === 0); assert.equal(matrix.checks, 2);
+});
+
+test("hermetic inherited config preserves alias origins and explicit libraries against plain tsc", async t => {
+  const root = scratch(t), configRoot = join(root, "config");
+  mkdirSync(configRoot); mkdirSync(join(root, "node_modules"));
+  symlinkSync(join(repo, "node_modules/typescript"), join(root, "node_modules/typescript"), "junction");
+  writeFileSync(join(root, "package.json"), JSON.stringify({type: "module"}));
+  writeFileSync(join(configRoot, "base.json"), JSON.stringify({compilerOptions: {target: "ES2022", module: "NodeNext", strict: true, types: [], lib: ["ES2022"], paths: {inherited: ["./contract.d.mts"]}}}));
+  writeFileSync(join(configRoot, "contract.d.mts"), "export declare const value: number;");
+  writeFileSync(join(root, "tsconfig.json"), JSON.stringify({extends: "./config/base.json", files: ["consumer.mts"]}));
+  writeFileSync(join(root, "consumer.mts"), 'import {value} from "inherited"; export const use = value;');
+  const plain = spawnSync(process.execPath, [compiler, "--project", "tsconfig.json", "--noEmit"], {cwd: root, encoding: "utf8"});
+  assert.equal(plain.status, 0, plain.stdout);
+  const before = bytes(root);
+  const matrix = await checkSdkContracts({minimum: target, current: target, consumer: root});
+  assert.equal(matrix.ok, plain.status === 0); assert.equal(matrix.checks, 2);
+  assert.equal(bytes(root), before);
 });
