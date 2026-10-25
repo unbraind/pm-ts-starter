@@ -15,12 +15,12 @@ export declare const COMPILER_OPTION_POLICY: ReadonlyMap<string, CompilerOptionP
 export declare function compilerOptionNames(help: string): string[];
 /** Refuse every newly introduced option rather than silently assigning a default class. */
 export declare function classifiedCompilerOptions(help: string): ReadonlyMap<string, CompilerOptionPolicy>;
-/** Apply safe values before even showConfig can activate inherited write settings. */
+/** Apply safe values only after the original root file list has been resolved. */
 export declare function enforcedCompilerOptions(policy: ReadonlyMap<string, CompilerOptionPolicy>): Record<string, unknown>;
 /** Disable command-only modes before they can turn a bounded check into a watcher. */
 export declare function enforcedCompilerArguments(policy: ReadonlyMap<string, CompilerOptionPolicy>): string[];
 /** Enumerate resolution inputs for component-wise isolation checks, including unused aliases. */
 export declare function compilerInputPaths(project: string, options: Record<string, unknown>): unknown[];
-/** Inspect the original config without inheriting output/cache destinations or checking bypasses. */
-export declare function inspectionCompilerArguments(policy: ReadonlyMap<string, CompilerOptionPolicy>, project: string): string[];
+/** Read original discovery semantics; showConfig exits before checking or emitting files. */
+export declare function inspectionCompilerArguments(policy: ReadonlyMap<string, CompilerOptionPolicy>): string[];
 //# sourceMappingURL=sdk-compiler-policy.d.ts.map

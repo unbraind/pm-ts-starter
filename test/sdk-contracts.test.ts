@@ -847,3 +847,88 @@ process.exit(result.status ?? 1);`);
     assert.deepEqual(phases, ["allocated", "linked", "cleanup"]);
   }
 });
+
+/** Instrument the same compiler to compare untouched and bounded programs at compilation time. */
+function instrumentDiscoveryOracle(project: string, receipt: string): void {
+  const bin = join(project, "node_modules/typescript/bin");
+  writeFileSync(join(bin, "plain-tsc"), readFileSync(join(bin, "tsc")));
+  unlinkSync(join(bin, "tsc"));
+  writeFileSync(join(bin, "tsc"), `import {spawnSync} from 'node:child_process';
+import {appendFileSync,existsSync,statSync} from 'node:fs'; import {relative,basename,resolve} from 'node:path';
+const plain = new URL('./plain-tsc', import.meta.url).pathname;
+const args = process.argv.slice(2);
+const run = args => { const result = spawnSync(process.execPath,[plain,...args],{encoding:'utf8',maxBuffer:64*1024*1024,timeout:30000}); if (result.error || result.signal || result.status === null) throw new Error('plain tsc oracle failed', {cause:result.error}); return result; };
+if (!args.includes('--help') && !args.includes('--showConfig') && !args.includes('--listFilesOnly')) {
+  const original = run(['--project','tsconfig.json','--noEmit','--pretty','false','--locale','en']);
+  const originalFiles = run(['--project','tsconfig.json','--listFilesOnly','--pretty','false','--locale','en']);
+  const checkedFiles = run([...args,'--listFilesOnly']);
+  const normalize = output => [...new Set(output.split(/\\r?\\n/).filter(line => line && existsSync(resolve(line)) && statSync(resolve(line)).isFile()).map(line => resolve(line)).map(file => /[/\\\\](?:lib|\\.sdk-contract-libs)[/\\\\]lib\\..*\\.d\\.ts$/.test(file) ? '<lib>/' + basename(file) : relative(process.cwd(),file).replaceAll('\\\\','/')))].sort();
+  appendFileSync(${JSON.stringify(receipt)},JSON.stringify({original:normalize(originalFiles.stdout),checked:normalize(checkedFiles.stdout),status:original.status,codes:[...original.stdout.matchAll(/error (TS\\d+):/g)].map(match => match[1]).sort()}) + '\\n');
+}
+const result = run(args); process.stdout.write(result.stdout); process.stderr.write(result.stderr); process.exit(result.status ?? 1);`);
+}
+
+/** Each corpus member changes original discovery or diagnostic presentation independently. */
+interface DiscoveryCase {
+  name: string;
+  config: Record<string, unknown>;
+  files?: Record<string, string>;
+  build?: boolean;
+}
+
+test("original discovery differential corpus equals plain tsc file lists, verdicts and error codes", async t => {
+  const project = scratch(t), receipt = join(scratch(t), "discovery.jsonl");
+  const base = installedConsumer("npm", "current"), endpoints = publishedSdks();
+  cpSync(join(base, "node_modules"), join(project, "node_modules"), {recursive: true});
+  writeFileSync(join(project, "package.json"), JSON.stringify({type: "module"}));
+  instrumentDiscoveryOracle(project, receipt);
+  const options = {strict: true, skipLibCheck: false, target: "ES2022", module: "NodeNext", types: []};
+  const good = 'import {value} from "./contract.mjs"; export const use = value;';
+  const bad = 'import {nonexistentSdkExportForDiscovery} from "@unbrained/pm-cli/sdk/authoring"; export const use = nonexistentSdkExportForDiscovery;';
+  const stale = 'declare module "@unbrained/pm-cli/sdk/authoring" { export const nonexistentSdkExportForDiscovery: number; }';
+  const corpus: DiscoveryCase[] = [
+    {name: "include", config: {include: ["input/src/**/*.mts"]}},
+    {name: "exclude-stale", config: {include: ["input/**/*"], exclude: ["input/excluded"]}, files: {"excluded/stale.d.ts": stale}},
+    {name: "explicit-files-clear-include", config: {files: ["input/src/consumer.mts"], include: []}, files: {"ignored/stale.d.ts": stale}},
+    {name: "explicit-files-override-exclude", config: {files: ["input/src/consumer.mts"], exclude: ["input"]}},
+    {name: "implicit-outDir-stale", config: {compilerOptions: {outDir: "input/dist", types: ["node"]}, include: ["input/**/*"]}, files: {"dist/stale.d.ts": stale, "src/consumer.mts": bad}},
+    {name: "implicit-declarationDir-stale", config: {compilerOptions: {types: ["node"], declaration: true, declarationDir: "input/declarations"}, include: ["input/**/*"]}, files: {"declarations/stale.d.ts": stale, "src/consumer.mts": bad}},
+    {name: "default-include-outDir", config: {compilerOptions: {outDir: "input/dist", types: ["node"]}}, files: {"dist/stale.d.ts": stale, "src/consumer.mts": bad}},
+    {name: "rootDir", config: {compilerOptions: {rootDir: "input/src"}, include: ["input/src/**/*"]}},
+    {name: "rootDir-error", config: {compilerOptions: {rootDir: "input/other"}, files: ["input/src/consumer.mts"]}},
+    {name: "paths", config: {compilerOptions: {paths: {"local-contract": ["./input/contract.d.mts"]}}, files: ["input/src/consumer.mts"]}, files: {"src/consumer.mts": 'import {value} from "local-contract"; export const use = value;', "contract.d.mts": "export declare const value: number;"}},
+    {name: "typeRoots-types", config: {compilerOptions: {typeRoots: ["input/typings", "node_modules/@types"], types: ["local", "node"]}, files: ["input/src/consumer.mts"]}, files: {"typings/local/index.d.ts": "declare const localValue: number;", "src/consumer.mts": "export const use = localValue;"}},
+    {name: "types-empty", config: {compilerOptions: {types: []}, files: ["input/src/consumer.mts"]}, files: {"src/consumer.mts": "export const use = 1;"}},
+    {name: "extends-chain-outDir", config: {extends: "./input/config/child.json", compilerOptions: {types: ["node"]}}, files: {"config/base.json": JSON.stringify({compilerOptions: {...options, outDir: "../dist"}, include: ["../src/**/*", "../dist/**/*"]}), "config/child.json": JSON.stringify({extends: "./base.json"}), "dist/stale.d.ts": stale, "src/consumer.mts": bad}},
+    {name: "extends-include-exclude", config: {extends: "./input/config/base.json"}, files: {"config/base.json": JSON.stringify({include: ["../**/*"], exclude: ["../excluded"]}), "excluded/stale.d.ts": stale}},
+    {name: "reference-built", config: {files: ["input/src/consumer.mts"], references: [{path: "input/reference"}]}, files: {"reference/tsconfig.json": JSON.stringify({compilerOptions: {composite: true, module: "NodeNext", target: "ES2022", types: [], outDir: "dist"}, files: ["index.ts"]}), "reference/index.ts": "export const value = 1;", "src/consumer.mts": 'import {value} from "../reference/index.js"; export const use = value;'}, build: true},
+    {name: "reference-missing-build", config: {files: ["input/src/consumer.mts"], references: [{path: "input/reference"}]}, files: {"reference/tsconfig.json": JSON.stringify({compilerOptions: {composite: true, module: "NodeNext", target: "ES2022", types: [], outDir: "dist"}, files: ["index.ts"]}), "reference/index.ts": "export const value = 1;", "src/consumer.mts": 'import {value} from "../reference/index.js"; export const use = value;'}},
+    ...["traceResolution", "explainFiles", "diagnostics", "extendedDiagnostics", "listFiles", "listEmittedFiles"].flatMap(name => [false, true].map(failing => ({name: `${name}-${failing ? "error" : "clean"}`, config: {compilerOptions: {[name]: true}, include: ["input/src/**/*"]}, files: {"src/consumer.mts": failing ? 'import {value} from "./contract.mjs"; export const use: string = value;' : good}}))),
+  ];
+  let comparisons = 0;
+  for (const entry of corpus) {
+    rmSync(join(project, "input"), {recursive: true, force: true});
+    for (const [file, content] of Object.entries({"src/consumer.mts": good, "src/contract.d.mts": "export declare const value: number;", ...entry.files})) {
+      mkdirSync(dirname(join(project, "input", file)), {recursive: true});
+      writeFileSync(join(project, "input", file), content);
+    }
+    writeFileSync(join(project, "tsconfig.json"), JSON.stringify({...entry.config, compilerOptions: {...options, ...(entry.config.compilerOptions as Record<string, unknown>)}}));
+    if (entry.build) {
+      const build = spawnSync(process.execPath, [join(project, "node_modules/typescript/bin/plain-tsc"), "--build", "input/reference"], {cwd: project, encoding: "utf8"});
+      assert.equal(build.status, 0, `${entry.name}: ${build.stdout}`);
+    }
+    writeFileSync(receipt, "");
+    const matrix = await checkSdkContracts({minimum: {root: endpoints.minimum, version: minimumVersion}, current: {root: endpoints.current, version: currentVersion}, consumer: project});
+    const records = readFileSync(receipt, "utf8").trim().split("\n").map(line => JSON.parse(line) as {original: string[]; checked: string[]; status: number; codes: string[]});
+    assert.equal(records.length, 2, entry.name);
+    for (const [index, record] of records.entries()) {
+      assert.deepEqual(record.checked, record.original, `${entry.name}: ${matrix.rows[index]!.target} file list`);
+      comparisons++;
+    }
+    const oracle = records[1]!, current = matrix.rows[1]!;
+    assert.equal(current.ok, oracle.status === 0, `${entry.name}: current verdict`);
+    assert.deepEqual([...current.codes].sort(), oracle.codes, `${entry.name}: current error codes`);
+    assert.equal(current.diagnostic_count, oracle.codes.length, entry.name);
+  }
+  t.diagnostic(`Discovery differential: ${corpus.length} configs, ${comparisons} file-list comparisons, ${corpus.length} current verdict/error-code comparisons; zero disagreements.`);
+});

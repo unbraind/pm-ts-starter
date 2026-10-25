@@ -197,11 +197,11 @@ function guardReferences(project: string, file: string): void {
     if (value.startsWith("\\") || ((isAbsolute(value) || value.startsWith(".")) && !inside(project, resolve(dirname(file), value)))) isolationRefusal();
   }
 }
-/** Validate effective JSON configuration paths before any type checking, including unused aliases. */
+/** Resolve original roots and references with the same compiler before applying checking policy. */
 function isolatedConfig(project: string, compiler: string, policy: ReadonlyMap<string, CompilerOptionPolicy>): { compilerOptions: Record<string, unknown>; files: string[]; references?: { path: string }[] } {
   guardReferences(project, join(project, "tsconfig.json"));
   let config: { compilerOptions?: Record<string, unknown>; files?: string[]; references?: { path: string }[] };
-  try { config = JSON.parse(runCompiler(project, compiler, [...inspectionCompilerArguments(policy, project), "--project", "tsconfig.json", "--showConfig", "--locale", "en"]).stdout) as typeof config; }
+  try { config = JSON.parse(runCompiler(project, compiler, [...inspectionCompilerArguments(policy), "--project", "tsconfig.json", "--showConfig", "--locale", "en"]).stdout) as typeof config; }
   catch (error) { if (error instanceof SdkContractRefusal) throw error; isolationRefusal(); }
   const options = config.compilerOptions ?? {};
   const paths = [...compilerInputPaths(project, options), ...(config.files ?? []), ...(config.references ?? []).map(entry => entry.path)];
@@ -231,9 +231,8 @@ function isolateInline(source: string, project: string, copied = new Map<string,
 }
 /** Stage only compiler library declarations; executable compiler files are never copied or renamed. */
 function prepareCompilation(project: string, compiler: string, installed: string, policy: ReadonlyMap<string, CompilerOptionPolicy>): string {
-  mkdirSync(join(project, ".sdk-contract-inspection"), { recursive: true });
   const config = isolatedConfig(project, compiler, policy);
-  writeFileSync(join(project, ".sdk-contract-safe.json"), JSON.stringify({ extends: "./tsconfig.json", references: config.references, compilerOptions: enforcedCompilerOptions(policy) }));
+  writeFileSync(join(project, ".sdk-contract-safe.json"), JSON.stringify({ extends: "./tsconfig.json", files: config.files, include: [], exclude: [], references: config.references, compilerOptions: enforcedCompilerOptions(policy) }));
   const libraries: string[] = [];
   for (const file of config.files) if (existsSync(resolve(project, file))) guardReferences(project, resolve(project, file));
   for (const file of compilerFiles(project, compiler, ".sdk-contract-safe.json", policy)) {
@@ -247,7 +246,7 @@ function prepareCompilation(project: string, compiler: string, installed: string
   }
   // Explicit roots retain the compiler's exact library set while noLib prevents fallback to its installation.
   config.files.push(...libraries);
-  writeFileSync(join(project, ".sdk-contract.json"), JSON.stringify({ ...config, extends: "./.sdk-contract-safe.json", compilerOptions: { noLib: true, lib: null } }));
+  writeFileSync(join(project, ".sdk-contract.json"), JSON.stringify({ ...config, include: [], exclude: [], extends: "./.sdk-contract-safe.json", compilerOptions: { noLib: true, lib: null } }));
   verifyCompilation(project, compiler, installed, policy);
   return ".sdk-contract.json";
 }

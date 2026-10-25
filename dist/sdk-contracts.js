@@ -142,12 +142,12 @@ function guardReferences(project, file) {
             isolationRefusal();
     }
 }
-/** Validate effective JSON configuration paths before any type checking, including unused aliases. */
+/** Resolve original roots and references with the same compiler before applying checking policy. */
 function isolatedConfig(project, compiler, policy) {
     guardReferences(project, join(project, "tsconfig.json"));
     let config;
     try {
-        config = JSON.parse(runCompiler(project, compiler, [...inspectionCompilerArguments(policy, project), "--project", "tsconfig.json", "--showConfig", "--locale", "en"]).stdout);
+        config = JSON.parse(runCompiler(project, compiler, [...inspectionCompilerArguments(policy), "--project", "tsconfig.json", "--showConfig", "--locale", "en"]).stdout);
     }
     catch (error) {
         if (error instanceof SdkContractRefusal)
@@ -186,9 +186,8 @@ function isolateInline(source, project, copied = new Map(), base = project) {
 }
 /** Stage only compiler library declarations; executable compiler files are never copied or renamed. */
 function prepareCompilation(project, compiler, installed, policy) {
-    mkdirSync(join(project, ".sdk-contract-inspection"), { recursive: true });
     const config = isolatedConfig(project, compiler, policy);
-    writeFileSync(join(project, ".sdk-contract-safe.json"), JSON.stringify({ extends: "./tsconfig.json", references: config.references, compilerOptions: enforcedCompilerOptions(policy) }));
+    writeFileSync(join(project, ".sdk-contract-safe.json"), JSON.stringify({ extends: "./tsconfig.json", files: config.files, include: [], exclude: [], references: config.references, compilerOptions: enforcedCompilerOptions(policy) }));
     const libraries = [];
     for (const file of config.files)
         if (existsSync(resolve(project, file)))
@@ -208,7 +207,7 @@ function prepareCompilation(project, compiler, installed, policy) {
     }
     // Explicit roots retain the compiler's exact library set while noLib prevents fallback to its installation.
     config.files.push(...libraries);
-    writeFileSync(join(project, ".sdk-contract.json"), JSON.stringify({ ...config, extends: "./.sdk-contract-safe.json", compilerOptions: { noLib: true, lib: null } }));
+    writeFileSync(join(project, ".sdk-contract.json"), JSON.stringify({ ...config, include: [], exclude: [], extends: "./.sdk-contract-safe.json", compilerOptions: { noLib: true, lib: null } }));
     verifyCompilation(project, compiler, installed, policy);
     return ".sdk-contract.json";
 }

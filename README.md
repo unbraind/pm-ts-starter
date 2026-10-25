@@ -305,23 +305,26 @@ usable diagnostics produce `compiler_unavailable`.
 
 The invoked compiler's `--help --all --locale en` table is read once per compiler
 per check, including watch and build declarations. `sdk-compiler-policy.ts` is the
-single reasoned policy for all 137 TypeScript 7.0.2 options: 29 output/cache
-controls, 17 mandatory checking controls, and 91 options preserving consumer
+single reasoned policy for all 137 TypeScript 7.0.2 options: 35 output/cache/verbosity
+controls, 17 mandatory checking controls, and 85 options preserving consumer
 semantics or affecting only diagnostics, emit representation, or inactive services.
 Every newly discovered option receives a typed `isolation_refused` with guidance
 to classify it before retrying; the completeness test also fails on a new option.
 
-Before configuration inspection, policy-generated command-line overrides disable
-emission and incremental/composite state, contain output/cache/profile/trace
-paths inside private scratch storage, and require
-semantic checking, resolution, declaration checking, strict checks, and JavaScript
-checking. Watch is explicitly disabled on the command line. Build/init/clean and
-other command-only modes are never forwarded; invalid uses in configuration fail
-closed. A private overlay then clears output/cache destinations for file discovery
-and compilation and explicitly retains top-level project references, which
-TypeScript does not inherit through `extends`. The original configuration
-inheritance chain retains alias origins; missing referenced build declarations
-remain errors.
+Before applying checking or output policy, the same consumer compiler resolves
+root files and project references using `--showConfig` on the original configuration.
+Only watch mode is disabled during this read, which exits before checking or emitting.
+The private checking overlay pins those explicit roots, clears `include` and
+`exclude`, retains references, and then disables emission, persistent state and
+checking bypasses. This preserves implicit `outDir` and `declarationDir` exclusions
+and configuration inheritance by construction. Alias origins remain inherited;
+missing referenced build declarations remain errors. Build/init/clean and other
+command-only modes are never forwarded; invalid configuration uses fail closed.
+`traceResolution`, `explainFiles`, `diagnostics`, `extendedDiagnostics`, `listFiles`
+and `listEmittedFiles` are forced off: supplementary output cannot change a verdict
+or pollute file provenance. A 28-config differential corpus compares complete
+program file lists at both bounds and current-bound verdicts and error codes with
+plain tsc, including excluded stale ambient declarations and diagnostic options.
 Table-driven controls exercise every output option with escaping destinations
 and every checking option with a nonexistent SDK export at the published minimum
 (and current), including JavaScript consumers. File inventories and content hashes

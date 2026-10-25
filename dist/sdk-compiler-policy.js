@@ -1,5 +1,5 @@
 /** Exhaustive, reasoned policy for the exact compiler invoked by the SDK oracle. */
-import { isAbsolute, join, resolve } from "node:path";
+import { isAbsolute, resolve } from "node:path";
 /** Expand reviewed groups into independently addressable policy rows. */
 function entries(category, reason, safe, names) {
     return names.split(" ").map(name => [name, { category, reason, safe }]);
@@ -8,9 +8,10 @@ function entries(category, reason, safe, names) {
 export const COMPILER_OPTION_ROWS = [
     ...entries("output", "Disable emitted files and persistent compiler state.", false, "assumeChangesOnlyAffectDirectDependencies incremental composite declaration declarationMap emitDeclarationOnly sourceMap inlineSourceMap inlineSources"),
     ...entries("output", "Disable all emission even when a source has no errors.", true, "noEmit noEmitOnError"),
-    ...entries("output", "Clear inherited output, debug, trace and cache destinations before config inspection.", null, "outDir outFile declarationDir tsBuildInfoFile mapRoot sourceRoot generateCpuProfile generateTrace"),
+    ...entries("output", "Clear output, debug, trace and cache destinations after original root discovery.", null, "outDir outFile declarationDir tsBuildInfoFile mapRoot sourceRoot generateCpuProfile generateTrace"),
     ...entries("output", "Force watch mode off on every compiler invocation, including inherited invalid watch settings.", "off", "watch"),
     ...entries("output", "Never forward build, init, watch or profiling commands; the checker invokes only bounded project reads and checks.", "command", "build init clean force dry verbose builders stopBuildOnErrors pprofDir"),
+    ...entries("output", "Disable supplementary diagnostic output: verbosity cannot change a verdict and must not pollute file provenance.", false, "traceResolution explainFiles diagnostics extendedDiagnostics listFiles listEmittedFiles"),
     ...entries("checking", "Require semantic checking, resolution and checking of every declaration.", false, "noCheck noResolve skipLibCheck skipDefaultLibCheck"),
     ...entries("checking", "Check JavaScript as well as TypeScript; allowJs cannot silently leave a JS consumer unchecked.", true, "allowJs checkJs"),
     ...entries("checking", "Require the strict checking family even when a consumer disables an individual member.", true, "strict noImplicitAny noImplicitThis strictNullChecks strictFunctionTypes strictBindCallApply strictPropertyInitialization strictBuiltinIteratorReturn useUnknownInCatchVariables"),
@@ -20,7 +21,7 @@ export const COMPILER_OPTION_ROWS = [
     ...entries("neutral", "Only adds supplementary control-flow or unused-code diagnostics; disabling it does not suppress SDK binding or declaration diagnostics.", "preserve", "allowUnreachableCode allowUnusedLabels alwaysStrict noFallthroughCasesInSwitch noImplicitOverride noImplicitReturns noUnusedLocals noUnusedParameters"),
     ...entries("neutral", "Only controls emitted representation; noEmit and disabled persistent state prevent its output from being used as a verdict.", "preserve", "rewriteRelativeImportExtensions downlevelIteration emitBOM importHelpers newLine noEmitHelpers preserveConstEnums removeComments stripInternal emitDecoratorMetadata"),
     ...entries("neutral", "Only affects language-service or watch behavior; neither service nor watch mode is invoked.", "preserve", "disableReferencedProjectLoad disableSolutionSearching disableSourceOfProjectReferenceRedirect disableSizeLimit plugins watchInterval watchFile watchDirectory fallbackPolling synchronousWatchDirectory excludeDirectories excludeFiles preserveWatchOutput maxNodeModuleJsDepth"),
-    ...entries("neutral", "Only affects performance, diagnostic presentation or command selection; the checker supplies its own fixed command switches and parses every error.", "preserve", "all checkers help ignoreConfig listFilesOnly locale project quiet showConfig singleThreaded version diagnostics explainFiles extendedDiagnostics listEmittedFiles listFiles traceResolution noErrorTruncation pretty deduplicatePackages stableTypeOrdering"),
+    ...entries("neutral", "Only affects performance, diagnostic presentation or command selection; the checker supplies its own fixed command switches and parses every error.", "preserve", "all checkers help ignoreConfig listFilesOnly locale project quiet showConfig singleThreaded version noErrorTruncation pretty deduplicatePackages stableTypeOrdering"),
 ];
 /** Index the reviewed rows after retaining the array for duplicate-classification checks. */
 export const COMPILER_OPTION_POLICY = new Map(COMPILER_OPTION_ROWS);
@@ -40,7 +41,7 @@ export function classifiedCompilerOptions(help) {
         return [name, policy];
     }));
 }
-/** Apply safe values before even showConfig can activate inherited write settings. */
+/** Apply safe values only after the original root file list has been resolved. */
 export function enforcedCompilerOptions(policy) {
     return Object.fromEntries([...policy].filter(([, row]) => typeof row.safe === "boolean" || row.safe === null).map(([name, row]) => [name, row.safe]));
 }
@@ -53,9 +54,8 @@ export function compilerInputPaths(project, options) {
     return [options.baseUrl ?? ".", options.rootDir ?? ".", ...Object.values(options.paths ?? {}).flat().map(path => typeof path === "string" ? resolve(project, (options.baseUrl ?? "."), path) : path),
         ...(options.typeRoots ?? []), ...(options.rootDirs ?? []), ...(options.types ?? []).filter(value => isAbsolute(value) || value.startsWith("."))];
 }
-/** Inspect the original config without inheriting output/cache destinations or checking bypasses. */
-export function inspectionCompilerArguments(policy, project) {
-    return [...enforcedCompilerArguments(policy), ...[...policy].filter(([, row]) => typeof row.safe === "boolean" || row.safe === null)
-            .flatMap(([name, row]) => [`--${name}`, row.safe === null ? join(project, ".sdk-contract-inspection", name) : String(row.safe)])];
+/** Read original discovery semantics; showConfig exits before checking or emitting files. */
+export function inspectionCompilerArguments(policy) {
+    return enforcedCompilerArguments(policy);
 }
 //# sourceMappingURL=sdk-compiler-policy.js.map
