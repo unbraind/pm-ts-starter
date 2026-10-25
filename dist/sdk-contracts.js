@@ -1,4 +1,5 @@
 /** Compile author-owned consumer examples against exact installed SDK declarations. */
+import { classifiedCompilerOptions, compilerInputPaths, enforcedCompilerArguments, enforcedCompilerOptions } from "./sdk-compiler-policy.js";
 import { spawnSync } from "node:child_process";
 import { cpSync, constants, existsSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -113,8 +114,8 @@ function runCompiler(project, compiler, args) {
     return result;
 }
 /** Read one compiler-produced file path per line, refusing empty or unstructured provenance. */
-function compilerFiles(project, compiler, config) {
-    const output = runCompiler(project, compiler, ["--project", config, "--listFilesOnly", "--pretty", "false"]).stdout.trim();
+function compilerFiles(project, compiler, config, policy) {
+    const output = runCompiler(project, compiler, [...enforcedCompilerArguments(policy), "--project", config, "--listFilesOnly", "--pretty", "false", "--locale", "en"]).stdout.trim();
     const files = [];
     let diagnostic = false;
     for (const line of output.split(/\r?\n/)) {
@@ -142,11 +143,11 @@ function guardReferences(project, file) {
     }
 }
 /** Validate effective JSON configuration paths before any type checking, including unused aliases. */
-function isolatedConfig(project, compiler) {
+function isolatedConfig(project, compiler, policy) {
     guardReferences(project, join(project, "tsconfig.json"));
     let config;
     try {
-        config = JSON.parse(runCompiler(project, compiler, ["--project", "tsconfig.json", "--showConfig"]).stdout);
+        config = JSON.parse(runCompiler(project, compiler, [...enforcedCompilerArguments(policy), "--project", ".sdk-contract-safe.json", "--showConfig", "--locale", "en"]).stdout);
     }
     catch (error) {
         if (error instanceof SdkContractRefusal)
@@ -154,9 +155,7 @@ function isolatedConfig(project, compiler) {
         isolationRefusal();
     }
     const options = config.compilerOptions ?? {};
-    const paths = [options.baseUrl ?? ".", options.rootDir ?? ".", ...Object.values(options.paths ?? {}).flat().map(path => typeof path === "string" ? resolve(project, (options.baseUrl ?? "."), path) : path),
-        ...(options.typeRoots ?? []), ...(options.rootDirs ?? []), ...(options.types ?? []).filter(value => isAbsolute(value) || value.startsWith(".")),
-        ...(config.files ?? []), ...(config.references ?? []).map(entry => entry.path)];
+    const paths = [...compilerInputPaths(project, options), ...(config.files ?? []), ...(config.references ?? []).map(entry => entry.path)];
     if (paths.some(path => typeof path !== "string" || !inside(project, resolve(project, path))) || !config.files?.length)
         isolationRefusal();
     return { ...config, compilerOptions: options, files: config.files };
@@ -186,13 +185,14 @@ function isolateInline(source, project, copied = new Map(), base = project) {
     });
 }
 /** Stage only compiler library declarations; executable compiler files are never copied or renamed. */
-function prepareCompilation(project, compiler, installed) {
-    const config = isolatedConfig(project, compiler);
+function prepareCompilation(project, compiler, installed, policy) {
+    writeFileSync(join(project, ".sdk-contract-safe.json"), JSON.stringify({ extends: "./tsconfig.json", compilerOptions: enforcedCompilerOptions(policy) }));
+    const config = isolatedConfig(project, compiler, policy);
     const libraries = [];
     for (const file of config.files)
         if (existsSync(resolve(project, file)))
             guardReferences(project, resolve(project, file));
-    for (const file of compilerFiles(project, compiler, "tsconfig.json")) {
+    for (const file of compilerFiles(project, compiler, ".sdk-contract-safe.json", policy)) {
         if (inside(project, file)) {
             libraries.push(relative(project, file));
             continue;
@@ -207,13 +207,13 @@ function prepareCompilation(project, compiler, installed) {
     }
     // Explicit roots retain the compiler's exact library set while noLib prevents fallback to its installation.
     config.files.push(...libraries);
-    writeFileSync(join(project, ".sdk-contract.json"), JSON.stringify({ ...config, extends: "./tsconfig.json", compilerOptions: { noLib: true, lib: null } }));
-    verifyCompilation(project, compiler, installed);
+    writeFileSync(join(project, ".sdk-contract.json"), JSON.stringify({ ...config, extends: "./.sdk-contract-safe.json", compilerOptions: { noLib: true, lib: null } }));
+    verifyCompilation(project, compiler, installed, policy);
     return ".sdk-contract.json";
 }
 /** Fail closed before and after compilation if any file or SDK package escapes the selected installation. */
-function verifyCompilation(project, compiler, installed) {
-    for (const file of compilerFiles(project, compiler, ".sdk-contract.json")) {
+function verifyCompilation(project, compiler, installed, policy) {
+    for (const file of compilerFiles(project, compiler, ".sdk-contract.json", policy)) {
         const owner = owningPackage(file);
         const path = file.replaceAll("\\", "/"), selected = installed.replaceAll("\\", "/");
         const sdk = "/node_modules/@unbrained/pm-cli/", offset = path.lastIndexOf(sdk);
@@ -224,10 +224,10 @@ function verifyCompilation(project, compiler, installed) {
     }
 }
 /** Run only the consumer compiler; every error contributes to drift without filtering codes. */
-function compileConsumer(project, compiler, installed) {
-    const config = prepareCompilation(project, compiler, installed);
-    const result = runCompiler(project, compiler, ["--project", config, "--noEmit", "--skipLibCheck", "false", "--pretty", "false"]);
-    verifyCompilation(project, compiler, installed);
+function compileConsumer(project, compiler, installed, policy) {
+    const config = prepareCompilation(project, compiler, installed, policy);
+    const result = runCompiler(project, compiler, [...enforcedCompilerArguments(policy), "--project", config, "--pretty", "false", "--locale", "en"]);
+    verifyCompilation(project, compiler, installed, policy);
     const diagnostics = [...result.stdout.matchAll(/^(?:(.+)\((\d+),(\d+)\): |)error (TS\d+):/gm)].map(match => {
         const file = match[1] === undefined ? "<config>" : relative(project, resolve(project, match[1]));
         return { code: match[4], file: isAbsolute(file) || file.startsWith("..") ? "<external>" : file.replaceAll("\\", "/"),
@@ -272,6 +272,7 @@ export async function checkSdkContracts(options) {
     const compiler = options.compiler ?? (options.consumer === undefined ? resolveSdkContractCompiler() : "");
     const scratch = mkdtempSync(join(tmpdir(), "pm-sdk-contract-"));
     const rows = [];
+    const policies = new Map();
     try {
         options.onProgress?.("allocated");
         for (const target of ["minimum", "current"]) {
@@ -291,7 +292,18 @@ export async function checkSdkContracts(options) {
             for (const example of examples) {
                 if (options.consumer === undefined)
                     writeFileSync(join(project, "consumer.ts"), isolateInline(example.source, project));
-                const diagnostics = compileConsumer(project, entry, installed);
+                let policy = policies.get(entry);
+                if (!policy) {
+                    const help = runCompiler(project, entry, ["--help", "--all", "--locale", "en"]).stdout;
+                    try {
+                        policy = classifiedCompilerOptions(help);
+                    }
+                    catch {
+                        throw new SdkContractRefusal("isolation_refused", "Classify every option in this compiler's complete help-all table in the SDK compiler policy before retrying; provide a supported compiler with English help output.");
+                    }
+                    policies.set(entry, policy);
+                }
+                const diagnostics = compileConsumer(project, entry, installed, policy);
                 targetRoot({ root: installed, version: targets[target].version });
                 rows.push({ target, sdk: targets[target].version, example: example.id, ok: diagnostics.length === 0, diagnostic_count: diagnostics.length,
                     codes: diagnostics.slice(0, 3).map(diagnostic => diagnostic.code), diagnostics: diagnostics.slice(0, 3) });

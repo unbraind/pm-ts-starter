@@ -10,6 +10,7 @@ import test, { after, type TestContext } from "node:test";
 import { PmClient } from "@unbrained/pm-cli/sdk";
 import { createExtensionTestHarness } from "@unbrained/pm-cli/sdk/testing";
 import extension from "../index.ts";
+import { classifiedCompilerOptions } from "../sdk-compiler-policy.ts";
 import { checkSdkContracts, parseSdkConsumerExamples, resolveSdkContractCompiler, SDK_CONSUMER_EXAMPLES, SdkContractRefusal, type SdkContractOptions, type SdkContractMatrix } from "../sdk-contracts.ts";
 
 const repo = resolve(import.meta.dirname, "..");
@@ -362,7 +363,7 @@ function instrumentOracle(project: string, receipt: string, t: TestContext): voi
   writeFileSync(join(bin, "tsc"), `import {spawnSync} from 'node:child_process';
 import {appendFileSync,readFileSync} from 'node:fs'; import {createRequire} from 'node:module';
 const plain = new URL('./plain-tsc', import.meta.url).pathname;
-if (process.argv.includes('--showConfig') || process.argv.includes('--listFilesOnly')) {
+if (process.argv.includes('--help') || process.argv.includes('--showConfig') || process.argv.includes('--listFilesOnly')) {
   const probe = spawnSync(process.execPath, [plain,...process.argv.slice(2)], {stdio:'inherit'}); process.exit(probe.status ?? 1);
 }
 const oracle = spawnSync(process.execPath, [plain,'--project','tsconfig.json','--noEmit','--pretty','false'], {encoding:'utf8'});
@@ -511,7 +512,7 @@ test("project inputs refuse ambiguous options and missing compilers; diagnostics
   const stub = join(root, "diagnostics.cjs");
   const output = `error TS5099: private configuration text\n${join(root, "secret.ts")}(2,3): error TS9999: private source text\nconsumer.ts(4,5): error TS2322: private source text\n`;
   writeFileSync(stub, `const {spawnSync} = require("node:child_process");
-if (process.argv.includes("--showConfig") || process.argv.includes("--listFilesOnly")) { const result = spawnSync(process.execPath, [${JSON.stringify(compiler)}, ...process.argv.slice(2)], {stdio:"inherit"}); process.exit(result.status ?? 1); }
+if (process.argv.includes("--help") || process.argv.includes("--showConfig") || process.argv.includes("--listFilesOnly")) { const result = spawnSync(process.execPath, [${JSON.stringify(compiler)}, ...process.argv.slice(2)], {stdio:"inherit"}); process.exit(result.status ?? 1); }
 process.stdout.write(${JSON.stringify(output)}); process.exit(1);`);
   const matrix = await checkSdkContracts({ minimum: target, current: target, compiler: stub, examples: [SDK_CONSUMER_EXAMPLES[0]!] });
   assert.equal(matrix.failed, 2);
@@ -637,8 +638,9 @@ const result = spawnSync(process.execPath,[${JSON.stringify(compiler)},...proces
     });
   } finally { for (const [index, key] of keys.entries()) { if (saved[index] === undefined) delete process.env[key]; else process.env[key] = saved[index]; } }
   const records = readFileSync(receipt, "utf8").trim().split("\n").map(line => JSON.parse(line) as {entry: string; cwd: string; args: string[]});
-  assert.equal(records.filter(row => row.args.includes("--noEmit")).length, 4);
+  assert.equal(records.filter(row => row.args.includes("--pretty") && !row.args.includes("--showConfig") && !row.args.includes("--listFilesOnly")).length, 4);
   assert.ok(records.every(row => [join(root, "wrapper.mjs"), join(root, "wrapper.cjs")].includes(row.entry) && row.cwd !== root));
+  assert.equal(records.filter(row => row.args.includes("--help")).length, 2, "query each wrapper once across both targets");
 });
 
 test("hermetic project refuses outside imports, reference paths, config aliases and nested SDK installations", async t => {
@@ -684,12 +686,12 @@ test("hermetic provenance fails closed on empty, forged and post-compilation ext
     writeFileSync(entry, `const {spawnSync}=require('node:child_process'); const {existsSync,writeFileSync}=require('node:fs');
 const marker = require('node:path').join(process.cwd(),'checked');
 if (['config','config-path'].includes(${JSON.stringify(mode)}) && process.argv.includes('--showConfig')) {process.stdout.write(${JSON.stringify(mode === 'config-path' ? JSON.stringify({compilerOptions: {paths: {unused: [7]}}, files: ['consumer.ts']}) : '{}')}); process.exit(0);}
-if (${JSON.stringify(mode)} === 'diagnostics' && process.argv.includes('--noEmit')) {process.stdout.write('noise error TS9999:'); process.exit(1);}
+if (${JSON.stringify(mode)} === 'diagnostics' && !process.argv.includes('--help') && !process.argv.includes('--showConfig') && !process.argv.includes('--listFilesOnly')) {process.stdout.write('noise error TS9999:'); process.exit(1);}
 if (process.argv.includes('--listFilesOnly') && (!['post','config','diagnostics'].includes(${JSON.stringify(mode)}) || existsSync(marker))) {
   process.stdout.write(${mode === "indented" ? `require("node:path").join(process.cwd(),"consumer.ts") + ${JSON.stringify(`\n  ${external}\n`)}` : JSON.stringify(mode === "empty" ? "" : mode === "forged" ? `unstructured ${external}\n` : mode === "missing" ? `${external}.missing\n` : `${external}\n`)}); process.exit(0);
 }
 const result=spawnSync(process.execPath,[${JSON.stringify(compiler)},...process.argv.slice(2)],{stdio:'inherit'});
-if (process.argv.includes('--noEmit')) writeFileSync(marker,'compiled'); process.exit(result.status ?? 1);`);
+if (!process.argv.includes('--help') && !process.argv.includes('--showConfig') && !process.argv.includes('--listFilesOnly')) writeFileSync(marker,'compiled'); process.exit(result.status ?? 1);`);
     await assert.rejects(checkSdkContracts({ minimum: target, current: target, compiler: entry, examples: [SDK_CONSUMER_EXAMPLES[0]!] }), refuses(mode === "diagnostics" ? "compiler_unavailable" : "isolation_refused"));
   }
 });
@@ -760,4 +762,60 @@ test("hermetic inherited config preserves alias origins and explicit libraries a
   const matrix = await checkSdkContracts({minimum: target, current: target, consumer: root});
   assert.equal(matrix.ok, plain.status === 0); assert.equal(matrix.checks, 2);
   assert.equal(bytes(root), before);
+});
+
+
+/** Use the compiler's own complete table as the parameter source for safety controls. */
+function realCompilerPolicy() {
+  const help = spawnSync(process.execPath, [compiler, "--help", "--all", "--locale", "en"], {encoding: "utf8"});
+  assert.equal(help.status, 0, help.stderr);
+  return classifiedCompilerOptions(help.stdout);
+}
+
+for (const [name, row] of realCompilerPolicy()) {
+  if (row.category === "neutral") continue;
+  test(`compiler option ${row.category}: ${name}`, async t => {
+    const root = scratch(t), outside = join(root, "outside"), project = installedConsumer("npm", "minimum"), endpoints = publishedSdks();
+    mkdirSync(outside);
+    writeFileSync(join(outside, "sentinel"), "unchanged external data");
+    const expected = bytes(outside);
+    const minimum = {root: endpoints.minimum, version: minimumVersion};
+    const current = {root: endpoints.current, version: currentVersion};
+    const extension = name === "allowJs" || name === "checkJs" ? "mjs" : "mts";
+    const source = row.category === "checking"
+      ? 'import {nonexistentSdkExportForPolicyControl} from "@unbrained/pm-cli/sdk/authoring"; export const use = nonexistentSdkExportForPolicyControl;'
+      : "export const safe = 1;";
+    writeFileSync(join(project, `policy.${extension}`), source);
+    const attack = row.safe === null || name === "pprofDir" ? join(outside, name) : (row.safe === "command" || row.safe === "off") ? true : !row.safe;
+    const config = JSON.stringify({compilerOptions: {target: "ES2022", module: "NodeNext", types: ["node"],
+      // Every output control also carries the cache escape reported in review.
+      incremental: true, allowJs: true, checkJs: false, tsBuildInfoFile: join(outside, "build-info"), [name]: attack}, files: [`policy.${extension}`]});
+    writeFileSync(join(project, "tsconfig.json"), config);
+    if (row.safe === "command" || row.safe === "off") {
+      // Command-only modes are disabled or never forwarded. Invalid config uses
+      // must also stop without creating or overwriting an external file.
+      try { await checkSdkContracts({minimum, current, consumer: project}); }
+      catch (error) { assert.ok(refuses("isolation_refused")(error)); }
+    } else {
+      const matrix = await checkSdkContracts({minimum, current, consumer: project});
+      if (row.category === "checking") {
+        assert.equal(matrix.rows[0]!.target, "minimum");
+        assert.equal(matrix.rows[0]!.ok, false, name);
+        assert.ok(matrix.rows[0]!.codes.includes("TS2305"), `${name}: ${matrix.rows[0]!.codes}`);
+        assert.equal(matrix.failed, 2, name);
+      } else assert.equal(matrix.ok, true, `${name}: ${JSON.stringify(matrix.rows)}`);
+    }
+    assert.equal(bytes(outside), expected, `${name}: no outside file created or overwritten`);
+    assert.equal(readFileSync(join(project, "tsconfig.json"), "utf8"), config);
+    assert.equal(readFileSync(join(project, `policy.${extension}`), "utf8"), source);
+  });
+}
+
+test("future compiler option refuses before config inspection and help is queried once per compiler", async t => {
+  const root = scratch(t), entry = join(root, "compiler.cjs");
+  writeFileSync(entry, `const {spawnSync} = require('node:child_process');
+if (!process.argv.includes('--help')) throw new Error('policy must refuse before config inspection');
+const result = spawnSync(process.execPath, [${JSON.stringify(compiler)}, ...process.argv.slice(2)], {encoding:'utf8'});
+process.stdout.write(result.stdout + '\\n--futureUnsafeOption\\ntype: boolean\\n');`);
+  await assert.rejects(checkSdkContracts({minimum: target, current: target, compiler: entry}), refuses("isolation_refused"));
 });

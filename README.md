@@ -303,6 +303,26 @@ components and package metadata, never substring matches on diagnostic messages.
 Each invocation is bounded to 30 seconds and 8 MiB. Compiler failures without
 usable diagnostics produce `compiler_unavailable`.
 
+The invoked compiler's `--help --all --locale en` table is read once per compiler
+per check, including watch and build declarations. `sdk-compiler-policy.ts` is the
+single reasoned policy for all 137 TypeScript 7.0.2 options: 29 output/cache
+controls, 17 mandatory checking controls, and 91 options preserving consumer
+semantics or affecting only diagnostics, emit representation, or inactive services.
+Every newly discovered option receives a typed `isolation_refused` with guidance
+to classify it before retrying; the completeness test also fails on a new option.
+
+Before configuration inspection, a private overlay disables emission and
+incremental/composite state, clears output/cache/profile/trace paths, and requires
+semantic checking, resolution, declaration checking, strict checks, and JavaScript
+checking. Watch is explicitly disabled on the command line. Build/init/clean and
+other command-only modes are never forwarded; invalid uses in configuration fail
+closed. The original configuration inheritance chain retains alias origins.
+Table-driven controls exercise every output option with escaping destinations
+and every checking option with a nonexistent SDK export at the published minimum
+(and current), including JavaScript consumers. File inventories and content hashes
+assert that no output or cache was created or overwritten outside the isolated
+consumer. The same exhaustive tests must fail with policy enforcement reverted.
+
 The differential suite covers node16, nodenext and bundler resolution, ESM imports
 and CJS requires, exports types conditions, versioned types conditions and
 typesVersions, at both SDK bounds. npm and Bun consumers install their own exact
