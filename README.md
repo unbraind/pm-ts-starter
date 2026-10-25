@@ -262,7 +262,8 @@ executables are neither copied nor renamed. The original tsconfig and sources
 are copied unchanged; a private config extends the original configuration to
 preserve inherited alias origins and pins the compiler's original root-file list.
 Every compiler option value remains the consumer's own value or default, except
-output/cache paths, which are relocated into a disposable output sandbox.
+output/cache paths, which are relocated under a private output directory inside
+the disposable bound sandbox. The entire copied consumer is that sandbox.
 `composite`, `incremental`, `declaration`, `declarationMap`, `emitDeclarationOnly`,
 `noEmit`, `noEmitOnError`, `lib`, `noLib`, and all checking options keep their values.
 The compiler emits when the consumer configuration emits. Standard libraries stay
@@ -337,9 +338,11 @@ unlisted imports, incremental caches, declaration maps, declaration-only emissio
 consumer `noEmit`, explicit libraries, and prebuilt or missing project references.
 Both SDK bounds compare program files, verdicts, diagnostic counts and error codes
 with plain tsc; its output paths are independently relocated for safe emission.
-Filesystem inventories and content hashes verify that compiler writes stay in the
-output sandbox, with separate snapshots protecting original inputs and escaping
-output/cache destinations. Reintroducing a `composite: false` override must fail
+Filesystem inventories, content hashes and modification/change times protect the
+allocation parent and sibling bounds, original inputs, and escaping output/cache
+destinations. If `rootDir` excludes a source, native tsc can emit beside that source
+even with `outDir` configured; those writes stay beside the sandbox's copied
+sources. TS6059 and the consumer's emission flags remain unchanged. Reintroducing a `composite: false` override must fail
 the membership regression and the option-equality property.
 
 The differential suite covers node16, nodenext and bundler resolution, ESM imports

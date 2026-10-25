@@ -949,8 +949,9 @@ const args = process.argv.slice(2);
 const run = args => { const result = spawnSync(process.execPath,[plain,...args],{encoding:'utf8',maxBuffer:64*1024*1024,timeout:30000}); if (result.error || result.signal || result.status === null) throw new Error('plain tsc oracle failed', {cause:result.error}); result.stdout = stripVTControlCharacters(result.stdout); return result; };
 const checking = !args.includes('--help') && !args.includes('--showConfig') && !args.includes('--listFilesOnly');
 let record;
-// Snapshot all copied input bytes. The only allowed compiler writes are in the dedicated output sandbox.
-const snapshot = () => { const hash = createHash('sha256'); const visit = file => { if (file === resolve('.sdk-contract-output')) return; const info = statSync(file,{bigint:true}); hash.update(relative(process.cwd(),file)).update([info.mode,info.size,info.mtimeNs,info.ctimeNs].join(':')); if (info.isDirectory()) for (const name of readdirSync(file).sort()) visit(join(file,name)); else hash.update(readFileSync(file)); }; visit(process.cwd()); return hash.digest('hex'); };
+// A whole copied bound is the sandbox: native TS6059 emission can fall back beside copied sources.
+// Snapshot its allocation parent and every sibling, excluding only this bound; caller inputs are checked separately.
+const snapshot = () => { const hash = createHash('sha256'); const visit = file => { if (file === process.cwd()) return; const info = statSync(file,{bigint:true}); hash.update(relative(process.cwd(),file)).update([info.mode,info.size,info.mtimeNs,info.ctimeNs].join(':')); if (info.isDirectory()) for (const name of readdirSync(file).sort()) visit(join(file,name)); else hash.update(readFileSync(file)); }; visit(resolve('..')); return hash.digest('hex'); };
 let before;
 if (checking) {
   const originalConfig = JSON.parse(run(['--project','tsconfig.json','--showConfig']).stdout);
@@ -963,7 +964,7 @@ if (checking) {
   const paths = ['outDir','outFile','declarationDir','tsBuildInfoFile','mapRoot','sourceRoot'];
   const outputArgs = paths.filter(name => originalOptions[name] !== undefined || name === 'outDir' || (name === 'tsBuildInfoFile' && (originalOptions.composite || originalOptions.incremental))).flatMap(name => ['--'+name,resolve('.sdk-contract-output/oracle',name,typeof originalOptions[name] === 'string' ? basename(originalOptions[name]) : name === 'tsBuildInfoFile' ? 'cache.tsbuildinfo' : 'output')]);
   const original = run(['--project','tsconfig.json',...outputArgs]);
-  record = {original:normalize(originalFiles.stdout),checked:normalize(checkedFiles.stdout),originalOptions,effectiveOptions,originalWatchOptions:originalConfig.watchOptions ?? {},effectiveWatchOptions:effectiveConfig.watchOptions ?? {},sandbox:resolve('.sdk-contract-output'),status:original.status,codes:original.status === 0 ? [] : [...original.stdout.matchAll(/\\p{L}+ (TS\\d+):/gu)].map(match => match[1])};
+  record = {original:normalize(originalFiles.stdout),checked:normalize(checkedFiles.stdout),originalOptions,effectiveOptions,originalWatchOptions:originalConfig.watchOptions ?? {},effectiveWatchOptions:effectiveConfig.watchOptions ?? {},sandbox:process.cwd(),status:original.status,codes:original.status === 0 ? [] : [...original.stdout.matchAll(/\\p{L}+ (TS\\d+):/gu)].map(match => match[1])};
   before = snapshot();
 }
 const result = run(args);
@@ -996,7 +997,7 @@ function normalizedWatchOptions(options: Record<string, unknown>, root: string):
 }
 /** Compare the entire compiler table plus every effective key, including defaults. */
 function assertOptionEquality(record: DiscoveryRecord, label: string, expected: Record<string, unknown>, watch: Record<string, unknown> = {}): void {
-  const root = dirname(record.sandbox);
+  const root = record.sandbox;
   assert.deepEqual(normalizedWatchOptions(record.originalWatchOptions, root), watch, `${label}: original watch options survive copying`);
   assert.deepEqual(record.effectiveWatchOptions, record.originalWatchOptions, `${label}: watch values retain their original defaults and overrides`);
   assert.deepEqual(record.originalOptions, expected, `${label}: original configuration survives copying unchanged`);
@@ -1005,7 +1006,7 @@ function assertOptionEquality(record: DiscoveryRecord, label: string, expected: 
   for (const key of keys) {
     const effective = record.effectiveOptions[key];
     if (COMPILER_OPTION_POLICY.get(key)?.safe === "relocate" && effective !== undefined) {
-      assert.ok(resolve(dirname(record.sandbox), String(effective)).startsWith(record.sandbox + "/"), `${label}: ${key} relocated inside sandbox`);
+      assert.ok(resolve(record.sandbox, String(effective)).startsWith(record.sandbox + "/"), `${label}: ${key} relocated inside sandbox`);
     } else assert.deepEqual(effective, record.originalOptions[key], `${label}: ${key} must retain its original value`);
   }
 }
@@ -1038,6 +1039,7 @@ test("original discovery differential corpus equals plain tsc file lists, verdic
     {name: "default-include-outDir", config: {compilerOptions: {outDir: "input/dist", types: ["node"]}}, files: {"dist/stale.d.ts": stale, "src/consumer.mts": bad}},
     {name: "rootDir", config: {compilerOptions: {rootDir: "input/src"}, include: ["input/src/**/*"]}},
     {name: "rootDir-error", config: {compilerOptions: {rootDir: "input/other"}, files: ["input/src/consumer.mts"]}},
+    {name: "deep-rootDir-error-declarations", config: {compilerOptions: {rootDir: "input/a/b/c/d/e", declaration: true, declarationMap: true}, files: ["input/src/consumer.mts"]}},
     {name: "paths", config: {compilerOptions: {paths: {"local-contract": ["./input/contract.d.mts"]}}, files: ["input/src/consumer.mts"]}, files: {"src/consumer.mts": 'import {value} from "local-contract"; export const use = value;', "contract.d.mts": "export declare const value: number;"}},
     {name: "typeRoots-types", config: {compilerOptions: {typeRoots: ["input/typings", "node_modules/@types"], types: ["local", "node"]}, files: ["input/src/consumer.mts"]}, files: {"typings/local/index.d.ts": "declare const localValue: number;", "src/consumer.mts": "export const use = localValue;"}},
     {name: "types-empty", config: {compilerOptions: {types: []}, files: ["input/src/consumer.mts"]}, files: {"src/consumer.mts": "export const use = 1;"}},
@@ -1090,7 +1092,7 @@ test("original discovery differential corpus equals plain tsc file lists, verdic
     for (const [index, record] of records.entries()) {
       assert.deepEqual(record.checked, record.original, `${entry.name}: ${matrix.rows[index]!.target} file list`);
       assertOptionEquality(record, entry.name, expectedOptions);
-      assert.equal(record.writesConfined, true, `${entry.name}: all writes confined to output sandbox`);
+      assert.equal(record.writesConfined, true, `${entry.name}: all writes confined to the copied bound sandbox`);
       const checked = matrix.rows[index]!;
       assert.equal(checked.ok, record.status === 0, `${entry.name}: ${checked.target} verdict`);
       assert.deepEqual([...checked.codes].sort(), record.codes.slice(0, 3).sort(), `${entry.name}: ${checked.target} error codes`);
@@ -1099,7 +1101,7 @@ test("original discovery differential corpus equals plain tsc file lists, verdic
     }
 
   }
-  t.diagnostic(`Discovery differential: ${corpus.length} configs, ${comparisons} file-list comparisons, ${comparisons} verdict/error-code and full-option comparisons; all filesystem snapshots unchanged outside output sandbox.`);
+  t.diagnostic(`Discovery differential: ${corpus.length} configs, ${comparisons} file-list comparisons, ${comparisons} verdict/error-code and full-option comparisons; all filesystem snapshots unchanged outside the copied bound sandbox.`);
 });
 
 
