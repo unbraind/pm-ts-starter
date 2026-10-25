@@ -2,13 +2,18 @@ id: pm-ts-starter-sdk-contract-drift
 title: Compile consumer examples against minimum and current SDK contracts
 description: Add a typed public SDK compatibility matrix and CLI command for author-controlled consumer examples. Dependabot continues to own dependency bumps; starter pin checks continue to own installation acceptance.
 type: Feature
-status: in_progress
+status: closed
 priority: 2
 tags[1]: "gh:unbraind/pm-ts-starter#153"
 created_at: "2026-10-24T10:33:04.255Z"
-updated_at: "2026-10-24T10:49:30.463Z"
+updated_at: "2026-10-24T23:15:29.652Z"
+closed_at: "2026-10-24T21:49:23.439Z"
+completed_at: "2026-10-24T10:57:22.000Z"
 author: codex-agent
 acceptance_criteria: A deliberately removed API fails its consumer fixture; packed npm and Bun runs compile against the emitted public contract; plain trackers work without git and remain unchanged.
+resolution: "Real TypeScript consumers compile emitted minimum/current SDK contracts, a removed API fails its fixture and packed npm/Bun no-git runs leave source trackers unchanged."
+expected_result: A deliberately removed API fails its consumer fixture; packed npm and Bun runs compile against the emitted public contract; plain trackers work without git and remain unchanged.
+actual_result: "https://github.com/unbraind/pm-ts-starter/pull/153, merged 2026-10-24T10:57:22Z, merge 9867ea42f6beaa8346ee66d1b0db0c7e9ceef8aa: Real TypeScript consumers compile emitted minimum/current SDK contracts, a removed API fails its fixture and packed npm/Bun no-git runs leave source trackers unchanged."
 comments[6]{created_at,author,text}:
   "2026-10-24T10:33:06.485Z",codex-agent,"Overlap recheck: CLI scaffold author-time tsc and runtime-public-contract snapshots do not compare consumer examples across published SDK releases. Both starters test peer floors and installation; no sibling source implements this matrix. Dependabot retains all version bumps. Design: explicit exact-version installed SDK targets, real compiler processes, bounded path-free diagnostic rows, SDK-native command rendering and expected errors. Private per-call scratch only; no tracker writes, shared leases, checkpoints or caches."
   "2026-10-24T10:42:25.042Z",codex-agent,"Implemented typed compiler matrix, native TOON/JSON command, stable refusals, docs and example. Revert proof: changed only checkSdkContracts to report compiler failures as success (the former installation-only behavior); node --test --test-name-pattern=\"real SDK examples pass\" test/sdk-contracts.test.ts failed 1/1 (expected one failing current authoring fixture, got zero). Restored implementation. Targeted SDK+smoke run passed 101/101; targeted module measured 100% lines/branches/functions. Full npm/Bun release gates reserved for CI because the shared host is saturated."
@@ -25,4 +30,5 @@ tests[1]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
 docs[2]{path,scope}:
   docs/examples/sdk-contracts.json,project
   README.md,project
+close_reason: "https://github.com/unbraind/pm-ts-starter/pull/153, merged 2026-10-24T10:57:22Z, merge 9867ea42f6beaa8346ee66d1b0db0c7e9ceef8aa: Real TypeScript consumers compile emitted minimum/current SDK contracts, a removed API fails its fixture and packed npm/Bun no-git runs leave source trackers unchanged."
 body: ""

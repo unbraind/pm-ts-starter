@@ -24,7 +24,7 @@ export interface SdkContractOptions {
     examples?: readonly SdkConsumerExample[];
     /** Self-contained consumer directory, including its own tsconfig and installed TypeScript. */
     consumer?: string;
-    /** Compiler for inline examples only; project consumers always use their own compiler. */
+    /** Compiler entry for inline examples, including JavaScript wrappers and executable shell shims. */
     compiler?: string;
     /** Optional progress observer, also useful when checking overlapping callers. */
     onProgress?: (phase: SdkContractPhase) => void;
@@ -75,7 +75,7 @@ export interface SdkContractMatrix {
 /** Actionable input/tooling refusals, distinct from a valid matrix with API drift. */
 export declare class SdkContractRefusal extends Error {
     /** Stable refusal discriminator. */
-    readonly code: "invalid_input" | "sdk_unavailable" | "compiler_unavailable";
+    readonly code: "invalid_input" | "sdk_unavailable" | "compiler_unavailable" | "isolation_refused";
     /** Safe retry guidance without raw tool output or machine paths. */
     readonly remedy: string;
     /** Construct a typed boundary failure with a safe operator remedy. */

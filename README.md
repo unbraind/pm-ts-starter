@@ -249,16 +249,21 @@ Omit `--json` for native compact TOON. The result has `ok`, `checks`, `failed`,
 `rows` and `remedy`; a drift matrix exits nonzero while retaining the matrix.
 Each row identifies the endpoint, verified version and example, with the full
 error count and at most three TypeScript codes and locations. Raw source text and machine
-paths never appear in these diagnostics. `invalid_input`, `sdk_unavailable` and
-`compiler_unavailable` are typed refusals with retry guidance.
+paths never appear in these diagnostics. `invalid_input`, `sdk_unavailable`,
+`compiler_unavailable` and `isolation_refused` are typed refusals with retry guidance.
 
 Pass `--consumer ./consumer` to check a self-contained consumer project. Its sources,
 package metadata, dependencies and tsconfig are copied into an exclusive directory
 for each bound. Each copy contains the selected SDK as a physical package in its
 own node_modules; links are dereferenced so resolution cannot follow a package
-back to the original installation. The consumer's own installed TypeScript runs
-`tsc --project tsconfig.json --noEmit --skipLibCheck false --pretty false`.
-The tsconfig and sources are copied unchanged. Project mode cannot be combined
+back to the original installation. The consumer's own installed TypeScript entry
+runs in place, with its working directory set to the isolated consumer, using
+`--noEmit --skipLibCheck false --pretty false`. Compiler executables are neither
+copied nor renamed; TypeScript declaration files and package metadata remain
+available when the consumer imports its public types. The original tsconfig and
+sources are copied unchanged; a private effective config adds the exact discovered library declarations as roots
+and uses `noLib` to prevent fallback to the external compiler installation.
+Project mode cannot be combined
 with `--examples` or `--compiler`. Include the project's dependencies and compiler
 in its node_modules before running the checker; use relative imports within the
 self-contained project.
@@ -266,18 +271,33 @@ self-contained project.
 The default inline examples exercise typed authoring composition and certified
 complete tracker reads. Use `--examples docs/examples/sdk-contracts.json` for a
 JSON array of `{id, source}` consumers (1–16 examples, each at most 64 KiB).
-Inline mode creates a strict NodeNext consumer with Node ambient types and copies
-the selected compiler installation into it. The checker compiles consumer source
-without executing it.
+Inline mode creates a strict NodeNext consumer with Node ambient types. It invokes
+the selected compiler entry in its original location, preserving ESM/CJS wrappers,
+relative dependencies, TypeScript `lib/tsc.js` entries and bin shims
+(JavaScript or executable shell).
+Simple absolute inline declaration imports are copied and rewritten into this
+consumer, so their SDK imports bind to the selected version. Declarations with
+relative dependencies require an explicitly provisioned `--consumer` project.
+The checker compiles consumer source without executing it.
 
 The verdict is the consumer compiler's diagnostics. Every error is drift,
 including errors in external declarations and ambient dependencies. There is no
-AST graph walker, custom module or exports resolver, declaration rebinding,
-`paths` injection, diagnostic code allowlist, or second resolution probe.
+custom module or exports resolver, SDK declaration rebinding, `paths` injection,
+or diagnostic code allowlist.
 TypeScript alone selects import/require conditions, versioned `types@` conditions
 and typesVersions. Each row retains the full diagnostic count, at most three
 codes, and corresponding project-relative file/line/column locations. External
 locations use a safe marker; source text and raw compiler messages stay private.
+Every compiler invocation clears `NODE_PATH`, `NODE_OPTIONS` and inherited `TS*`
+environment variables. Before type checking, effective configuration paths and
+explicit references must remain inside the consumer, including unused `paths`
+and `typeRoots` entries. A discovery-only `--listFilesOnly` pass stages the
+compiler's library declarations, then canonical file lists are verified both
+before and after compilation. Every compiled file must be inside the isolated
+consumer; every SDK declaration must belong to its selected SDK installation.
+External files, nested alternative SDKs, and missing or unstructured provenance
+fail closed with `isolation_refused` and a remedy. These checks use complete path
+components and package metadata, never substring matches on diagnostic messages.
 Each invocation is bounded to 30 seconds and 8 MiB. Compiler failures without
 usable diagnostics produce `compiler_unavailable`.
 
