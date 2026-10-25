@@ -599,7 +599,7 @@ test("copied external declarations resolve newer-only real SDK APIs as minimum d
 test("an inline compiler installation without ambient Node types reports TS2688 rather than ignoring environment errors", async t => {
   const root = scratch(t), modules = join(root, "node_modules");
   mkdirSync(modules);
-  for (const name of ["typescript", "@typescript"]) symlinkSync(join(repo, "node_modules", name), join(modules, name), "junction");
+  symlinkSync(join(repo, "node_modules/typescript"), join(modules, "typescript"), "junction");
   const matrix = await checkSdkContracts({ minimum: target, current: target, compiler: join(modules, "typescript/bin/tsc"),
     examples: [{ id: "ambient", source: "export const value = 1;" }] });
   assert.equal(matrix.failed, 2);
