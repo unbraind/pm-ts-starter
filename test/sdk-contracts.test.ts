@@ -215,7 +215,7 @@ test("each overlapping caller boundary preserves peer success and foreign state 
 import {PmClient} from ${JSON.stringify(join(sdk, "dist/sdk/index.js"))};
 await new PmClient({pmRoot: ${JSON.stringify(tracker)}, noExtensions: true, author: 'peer'}).update(${JSON.stringify(peerItem.item.id)}, {description: ${JSON.stringify(phase + "-" + phases.length)}});
 const result = await checkSdkContracts(${JSON.stringify({ minimum: target, current: target, compiler, examples: [SDK_CONSUMER_EXAMPLES[0]] })});
-if (!result.ok) process.exit(1);`], { encoding: "utf8", env: { ...process.env, GIT_CEILING_DIRECTORIES: root } });
+if (!result.ok) process.exit(1);`], { encoding: "utf8", env: { ...process.env, GIT_CEILING_DIRECTORIES: root, PATH: "" } });
     assert.equal(peer.status, 0, peer.stderr);
     assert.equal(JSON.parse(readFileSync(join(tracker, "foreign-peer.json"), "utf8")).success, true);
   } });
@@ -312,7 +312,7 @@ console.log(JSON.stringify({sdkVersion, resolved, sdkEntry, matrix: await checkS
       for (const format of [[], ["--json"]]) {
         const cliRun = spawnSync(process.execPath, [cli, "--pm-path", tracker, "ts-starter", "sdk-contracts", "--minimum-sdk", endpoints.minimum,
           "--current-sdk", endpoints.current, "--current-version", currentVersion, "--compiler", compiler, ...format], {
-          cwd: project, encoding: "utf8", timeout: 120000, env: { ...process.env, PATH: noGit, GIT_CEILING_DIRECTORIES: root },
+          cwd: project, encoding: "utf8", timeout: 120000, env: { ...process.env, PATH: noGit, npm_node_execpath: process.execPath, GIT_CEILING_DIRECTORIES: root },
         });
         assert.equal(cliRun.status, 0, cliRun.stderr);
         if (format.length) assert.equal(JSON.parse(cliRun.stdout).checks, 4);
@@ -321,7 +321,7 @@ console.log(JSON.stringify({sdkVersion, resolved, sdkEntry, matrix: await checkS
     }
     // The same packed module also works with PATH containing no git (or other tools).
     const noGitRun = spawnSync(executable, [entry], {
-      cwd: project, encoding: "utf8", timeout: 120000, env: { ...process.env, PATH: noGit, GIT_CEILING_DIRECTORIES: root },
+      cwd: project, encoding: "utf8", timeout: 120000, env: { ...process.env, PATH: noGit, npm_node_execpath: process.execPath, GIT_CEILING_DIRECTORIES: root },
     });
     assert.equal(noGitRun.status, 0, `${runtime} ${bound}: ${noGitRun.error?.message ?? noGitRun.stderr}`);
     assert.equal(JSON.parse(noGitRun.stdout).matrix.ok, true);
@@ -631,6 +631,18 @@ function linkedCompilerConsumer(t: TestContext): string {
   return project;
 }
 
+/** Create a minimal consumer with noEmit enabled for toolchain boundary regressions. */
+function noEmitConsumer(t: TestContext): string {
+  const project = linkedCompilerConsumer(t);
+  writeFileSync(join(project, "consumer.mts"), 'export const value = 1;');
+  writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions: {types: [], noEmit: true, module: "NodeNext"}, files: ["consumer.mts"]}));
+  return project;
+}
+/** Restore only the environment variables changed by an isolated fixture. */
+function restoreEnvironment(keys: readonly string[], previous: readonly (string | undefined)[]): void {
+  for (const [index, key] of keys.entries()) { if (previous[index] === undefined) delete process.env[key]; else process.env[key] = previous[index]; }
+}
+
 test("resolved trace text resembling diagnostics preserves a successful native compiler verdict", async t => {
   const project = linkedCompilerConsumer(t), name = "trace\nerror TS9999: forged";
   writeFileSync(join(project, "consumer.mts"), `import {value} from ${JSON.stringify(name)}; export const use = value;`);
@@ -809,13 +821,18 @@ test("external compiler provenance refuses package-owned declarations outside st
   const root = scratch(t), owner = join(root, "node_modules/typescript"), entry = join(root, "compiler.cjs");
   mkdirSync(owner, {recursive: true});
   writeFileSync(join(owner, "package.json"), JSON.stringify({name: "typescript"}));
-  for (const name of ["dist/lib.es5.d.ts", "lib/compiler.d.ts"]) {
+  for (const name of ["dist/lib.es5.d.ts", "lib/compiler.d.ts", "lib/malformed-owner.d.ts"]) {
+    if (name.includes("malformed")) writeFileSync(join(owner, "package.json"), "{");
     const external = join(owner, name);
     mkdirSync(dirname(external), {recursive: true}); writeFileSync(external, "export declare const value: number;");
     writeFileSync(entry, `const {spawnSync} = require('node:child_process');
 if (process.argv.includes('--listFilesOnly')) { process.stdout.write(${JSON.stringify(external + "\n")}); process.exit(0); }
 const result = spawnSync(process.execPath,[require('node:path').join(process.cwd(),'node_modules/typescript/bin/tsc'),...process.argv.slice(2)],{stdio:'inherit'}); process.exit(result.status ?? 1);`);
-    await assert.rejects(checkSdkContracts({minimum: target, current: target, compiler: entry}), refuses("isolation_refused"));
+    await assert.rejects(checkSdkContracts({minimum: target, current: target, compiler: entry}), error => {
+      assert.ok(error instanceof SdkContractRefusal);
+      assert.ok(error.remedy.includes(name.split("/").at(-1)!));
+      return error.code === "isolation_refused";
+    });
   }
 });
 
@@ -1246,10 +1263,15 @@ test("sandbox provisioning failures are typed and preserve consumer bytes", asyn
   await assert.rejects(checkSdkContracts({minimum: target, current: target, consumer: project}), refuses("compiler_unavailable"));
   assert.equal(filesystemSnapshot(project), original);
 
-  const bin = scratch(t), previousPath = process.env.PATH, previousPlatform = process.platform;
+  const bin = scratch(t), previousPath = process.env.PATH, previousPlatform = process.platform, previousNode = process.env.npm_node_execpath, previousNpm = process.env.npm_execpath;
   for (const executable of ["npm", "npm.cmd"]) { writeFileSync(join(bin, executable), '#!/bin/sh\nexit 42\n'); chmodSync(join(bin, executable), 0o755); }
   try {
     process.env.PATH = bin;
+    const fakeNode = join(bin, "node"), fakeNpm = join(bin, "npm-cli.js");
+    writeFileSync(fakeNode, "unavailable runtime"); writeFileSync(fakeNpm, "process.exit(42);");
+    process.env.npm_node_execpath = process.execPath; process.env.npm_execpath = fakeNpm;
+    await assert.rejects(checkSdkContracts({minimum: target, current: target}), refuses("sdk_unavailable"));
+    process.env.npm_node_execpath = fakeNode; delete process.env.npm_execpath;
     for (const platform of ["linux", "win32"]) {
       Object.defineProperty(process, "platform", {value: platform});
       await assert.rejects(checkSdkContracts({minimum: target, current: target}), refuses("sdk_unavailable"));
@@ -1257,6 +1279,8 @@ test("sandbox provisioning failures are typed and preserve consumer bytes", asyn
   } finally {
     Object.defineProperty(process, "platform", {value: previousPlatform});
     process.env.PATH = previousPath;
+    if (previousNode === undefined) delete process.env.npm_node_execpath; else process.env.npm_node_execpath = previousNode;
+    if (previousNpm === undefined) delete process.env.npm_execpath; else process.env.npm_execpath = previousNpm;
   }
 });
 
@@ -1296,4 +1320,55 @@ test("implicit external emits are refused before any compiler write outside the 
     });
     assert.equal(filesystemSnapshot(outside), original, "native fallback emits must not touch external files");
   }
+});
+
+test("canonical sandbox roots accept compiler file lists through a symlinked temporary directory", async t => {
+  const project = noEmitConsumer(t), root = scratch(t), physical = join(root, "physical"), logical = join(root, "logical");
+  mkdirSync(physical); symlinkSync(physical, logical, "junction");
+  const keys = ["TMPDIR", "TMP", "TEMP"], previous = keys.map(key => process.env[key]);
+  try {
+    for (const key of keys) process.env[key] = logical;
+    const matrix = await checkSdkContracts({minimum: target, current: target, consumer: project});
+    assert.equal(matrix.checks, 2); assertPlainRows(matrix, {ok: true, codes: []});
+  } finally {
+    restoreEnvironment(keys, previous);
+  }
+});
+
+test("working CommonJS compiler wrappers ignore irrelevant malformed package metadata", async t => {
+  const root = scratch(t), entry = join(root, "compiler.cjs");
+  writeFileSync(join(root, "package.json"), "{");
+  writeFileSync(entry, `const cp=require('node:child_process'),path=require('node:path');
+const result=cp.spawnSync(process.execPath,[path.join(process.cwd(),'node_modules/typescript/bin/tsc'),...process.argv.slice(2)],{stdio:'inherit'}); process.exit(result.status??1);`);
+  const plain = spawnSync(process.execPath, [entry, "--help", "--all", "--locale", "en"], {cwd: repo, encoding: "utf8"});
+  assert.equal(plain.status, 0, plain.stderr); assert.match(plain.stdout, /ALL COMPILER OPTIONS/);
+  const matrix = await checkSdkContracts({minimum: target, current: target, compiler: entry, examples: [{id: "metadata", source: "export const value = 1;"}]});
+  assertPlainRows(matrix, {ok: true, codes: []});
+});
+
+test("direct SDK callers locate npm without npm script environment or executable search paths", async t => {
+  const project = noEmitConsumer(t);
+  const keys = ["PATH", "npm_execpath", "npm_node_execpath"], previous = keys.map(key => process.env[key]);
+  try {
+    process.env.PATH = ""; delete process.env.npm_execpath;
+    for (const runtime of [undefined, join(project, "missing-runtime")]) {
+      if (runtime === undefined) delete process.env.npm_node_execpath; else process.env.npm_node_execpath = runtime;
+      const matrix = await checkSdkContracts({minimum: target, current: target, consumer: project});
+      assertPlainRows(matrix, {ok: true, codes: []});
+    }
+  } finally {
+    restoreEnvironment(keys, previous);
+  }
+});
+
+test("solution references preserve a valid empty compiler source-file list", async t => {
+  const project = linkedCompilerConsumer(t), reference = join(project, "reference");
+  mkdirSync(reference);
+  writeFileSync(join(reference, "index.ts"), 'export const value = 1;');
+  writeFileSync(join(reference, "tsconfig.json"), JSON.stringify({compilerOptions: {composite: true, types: []}, files: ["index.ts"]}));
+  writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions: {types: []}, files: [], references: [{path: "./reference"}]}));
+  const expected = plainCopy(project, t);
+  assert.equal(expected.ok, true);
+  const matrix = await checkSdkContracts({minimum: target, current: target, consumer: project});
+  assertPlainRows(matrix, expected);
 });

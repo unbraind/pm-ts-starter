@@ -7,12 +7,10 @@ status: in_progress
 priority: 1
 tags[1]: "gh:unbraind/pm-ts-starter#154"
 created_at: "2026-10-24T13:07:42.652Z"
-updated_at: "2026-10-25T20:26:31.834Z"
-assignee: codex-agent
-claim_principal: codex-agent
+updated_at: "2026-10-25T22:03:20.235Z"
 author: codex-agent
 acceptance_criteria: Exact manifest minimum and explicit current SDK resolve inside separate packed npm and Bun consumers; a newer-only public API passes current and fails minimum; reverting only consumer provisioning fails the regression.
-comments[74]{created_at,author,text}:
+comments[77]{created_at,author,text}:
   "2026-10-24T13:07:46.558Z",codex-agent,"Scope: correct the packed-consumer compatibility gate added by PR 153. Use separate npm and Bun consumer installations per bound, select the minimum from manifest.json and current release 2026.10.24, and prove the actual resolver result from each consumer. Add a real newer-only SDK API use through emitted declarations, retaining the fixed compiler examples and no-git checks. Repository dependency pins remain unchanged; full npm and Bun release gates will run locally and in CI."
   "2026-10-24T13:07:47.361Z",codex-agent,"Implementation: each compiler project maps the selected SDK public type exports through TypeScript paths, including imports reached through absolute external declarations. Unexported SDK subpaths resolve to an empty declaration rather than falling through to a foreign installation. Packed acceptance now installs npm and Bun consumers separately for each exact bound and verifies package metadata and SDK entry resolution at runtime. Regression uses real acquireLockLease, absent in the manifest minimum and present in 2026.10.24. Typecheck, test typecheck, lint, docstring gate and zero-duplication gate passed."
   "2026-10-24T13:07:47.949Z",codex-agent,"Fail-on-revert proof: restored only checkSdkContracts to its origin/main implementation, leaving the new regression and helper intact. node --test --test-name-pattern='absolute declaration imports report newer-only SDK APIs as minimum drift' test/sdk-contracts.test.ts failed 1/1: expected matrix.ok=false, got true, because the minimum inherited acquireLockLease from the external consumer's current SDK. Restored the fixed function immediately. Before revert the complete targeted suite passed 8/8 with 100% sdk-contracts.ts lines, branches and functions. Running the registered targeted suite again after restoration. Local strict tracker health passes after provisioning the same pm-github version as CI; an existing provenance advisory remains untouched."
@@ -87,6 +85,9 @@ comments[74]{created_at,author,text}:
   "2026-10-25T19:40:19.353Z",codex-agent,"Post-compilation isolation now passes its dedicated test, including actual external declarations, missing references as native diagnostics, unused resolution settings compared with plain tsc, and an alternate SDK inside the copy. The discovery corpus now has 52 configurations (104 bound comparisons), including allowJs TS5055, JSON imports, quoted path literals, empty reference solutions, source-map metadata, and incremental outFile cache precedence. Full-table pass-through covers all 137 options. Full npm/Bun release gates are being submitted to CI on the pushed candidate; no merge or review-thread replies."
   "2026-10-25T20:19:32.476Z",codex-agent,"The three remaining standalone baseline tests now use plain project compilation on second copies as well: 3/3 passed for local references, inherited aliases and composite membership. Removed every baseline noEmit, force and pretty override. The full linked coverage experiment inherited toolchain coverage into npm and compiler children, producing unrelated child-tool coverage data; compiler and dependency-installer calls now clear NODE_V8_COVERAGE while the checker stays covered. The earlier long local run and CI candidate are superseded, not passing evidence; rerunning on the updated candidate."
   "2026-10-25T20:26:31.827Z",codex-agent,"Child instrumentation is now explicitly disabled with an empty NODE_V8_COVERAGE value because Node reinjects an omitted variable. Compiler wrappers verify the disabled child value while the checker remains instrumented. Wrapper regression: 6/6 pass, including ESM, CJS, library entry and shell/bin shims. The rewritten plain-project oracle selection passed 3/3, and the full 137-option property passed 4/4 policy tests. Typecheck, lint, docstrings and zero duplication pass. Superseded runs are not counted as release-gate approval."
+  "2026-10-25T21:57:25.450Z",codex-agent,"Round 8 CI measured 432/433 passing tests in each Node 22/26 npm job; the sole failure was the packed no-Git consumer with an empty executable search path. All 52 config/104 bound comparisons, 144 resolution verdicts, 64 hostile cases and the 137-option property passed. Fixed installer discovery to invoke the installed npm JavaScript entry through the parent Node runtime without requiring Git or PATH. The packed npm/Bun, overlapping-peer and provisioning regression selection now passes 3/3 locally. Also canonicalized sandbox roots and accepted working CommonJS compiler wrappers with irrelevant malformed package metadata. Reverting only root canonicalization fails its regression 0/1; restoring passes 1/1. Reverting only the package-owner fallback fails its regression 0/1; restoring passes. A focused five-test coverage selection passes 5/5; full source coverage and final release gates remain pending."
+  "2026-10-25T21:59:46.634Z",codex-agent,"Installer behavioral revert proof: on an isolated copy of the unchanged module and a real no-emit consumer, reverting only npmInvocation to executable-name lookup makes the empty-PATH success assertion fail with sdk_unavailable (exit 1). Restoring that helper makes the identical assertion pass (exit 0). The package worktree source was never altered during this extra proof. Typecheck, lint, build, test typecheck, docstrings (61/61 declarations) and duplication (0/10022 lines) pass after the fix."
+  "2026-10-25T22:03:19.171Z",codex-agent,"The PM-linked final regression selection passes 4/4 with exit 0 after raising its timeout to 600 seconds; the prior 120-second run reported all four assertions passing but was classified as a timeout and is not counted as approval. Tracker test-result persistence is disabled by project policy, so this comment preserves the receipt. Implementation and local static checks are ready for the corrected CI candidate; broader local source coverage remains running and npm/Bun release gates will be verified on the pushed head. The item remains in progress for orchestrator review and will not be closed."
 files[17]{path,scope}:
   dist/index.d.ts.map,project
   dist/index.js,project
@@ -105,7 +106,7 @@ files[17]{path,scope}:
   test/compiler-option-fixtures.ts,project
   test/sdk-compiler-policy.test.ts,project
   test/sdk-contracts.test.ts,project
-tests[24]:
+tests[25]:
   - command: node --test --experimental-test-coverage --test-coverage-include=sdk-contracts.ts test/sdk-contracts.test.ts
     scope: project
     timeout_seconds: 3600
@@ -295,12 +296,24 @@ tests[24]:
       source_ref: fix/min-sdk-drift-check
   - command: node --test --experimental-test-coverage --test-coverage-include=sdk-contracts.ts --test-coverage-include=sdk-compiler-policy.ts --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/sdk-contracts-round8.lcov test/sdk-compiler-policy.test.ts test/sdk-contracts.test.ts
     scope: project
-    timeout_seconds: 3600
+    timeout_seconds: 7200
     provenance:
       author: codex-agent
       created_at: "2026-10-25T19:44:12.848Z"
       source_kind: local_mutation
       source_ref: fix/min-sdk-drift-check
+    updated_by: codex-agent
+    updated_at: "2026-10-25T20:28:51.127Z"
+  - command: "node --test --test-name-pattern=\"direct SDK callers|canonical sandbox roots|working CommonJS compiler|solution references\" test/sdk-contracts.test.ts"
+    scope: project
+    timeout_seconds: 600
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-25T21:58:39.188Z"
+      source_kind: local_mutation
+      source_ref: fix/min-sdk-drift-check
+    updated_by: codex-agent
+    updated_at: "2026-10-25T22:01:05.219Z"
 docs[1]{path,scope}:
   README.md,project
 body: ""

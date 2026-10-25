@@ -271,7 +271,9 @@ copy. Absolute or project-escaping output/cache paths receive `isolation_refused
 with a remedy to use contained relative destinations.
 Project mode cannot be combined with `--examples` or `--compiler`. Include the
 project's installable dependencies and compiler in its node_modules before running
-the checker. Sandbox provisioning requires npm; it does not run lifecycle scripts.
+the checker. Sandbox provisioning requires npm; it locates npm's JavaScript entry
+beside the Node runtime even when executable search paths are empty. It does not
+run lifecycle scripts.
 
 The default inline examples exercise typed authoring composition and certified
 complete tracker reads. Use `--examples docs/examples/sdk-contracts.json` for a
@@ -300,7 +302,8 @@ copy, and every SDK declaration must belong to the selected SDK installation.
 An escaping resolved file receives `isolation_refused` naming that file without
 publishing an absolute machine path. Unused aliases and ordinary string literals
 are never interpreted as filesystem references. Missing imports retain native
-compiler diagnostics. Empty or unstructured provenance fails closed.
+compiler diagnostics. Empty or unstructured provenance fails closed, except for
+valid empty solution configurations with project references.
 Each invocation is bounded to 30 seconds and 8 MiB. Compiler failures without
 usable diagnostics produce `compiler_unavailable`.
 

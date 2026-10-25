@@ -72,6 +72,21 @@ function copyConsumer(source, destination, projectOnly = false) {
             return path !== ".git" && !(projectOnly && /(^|\/)node_modules(?:\/|$)/.test(path));
         } });
 }
+/** Locate an installed npm CLI without requiring Git or executable search paths. */
+function npmInvocation() {
+    const configured = process.env.npm_node_execpath;
+    const runtime = configured && existsSync(configured) ? configured : process.execPath;
+    const candidates = [process.env.npm_execpath, join(dirname(runtime), "npm"),
+        join(dirname(runtime), "node_modules/npm/bin/npm-cli.js"), join(dirname(runtime), "../lib/node_modules/npm/bin/npm-cli.js")];
+    for (const candidate of candidates) {
+        if (!candidate || !existsSync(candidate))
+            continue;
+        const cli = realpathSync(candidate);
+        if (basename(cli) === "npm-cli.js")
+            return { command: runtime, args: [cli] };
+    }
+    return { command: process.platform === "win32" ? "npm.cmd" : "npm", args: [] };
+}
 /** Install package artifacts separately; never carry the consumer node_modules tree into a project copy. */
 function installDependencies(project, modules, names) {
     if (!existsSync(modules))
@@ -103,7 +118,8 @@ function installDependencies(project, modules, names) {
     writeFileSync(metadata, JSON.stringify({ private: true }));
     // Node propagates coverage automatically unless the child explicitly disables it.
     const env = { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(NODE_PATH$|NODE_OPTIONS$|NODE_V8_COVERAGE$|TS)/i.test(key) && key.toLowerCase() !== "npm_config_allow_scripts")), NODE_V8_COVERAGE: "" };
-    const result = spawnSync(process.platform === "win32" ? "npm.cmd" : "npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund", "--no-package-lock", "--install-links", "--prefer-offline", "--legacy-peer-deps", ...sources], { cwd: project, encoding: "utf8", timeout: 120000, maxBuffer: 8 * 1024 * 1024, env });
+    const npm = npmInvocation();
+    const result = spawnSync(npm.command, [...npm.args, "install", "--ignore-scripts", "--no-audit", "--no-fund", "--no-package-lock", "--install-links", "--prefer-offline", "--legacy-peer-deps", ...sources], { cwd: project, encoding: "utf8", timeout: 120000, maxBuffer: 8 * 1024 * 1024, env });
     if (original)
         writeFileSync(metadata, original);
     else
@@ -146,7 +162,7 @@ function owningPackage(file) {
         return { root, name: metadata.name ?? "" };
     }
     catch {
-        isolationRefusal();
+        return { root, name: "" };
     }
 }
 /** Invoke JavaScript compiler entries in their original module context with clean resolution state. */
@@ -220,9 +236,9 @@ function isolatedConfig(project, compiler, policy) {
 /** Verify only compiler-resolved inputs after compilation; source strings are never scanned. */
 function verifyCompilation(project, compiler, installed, options, empty) {
     for (const file of compilerFiles(project, compiler, "tsconfig.json", options, empty)) {
-        const owner = owningPackage(file);
-        if (!inside(project, file) || (owner.name === "@unbrained/pm-cli" && owner.root !== installed)) {
-            const name = inside(project, file) ? relative(project, file).replaceAll("\\", "/") : basename(file);
+        const contained = inside(project, file), owner = contained ? owningPackage(file) : { root: "", name: "" };
+        if (!contained || (owner.name === "@unbrained/pm-cli" && owner.root !== installed)) {
+            const name = contained ? relative(project, file).replaceAll("\\", "/") : basename(file);
             throw new SdkContractRefusal("isolation_refused", `Resolved file ${JSON.stringify(name)} is outside the isolated project or selected SDK bound; move that dependency inside the consumer project and retry.`);
         }
     }
@@ -287,7 +303,7 @@ export async function checkSdkContracts(options) {
     const examples = options.consumer === undefined ? parseSdkConsumerExamples(options.examples ?? SDK_CONSUMER_EXAMPLES) : [{ id: "consumer", source: "" }];
     const targets = { minimum: { ...options.minimum, root: targetRoot(options.minimum) }, current: { ...options.current, root: targetRoot(options.current) } };
     const compiler = options.compiler ?? (options.consumer === undefined ? resolveSdkContractCompiler() : "");
-    const scratch = mkdtempSync(join(tmpdir(), "pm-sdk-contract-"));
+    const scratch = realpathSync(mkdtempSync(join(tmpdir(), "pm-sdk-contract-")));
     const rows = [];
     const policies = new Map();
     try {
