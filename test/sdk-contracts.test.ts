@@ -128,6 +128,16 @@ function bytes(root: string): string {
   }
   return digest.digest("hex");
 }
+/** Detect writes even when a compiler rewrites identical bytes or restores the file inventory. */
+function filesystemSnapshot(root: string): string {
+  const digest = createHash("sha256");
+  for (const name of [".", ...readdirSync(root, {recursive: true}).map(String).sort()]) {
+    const file = join(root, name), info = lstatSync(file, {bigint: true});
+    digest.update(name).update([info.mode, info.size, info.mtimeNs, info.ctimeNs].join(":"));
+    if (info.isFile()) digest.update(readFileSync(file));
+  }
+  return digest.digest("hex");
+}
 /** Match stable refusal codes and usable remedies without reading private tool output. */
 function refuses(code: SdkContractRefusal["code"]): (error: unknown) => boolean {
   return error => error instanceof SdkContractRefusal && error.code === code && error.remedy.length > 20;
@@ -849,7 +859,7 @@ for (const [name, row] of realCompilerPolicy()) {
   test(`compiler option ${row.category}: ${name}`, async t => {
     const root = scratch(t), outside = join(root, "outside"), project = installedConsumer("npm", "minimum");
     mkdirSync(outside); writeFileSync(join(outside, "sentinel"), "unchanged external data");
-    const expected = bytes(root);
+    const expected = filesystemSnapshot(root);
     const config = JSON.stringify({compilerOptions: {target: "ES2022", module: "NodeNext", types: [], incremental: true,
       declaration: true, sourceMap: true, tsBuildInfoFile: join(outside, "build-info"), [name]: row.safe === "relocate" ? join(outside, name) : true}, files: ["policy.mts"]});
     writeFileSync(join(project, "tsconfig.json"), config);
@@ -858,7 +868,7 @@ for (const [name, row] of realCompilerPolicy()) {
       const matrix = await checkSdkContracts({minimum: target, current: target, consumer: project});
       assert.equal(matrix.checks, 2);
     } catch (error) { assert.ok(refuses("isolation_refused")(error)); }
-    assert.equal(bytes(root), expected, `${name}: filesystem snapshot outside sandbox is unchanged`);
+    assert.equal(filesystemSnapshot(root), expected, `${name}: filesystem snapshot outside sandbox is unchanged`);
     assert.equal(readFileSync(join(project, "tsconfig.json"), "utf8"), config);
   });
 }
@@ -903,7 +913,7 @@ const run = args => { const result = spawnSync(process.execPath,[plain,...args],
 const checking = !args.includes('--help') && !args.includes('--showConfig') && !args.includes('--listFilesOnly');
 let record;
 // Snapshot all copied input bytes. The only allowed compiler writes are in the dedicated output sandbox.
-const snapshot = () => { const hash = createHash('sha256'); const visit = dir => { for (const name of readdirSync(dir).sort()) { const file = join(dir,name); if (file === resolve('.sdk-contract-output')) continue; hash.update(relative(process.cwd(),file)); if (statSync(file).isDirectory()) visit(file); else hash.update(readFileSync(file)); } }; visit(process.cwd()); return hash.digest('hex'); };
+const snapshot = () => { const hash = createHash('sha256'); const visit = file => { if (file === resolve('.sdk-contract-output')) return; const info = statSync(file,{bigint:true}); hash.update(relative(process.cwd(),file)).update([info.mode,info.size,info.mtimeNs,info.ctimeNs].join(':')); if (info.isDirectory()) for (const name of readdirSync(file).sort()) visit(join(file,name)); else hash.update(readFileSync(file)); }; visit(process.cwd()); return hash.digest('hex'); };
 let before;
 if (checking) {
   const originalConfig = JSON.parse(run(['--project','tsconfig.json','--showConfig']).stdout);
@@ -945,7 +955,7 @@ function discoveryRecords(receipt: string): DiscoveryRecord[] {
 /** Compare watch exclusion paths relative to their unchanged copied project origin. */
 function normalizedWatchOptions(options: Record<string, unknown>, root: string): Record<string, unknown> {
   return Object.fromEntries(Object.entries(options).map(([key, value]) => [key, Array.isArray(value)
-    ? value.map(path => typeof path === "string" && path.startsWith(root + "/") ? path.slice(root.length + 1) : path) : value]));
+    ? value.map((path: unknown) => typeof path === "string" && path.startsWith(root + "/") ? path.slice(root.length + 1) : path) : value]));
 }
 /** Compare the entire compiler table plus every effective key, including defaults. */
 function assertOptionEquality(record: DiscoveryRecord, label: string, expected: Record<string, unknown>, watch: Record<string, unknown> = {}): void {
@@ -1035,9 +1045,9 @@ test("original discovery differential corpus equals plain tsc file lists, verdic
     const expected = spawnSync(process.execPath, [join(project, "node_modules/typescript/bin/plain-tsc"), "--project", "tsconfig.json", "--showConfig"], {cwd: project, encoding: "utf8"});
     assert.equal(expected.status, 0, expected.stdout);
     const expectedOptions = (JSON.parse(expected.stdout) as {compilerOptions: Record<string, unknown>}).compilerOptions;
-    const originalBytes = bytes(project);
+    const originalBytes = filesystemSnapshot(project);
     const matrix = await checkSdkContracts({minimum: {root: endpoints.minimum, version: minimumVersion}, current: {root: endpoints.current, version: currentVersion}, consumer: project});
-    assert.equal(bytes(project), originalBytes, `${entry.name}: original filesystem snapshot`);
+    assert.equal(filesystemSnapshot(project), originalBytes, `${entry.name}: original filesystem snapshot`);
     const records = discoveryRecords(receipt);
     assert.equal(records.length, 2, entry.name);
     for (const [index, record] of records.entries()) {
