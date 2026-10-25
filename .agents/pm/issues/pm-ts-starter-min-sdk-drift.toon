@@ -7,10 +7,12 @@ status: in_progress
 priority: 1
 tags[1]: "gh:unbraind/pm-ts-starter#154"
 created_at: "2026-10-24T13:07:42.652Z"
-updated_at: "2026-10-25T12:49:46.885Z"
+updated_at: "2026-10-25T19:40:19.360Z"
+assignee: codex-agent
+claim_principal: codex-agent
 author: codex-agent
 acceptance_criteria: Exact manifest minimum and explicit current SDK resolve inside separate packed npm and Bun consumers; a newer-only public API passes current and fails minimum; reverting only consumer provisioning fails the regression.
-comments[64]{created_at,author,text}:
+comments[72]{created_at,author,text}:
   "2026-10-24T13:07:46.558Z",codex-agent,"Scope: correct the packed-consumer compatibility gate added by PR 153. Use separate npm and Bun consumer installations per bound, select the minimum from manifest.json and current release 2026.10.24, and prove the actual resolver result from each consumer. Add a real newer-only SDK API use through emitted declarations, retaining the fixed compiler examples and no-git checks. Repository dependency pins remain unchanged; full npm and Bun release gates will run locally and in CI."
   "2026-10-24T13:07:47.361Z",codex-agent,"Implementation: each compiler project maps the selected SDK public type exports through TypeScript paths, including imports reached through absolute external declarations. Unexported SDK subpaths resolve to an empty declaration rather than falling through to a foreign installation. Packed acceptance now installs npm and Bun consumers separately for each exact bound and verifies package metadata and SDK entry resolution at runtime. Regression uses real acquireLockLease, absent in the manifest minimum and present in 2026.10.24. Typecheck, test typecheck, lint, docstring gate and zero-duplication gate passed."
   "2026-10-24T13:07:47.949Z",codex-agent,"Fail-on-revert proof: restored only checkSdkContracts to its origin/main implementation, leaving the new regression and helper intact. node --test --test-name-pattern='absolute declaration imports report newer-only SDK APIs as minimum drift' test/sdk-contracts.test.ts failed 1/1: expected matrix.ok=false, got true, because the minimum inherited acquireLockLease from the external consumer's current SDK. Restored the fixed function immediately. Before revert the complete targeted suite passed 8/8 with 100% sdk-contracts.ts lines, branches and functions. Running the registered targeted suite again after restoration. Local strict tracker health passes after provisioning the same pm-github version as CI; an existing provenance advisory remains untouched."
@@ -75,10 +77,22 @@ comments[64]{created_at,author,text}:
   "2026-10-25T12:10:12.638Z",codex-agent,"Fixed the legitimate supplementary-output refusals without changing compiler values. Provenance now resolves explainFiles relative headers and verifies their real paths, and accepts numeric statistics only when diagnostics/extendedDiagnostics is enabled. Malformed statistics, a numeric-statistics-only empty file list, indented escaping files, relative external files and directory headers are still refused. PM-linked focused verification passed 2/2: all six supplementary options, 12 clean/error configurations, 24/24 native verdict/code comparisons, unchanged caller metadata, and five negative provenance controls. The complete corpus/generated-property rerun is in progress on this implementation. Earlier-head CI was canceled as superseded; only the next pushed head will count for final release approval."
   "2026-10-25T12:34:20.584Z",codex-agent,"The generated-option test now passes: 133 configurations at both bounds plus four typed checking-bypass refusals, all 137 options accounted for, with option/watch equality and unchanged external snapshots. The corpus found a boundary error in the test: native TS6059 emission ignores outDir and writes beside the source. A real compiler probe confirmed this. The actual sandbox is the whole disposable copied bound, including its copied sources; preserving consumer option values requires allowing native fallback emission there. Correcting the snapshot to protect the allocation parent and sibling bounds outside that copy, retaining independent caller-input and external-output/cache snapshots, and adding a deeply nested invalid rootDir with declarations/maps. No compiler option or diagnostic is changed."
   "2026-10-25T12:49:45.590Z",codex-agent,"Final PM-linked corpus verification passed 1/1: 45 configurations, 90/90 complete program-file comparisons, 90/90 native verdict/error-code/full-option comparisons, zero failures/skips/cancellations/TODOs, and unchanged metadata/content snapshots outside each copied bound sandbox. This includes TS6059 fallback emission beside copied sources and a deeply nested invalid rootDir with declarations/maps. The separate generated-option test passed all 137 settings: 133 configurations checked at both bounds (266 effective-configuration comparisons) and four typed checking-bypass refusals. The full-table unit suite remains 4/4; composite revert proof remains recorded. Supplementary output controls are 24/24 native comparisons with five negative provenance controls. Releasing for orchestrator verification; final npm/Bun release/coverage evidence will be taken only from the next pushed head."
-files[13]{path,scope}:
+  "2026-10-25T18:49:04.669Z",codex-agent,"Round 8: replace compiler-option relocation and source reference scanning with unmodified project-copy compilation and compiler-resolved input verification. Add unmodified-copy differential regressions for native emit collisions and ordinary quoted path values; record both behavioral revert proofs and npm/Bun release gates."
+  "2026-10-25T18:54:33.001Z",codex-agent,"Project copy excludes node_modules and Git metadata. Sandbox dependency provisioning installs existing package artifacts with npm --install-links --ignore-scripts, restores consumer package metadata, and runs the same installed compiler artifact inside the copy so standard libraries satisfy strict resolved-file containment too. First smoke run: 2/2 tests pass, including resolution mutation controls and trace text resembling diagnostics."
+  "2026-10-25T19:01:31.840Z",codex-agent,"Behavioral revert proof 1: temporarily re-added outDir injection to compileConsumer; node --test --test-name-pattern=\"unmodified copy retains native allowJs TS5055 output collisions\" test/sdk-contracts.test.ts exited 1 (0/1 pass): the checker incorrectly returned true while plain unmodified tsc returned TS5055. Restored the implementation immediately; no rebuilt dist is needed because this regression imports source."
+  "2026-10-25T19:02:32.258Z",codex-agent,"Behavioral revert proof 2: temporarily restored the deleted regex guard and called it on compiler-resolved files; node --test --test-name-pattern=\"unmodified copy accepts JSON imports and ordinary quoted path literals\" test/sdk-contracts.test.ts exited 1 (0/1 pass) with isolation_refused for an ordinary quoted path value accepted by plain tsc. Restored the guard-free implementation immediately. Both focused regressions passed beforehand (2/2)."
+  "2026-10-25T19:11:51.263Z",codex-agent,"Focused linked run passed 4/4 tests, including 137/137 option pass-through configurations. Both revert proofs are recorded above. Provisioning uses one fresh private dependency template per invocation, cloned into separate bound copies before replacing each SDK; original node_modules is excluded from the project copy. Compiler-package and native-library bytes are verified against the original installation. Added empty solution references, implicit escaping incremental-cache detection, harmless source-map metadata, and alternate SDK ownership coverage. PM linked execution reports tracking_disabled; these comments retain the verified results without changing tracker policy."
+  "2026-10-25T19:33:48.430Z",codex-agent,"Removed inline declaration rewriting too: inline source bytes now reach tsc unchanged, and declaration/module-kind fixtures use self-contained relative project layouts. Compiler-resolved preflight refuses only implicit outputs that would escape beside external sources; post-compilation canonical file verification remains authoritative for isolation. The implicit-output regression passed 3/3 selected tests (including the 137-option property), preserving external bytes and timestamps. Two exploratory dependency installs timed out while repacking an SDK that was immediately replaced; provisioning now excludes the consumer SDK and disables peer SDK auto-installation, then installs the selected bound into each copy."
+  "2026-10-25T19:36:03.377Z",codex-agent,"Current provisioning checks: local declaration SDK drift, exact compiler/native-library mismatch controls, and implicit external-output protection passed. The unused-path test now compares native compiler verdicts instead of assuming success: a rootDir that excludes the copied source must retain TS6059. Updated linked commands to follow the renamed guard-free isolation and declaration-layout tests. Typecheck, lint, docstrings, and unchanged zero-duplication threshold pass."
+  "2026-10-25T19:40:19.353Z",codex-agent,"Post-compilation isolation now passes its dedicated test, including actual external declarations, missing references as native diagnostics, unused resolution settings compared with plain tsc, and an alternate SDK inside the copy. The discovery corpus now has 52 configurations (104 bound comparisons), including allowJs TS5055, JSON imports, quoted path literals, empty reference solutions, source-map metadata, and incremental outFile cache precedence. Full-table pass-through covers all 137 options. Full npm/Bun release gates are being submitted to CI on the pushed candidate; no merge or review-thread replies."
+files[17]{path,scope}:
   dist/index.d.ts.map,project
   dist/index.js,project
   dist/index.js.map,project
+  dist/sdk-compiler-policy.d.ts,project
+  dist/sdk-compiler-policy.d.ts.map,project
+  dist/sdk-compiler-policy.js,project
+  dist/sdk-compiler-policy.js.map,project
   dist/sdk-contracts.d.ts,project
   dist/sdk-contracts.d.ts.map,project
   dist/sdk-contracts.js,project
@@ -89,7 +103,7 @@ files[13]{path,scope}:
   test/compiler-option-fixtures.ts,project
   test/sdk-compiler-policy.test.ts,project
   test/sdk-contracts.test.ts,project
-tests[22]:
+tests[23]:
   - command: node --test --experimental-test-coverage --test-coverage-include=sdk-contracts.ts test/sdk-contracts.test.ts
     scope: project
     timeout_seconds: 3600
@@ -126,14 +140,6 @@ tests[22]:
       source_ref: fix/min-sdk-drift-check
     updated_by: codex-agent
     updated_at: "2026-10-24T23:51:13.016Z"
-  - command: "node --test --experimental-test-coverage --test-coverage-include=sdk-contracts.ts --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/sdk-contracts-round4.lcov --test-name-pattern=\"absolute-import inline|compiler entries run|hermetic|inline relocation|inline declaration relocation\" test/sdk-contracts.test.ts"
-    scope: project
-    timeout_seconds: 1200
-    provenance:
-      author: codex-agent
-      created_at: "2026-10-24T23:46:53.151Z"
-      source_kind: local_mutation
-      source_ref: fix/min-sdk-drift-check
   - command: "node --test --experimental-test-coverage --test-coverage-include=sdk-contracts.ts --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/sdk-contracts-boundaries.lcov --test-name-pattern=\"refuse malformed|wrong SDK identity|diagnostic output|project inputs|an inline compiler|review reproductions\" test/sdk-contracts.test.ts"
     scope: project
     timeout_seconds: 600
@@ -148,14 +154,6 @@ tests[22]:
     provenance:
       author: codex-agent
       created_at: "2026-10-25T00:10:42.277Z"
-      source_kind: local_mutation
-      source_ref: fix/min-sdk-drift-check
-  - command: "node --test --experimental-test-coverage --test-coverage-include=sdk-contracts.ts --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/sdk-contracts-transitive.lcov --test-name-pattern=\"hermetic project refuses\" test/sdk-contracts.test.ts"
-    scope: project
-    timeout_seconds: 600
-    provenance:
-      author: codex-agent
-      created_at: "2026-10-25T00:28:58.413Z"
       source_kind: local_mutation
       source_ref: fix/min-sdk-drift-check
   - command: node --test test/sdk-compiler-policy.test.ts
@@ -267,6 +265,30 @@ tests[22]:
     provenance:
       author: codex-agent
       created_at: "2026-10-25T12:03:11.367Z"
+      source_kind: local_mutation
+      source_ref: fix/min-sdk-drift-check
+  - command: "node --test --test-name-pattern=\"unmodified copy|option-table|output paths\" test/sdk-contracts.test.ts test/sdk-compiler-policy.test.ts"
+    scope: project
+    timeout_seconds: 600
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-25T19:03:08.027Z"
+      source_kind: local_mutation
+      source_ref: fix/min-sdk-drift-check
+  - command: "node --test --test-name-pattern=\"post-compile isolation\" test/sdk-contracts.test.ts"
+    scope: project
+    timeout_seconds: 600
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-25T19:40:18.111Z"
+      source_kind: local_mutation
+      source_ref: fix/min-sdk-drift-check
+  - command: "node --test --test-name-pattern=\"local declaration imports|project copies preserve|inline sources are unchanged|compiler entries run|hermetic\" test/sdk-contracts.test.ts"
+    scope: project
+    timeout_seconds: 1800
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-25T19:40:18.111Z"
       source_kind: local_mutation
       source_ref: fix/min-sdk-drift-check
 docs[1]{path,scope}:

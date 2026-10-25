@@ -255,35 +255,33 @@ paths never appear in these diagnostics. `invalid_input`, `sdk_unavailable`,
 Pass `--consumer ./consumer` to check a self-contained consumer project. Its sources,
 package metadata, dependencies and tsconfig are copied into an exclusive directory
 for each bound. Each copy contains the selected SDK as a physical package in its
-own node_modules; links are dereferenced so resolution cannot follow a package
-back to the original installation. The consumer's own installed TypeScript entry
-runs in place, with its working directory set to the isolated consumer. Compiler
-executables are neither copied nor renamed. The original tsconfig and sources
-are copied unchanged; a private config extends the original configuration to
-preserve inherited alias origins and pins the compiler's original root-file list.
-Every compiler option value remains the consumer's own value or default, except
-output/cache paths, which are relocated under a private output directory inside
-the disposable bound sandbox. The entire copied consumer is that sandbox.
-`composite`, `incremental`, `declaration`, `declarationMap`, `emitDeclarationOnly`,
-`noEmit`, `noEmitOnError`, `lib`, `noLib`, and all checking options keep their values.
-The compiler emits when the consumer configuration emits. Standard libraries stay
-in the invoked compiler's installation and are verified by package ownership and
-library-file location, without adding them to the project's root files.
-Project mode cannot be combined
-with `--examples` or `--compiler`. Include the project's dependencies and compiler
-in its node_modules before running the checker; use relative imports within the
-self-contained project.
+fresh node_modules. The project copy excludes every node_modules directory and
+Git metadata. npm installs the consumer's installed package artifacts separately,
+with lifecycle scripts disabled. A private template of those fresh artifacts is
+cloned into each bound, where the selected SDK replaces the SDK package. The consumer package metadata is restored byte for byte. The same
+installed compiler artifact runs inside the copy, so its standard libraries are
+also inside the isolation boundary. Compiler package and standard-library bytes
+are checked against the original installation before cloning; a mismatch receives
+`compiler_unavailable` instead of silently substituting another compiler.
+The original tsconfig, in-project extends targets, project references, sources and
+existing build artifacts retain their relative layout and bytes. Compilation runs
+`tsc --project tsconfig.json` with no option overrides, generated config, injected
+outDir, or output relocation. Native emits and build-info stay in the project
+copy. Absolute or project-escaping output/cache paths receive `isolation_refused`
+with a remedy to use contained relative destinations.
+Project mode cannot be combined with `--examples` or `--compiler`. Include the
+project's installable dependencies and compiler in its node_modules before running
+the checker. Sandbox provisioning requires npm; it does not run lifecycle scripts.
 
 The default inline examples exercise typed authoring composition and certified
 complete tracker reads. Use `--examples docs/examples/sdk-contracts.json` for a
 JSON array of `{id, source}` consumers (1–16 examples, each at most 64 KiB).
-Inline mode creates a strict NodeNext consumer with Node ambient types. It invokes
-the selected compiler entry in its original location, preserving ESM/CJS wrappers,
-relative dependencies, TypeScript `lib/tsc.js` entries and bin shims
-(JavaScript or executable shell).
-Simple absolute inline declaration imports are copied and rewritten into this
-consumer, so their SDK imports bind to the selected version. Declarations with
-relative dependencies require an explicitly provisioned `--consumer` project.
+Inline mode creates a strict NodeNext consumer with Node ambient types. It provisions the selected TypeScript artifact inside the copy. Custom compiler
+wrappers and shell shims must resolve their compiled inputs and libraries inside
+the copy too.
+Inline sources are passed through byte for byte. Supply declaration graphs in a
+self-contained consumer project with relative imports; inline imports that resolve
+outside the copy receive a named post-compilation isolation refusal.
 The checker compiles consumer source without executing it.
 
 The verdict is the consumer compiler's diagnostics. Every error is drift,
@@ -295,23 +293,20 @@ and typesVersions. Each row retains the full diagnostic count, at most three
 codes, and corresponding project-relative file/line/column locations. External
 locations use a safe marker; source text and raw compiler messages stay private.
 Every compiler invocation clears `NODE_PATH`, `NODE_OPTIONS` and inherited `TS*`
-environment variables. Before type checking, effective configuration paths and
-explicit references must remain inside the consumer, including unused `paths`
-and `typeRoots` entries. Discovery-only `--listFilesOnly` passes verify canonical
-file lists before and after compilation. Every compiled file must be inside the isolated consumer or
-be a standard compiler library; every SDK declaration must belong to the selected
-SDK installation.
-External files, nested alternative SDKs, and missing or unstructured provenance
-fail closed with `isolation_refused` and a remedy. These checks use complete path
-components and package metadata, never substring matches on diagnostic messages.
+environment variables. After compilation, a discovery-only `--listFilesOnly` pass
+checks the compiler's own resolved inputs. Every canonical file must be inside the
+copy, and every SDK declaration must belong to the selected SDK installation.
+An escaping resolved file receives `isolation_refused` naming that file without
+publishing an absolute machine path. Unused aliases and ordinary string literals
+are never interpreted as filesystem references. Missing imports retain native
+compiler diagnostics. Empty or unstructured provenance fails closed.
 Each invocation is bounded to 30 seconds and 8 MiB. Compiler failures without
 usable diagnostics produce `compiler_unavailable`.
 
 The invoked compiler's `--help --all --locale en` table is read once per compiler
 per check, including watch and build declarations. `sdk-compiler-policy.ts` is the
-single reasoned policy for all 137 TypeScript 7.0.2 options. Its classes relocate
-path-valued output/cache destinations, refuse checking bypasses, or preserve the
-consumer's values. Every newly discovered option receives a typed
+single reasoned policy for all 137 TypeScript 7.0.2 options. Its classes confine
+output/cache destinations, refuse checking bypasses, or preserve consumer values. Every newly discovered option receives a typed
 `isolation_refused` with guidance to classify it before retrying; the completeness
 test also fails on a new option. Active `noCheck`, `noResolve`, `skipLibCheck`, and
 `skipDefaultLibCheck` receive a typed refusal naming the option and explaining how
@@ -321,29 +316,15 @@ fail closed; the checker invokes project compilation, without build or watch mod
 Referenced project declarations must already be built when plain project `tsc`
 requires them; the checker does not build project references automatically.
 
-Before relocating outputs, the same consumer compiler resolves root files and
-project references using `--showConfig` on the original configuration. The private
-overlay pins those explicit roots, clears `include` and `exclude`, retains
-references, and overrides only path-valued outputs. This preserves implicit
-`outDir` and `declarationDir` exclusions, composite membership errors, and inherited
-input paths. Explicit output/cache destinations and default emit/cache locations
-move below the sandbox. Diagnostic presentation and supplementary tracing retain
-their original settings.
-
-A property test enumerates the compiler's entire option table, assigns each option
-a nondefault value, and asserts that only output paths may change. Instrumented
-real compiler invocations also compare complete effective option objects for the
-differential corpus and generated configurations. Corpus cases include composite
-unlisted imports, incremental caches, declaration maps, declaration-only emission,
-consumer `noEmit`, explicit libraries, and prebuilt or missing project references.
-Both SDK bounds compare program files, verdicts, diagnostic counts and error codes
-with plain tsc; its output paths are independently relocated for safe emission.
-Filesystem inventories, content hashes and modification/change times protect the
-allocation parent and sibling bounds, original inputs, and escaping output/cache
-destinations. If `rootDir` excludes a source, native tsc can emit beside that source
-even with `outDir` configured; those writes stay beside the sandbox's copied
-sources. TS6059 and the consumer's emission flags remain unchanged. Reintroducing a `composite: false` override must fail
-the membership regression and the option-equality property.
+A full-table property asserts that every original configuration value reaches the
+compiler unchanged. Instrumented real compiler invocations compare complete
+option objects and resolved files. The differential oracle runs plain tsc on a
+second identical copy, with the original config and no output overrides. Cases
+include allowJs TS5055 output collisions, JSON imports and quoted path literals,
+composite membership, incremental caches, declaration maps, declaration-only
+emission, consumer noEmit, explicit libraries and built or missing references.
+Both SDK bounds compare verdicts, diagnostic counts and complete error-code
+multisets. Filesystem snapshots protect original inputs and neighboring bounds.
 
 The differential suite covers node16, nodenext and bundler resolution, ESM imports
 and CJS requires, exports types conditions, versioned types conditions and
