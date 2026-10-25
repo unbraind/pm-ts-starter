@@ -7,10 +7,10 @@ status: in_progress
 priority: 1
 tags[1]: "gh:unbraind/pm-ts-starter#154"
 created_at: "2026-10-24T13:07:42.652Z"
-updated_at: "2026-10-25T03:09:49.946Z"
+updated_at: "2026-10-25T03:33:39.292Z"
 author: codex-agent
 acceptance_criteria: Exact manifest minimum and explicit current SDK resolve inside separate packed npm and Bun consumers; a newer-only public API passes current and fails minimum; reverting only consumer provisioning fails the regression.
-comments[46]{created_at,author,text}:
+comments[48]{created_at,author,text}:
   "2026-10-24T13:07:46.558Z",codex-agent,"Scope: correct the packed-consumer compatibility gate added by PR 153. Use separate npm and Bun consumer installations per bound, select the minimum from manifest.json and current release 2026.10.24, and prove the actual resolver result from each consumer. Add a real newer-only SDK API use through emitted declarations, retaining the fixed compiler examples and no-git checks. Repository dependency pins remain unchanged; full npm and Bun release gates will run locally and in CI."
   "2026-10-24T13:07:47.361Z",codex-agent,"Implementation: each compiler project maps the selected SDK public type exports through TypeScript paths, including imports reached through absolute external declarations. Unexported SDK subpaths resolve to an empty declaration rather than falling through to a foreign installation. Packed acceptance now installs npm and Bun consumers separately for each exact bound and verifies package metadata and SDK entry resolution at runtime. Regression uses real acquireLockLease, absent in the manifest minimum and present in 2026.10.24. Typecheck, test typecheck, lint, docstring gate and zero-duplication gate passed."
   "2026-10-24T13:07:47.949Z",codex-agent,"Fail-on-revert proof: restored only checkSdkContracts to its origin/main implementation, leaving the new regression and helper intact. node --test --test-name-pattern='absolute declaration imports report newer-only SDK APIs as minimum drift' test/sdk-contracts.test.ts failed 1/1: expected matrix.ok=false, got true, because the minimum inherited acquireLockLease from the external consumer's current SDK. Restored the fixed function immediately. Before revert the complete targeted suite passed 8/8 with 100% sdk-contracts.ts lines, branches and functions. Running the registered targeted suite again after restoration. Local strict tracker health passes after provisioning the same pm-github version as CI; an existing provenance advisory remains untouched."
@@ -57,6 +57,8 @@ comments[46]{created_at,author,text}:
   "2026-10-25T02:38:51.019Z",codex-agent,"Final round-5 local validation: PM-linked targeted group passed 54/54 with zero failures, skips, cancellations or TODOs. This includes 29/29 escaping output/cache controls with unchanged outside inventories and hashes, 17/17 weakening-option controls rejecting nonexistent SDK exports at both published bounds (including JavaScript), five original compiler-entry forms, inherited alias/library preservation, and a future-option typed refusal before config inspection. The independent completeness/policy group passes 3/3 and measures sdk-compiler-policy.ts at 100% lines, branches and functions; real compiler enumeration is 137/137 classified with no duplicate rows. Build, typecheck, test typecheck, lint, docstrings, strict tracker health and unchanged 0% duplication pass. Enforcement-only revert fails 2/2 and restores byte-for-byte, as recorded above. Freeze tracker receipts before the final CI run: npm run release:check and bun run release:check on Node 22 and 26 must pass at the pushed head; exact run URL and counts will be linked from PR 154 checks and description. No full-gate success is claimed while CI is pending. Keep the item in progress for orchestrator verification and release the claim. No new PM CLI/SDK defect was found; compiler trust and provisioned package provenance remain caller responsibilities."
   "2026-10-25T03:04:39.206Z",codex-agent,"First round-5 CI at 2495a65: Node 26 passes all 440/440 tests, zero failures/skips/cancellations/TODOs, but the unchanged coverage gate correctly fails sdk-contracts.ts at 99.48% branches and 96.77% functions (aggregate 99.89% and 99.39%). The policy module is 100% in all three dimensions. The unexercised callback/branch is top-level project references: TypeScript does not inherit references through extends, so the safety overlay dropped their provenance. Correcting this by inspecting the original config with policy-generated safe CLI overrides, then explicitly preserving its references in the private overlay. No thresholds will change; Bun was not reached in the failed row."
   "2026-10-25T03:09:48.742Z",codex-agent,"Reference correction: original config inspection now uses policy-generated safe CLI values, so inherited output/cache/profile paths stay inside the private consumer before any config inspection. The private overlay explicitly copies top-level references and retains alias origins through extends. Added a negative control that removes a test-owned referenced build declaration: both plain tsc and both checker bounds must report TS6305 instead of silently compiling referenced source. Final correction group passes 5/5 under the PM runner; the standalone missing-build scenario passes 1/1. LCOV confirms the previously missing reference-path callback is exercised. Policy tests pass 3/3 at 100% lines/branches/functions including generated inspection arguments. Repeated enforcement-only revert with all three policy-enforcement functions returning empty overrides: both controls fail 2/2 (outside cache write and false minimum verdict), restored in finally to SHA256 3e64393396fa4db6b9877adf51462819de04210664612521f5c5d91bc43bf884. Both initial CI rows passed 440/440 tests but failed the same unchanged coverage thresholds; neither reached Bun, so that run is failed evidence. Freeze these correction receipts before a new exact-head npm/Bun CI run on Node 22 and 26, with final counts and run URL recorded in PR 154 description. Keep in progress for orchestrator verification and release the claim."
+  "2026-10-25T03:30:19.833Z",codex-agent,"Corrected-head CI at fab7b02 passes all 440/440 tests on Node 22 and 26 with 100% lines and functions, but the unchanged branch gate remains 99.48% in sdk-contracts.ts (99.89% aggregate). Neither row reaches Bun. The reference callback is now exercised; the remaining branch is the typed compiler failure during config inspection, because existing crash fixtures now fail earlier at the newly added option-discovery step. Adding a focused compiler fixture that answers real help-all then fails showConfig, asserting the typed refusal and cleanup. Production code and all thresholds remain unchanged."
+  "2026-10-25T03:33:38.022Z",codex-agent,"Final refusal boundary regression passes 2/2 under the PM runner, zero failures/skips/cancellations/TODOs. The new compiler fixture answers the real help-all query then either crashes during showConfig or returns malformed JSON; both outcomes retain typed refusals and exactly allocated/linked/cleanup progress, with receipt proof that option discovery succeeded before config inspection failed. Targeted LCOV records every branch of the config-inspection catch as executed (counts 2, 1, 8), covering the branch missing in the 440-test CI run. Production source remains byte-identical to fab7b02; the policy module SHA256 remains 3e64393396fa4db6b9877adf51462819de04210664612521f5c5d91bc43bf884, so the recorded three-function enforcement revert proof still applies unchanged. Typecheck, test typecheck and lint pass; unchanged 0% duplication and other release preflights are repeated before committing. The full suite now includes 441 tests. Freeze receipts for the next exact-head npm/Bun CI on Node 22 and 26; final run/head/count evidence will be in PR 154 description. Keep the item in progress for orchestrator verification; release the claim."
 files[12]{path,scope}:
   dist/index.d.ts.map,project
   dist/index.js,project
@@ -70,7 +72,7 @@ files[12]{path,scope}:
   sdk-contracts.ts,project
   test/sdk-compiler-policy.test.ts,project
   test/sdk-contracts.test.ts,project
-tests[11]:
+tests[12]:
   - command: node --test --experimental-test-coverage --test-coverage-include=sdk-contracts.ts test/sdk-contracts.test.ts
     scope: project
     timeout_seconds: 3600
@@ -160,6 +162,14 @@ tests[11]:
     provenance:
       author: codex-agent
       created_at: "2026-10-25T03:08:54.456Z"
+      source_kind: local_mutation
+      source_ref: fix/min-sdk-drift-check
+  - command: "node --test --experimental-test-coverage --test-coverage-include=sdk-contracts.ts --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/sdk-contracts-round5-config-crash.lcov --test-name-pattern=\"compiler config inspection crash|hermetic provenance\" test/sdk-contracts.test.ts"
+    scope: project
+    timeout_seconds: 600
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-25T03:33:15.673Z"
       source_kind: local_mutation
       source_ref: fix/min-sdk-drift-check
 docs[1]{path,scope}:

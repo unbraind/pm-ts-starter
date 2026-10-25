@@ -829,3 +829,21 @@ const result = spawnSync(process.execPath, [${JSON.stringify(compiler)}, ...proc
 process.stdout.write(result.stdout + '\\n--futureUnsafeOption\\ntype: boolean\\n');`);
   await assert.rejects(checkSdkContracts({minimum: target, current: target, compiler: entry}), refuses("isolation_refused"));
 });
+
+test("compiler config inspection crash and malformed JSON retain typed refusals and cleanup after option discovery", async t => {
+  const root = scratch(t), entry = join(root, "compiler.cjs"), receipt = join(root, "calls.jsonl");
+  for (const failure of ["crash", "malformed"]) {
+    writeFileSync(receipt, "");
+    writeFileSync(entry, `const {spawnSync} = require('node:child_process'); const {appendFileSync} = require('node:fs');
+const discovery = process.argv.includes('--help');
+appendFileSync(${JSON.stringify(receipt)}, (discovery ? 'help' : 'config') + '\\n');
+if (!discovery) { ${failure === "crash" ? "process.exit(7);" : "process.stdout.write('not JSON'); process.exit(0);"} }
+const result = spawnSync(process.execPath, [${JSON.stringify(compiler)}, ...process.argv.slice(2)], {stdio:'inherit'});
+process.exit(result.status ?? 1);`);
+    const phases: string[] = [];
+    await assert.rejects(checkSdkContracts({minimum: target, current: target, compiler: entry,
+      examples: [SDK_CONSUMER_EXAMPLES[0]!], onProgress: phase => { phases.push(phase); }}), refuses(failure === "crash" ? "compiler_unavailable" : "isolation_refused"));
+    assert.deepEqual(readFileSync(receipt, "utf8").trim().split("\n"), ["help", "config"]);
+    assert.deepEqual(phases, ["allocated", "linked", "cleanup"]);
+  }
+});
