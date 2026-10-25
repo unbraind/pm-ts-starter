@@ -7,10 +7,10 @@ status: in_progress
 priority: 1
 tags[1]: "gh:unbraind/pm-ts-starter#154"
 created_at: "2026-10-24T13:07:42.652Z"
-updated_at: "2026-10-25T11:42:17.677Z"
+updated_at: "2026-10-25T12:10:13.659Z"
 author: codex-agent
 acceptance_criteria: Exact manifest minimum and explicit current SDK resolve inside separate packed npm and Bun consumers; a newer-only public API passes current and fails minimum; reverting only consumer provisioning fails the regression.
-comments[60]{created_at,author,text}:
+comments[62]{created_at,author,text}:
   "2026-10-24T13:07:46.558Z",codex-agent,"Scope: correct the packed-consumer compatibility gate added by PR 153. Use separate npm and Bun consumer installations per bound, select the minimum from manifest.json and current release 2026.10.24, and prove the actual resolver result from each consumer. Add a real newer-only SDK API use through emitted declarations, retaining the fixed compiler examples and no-git checks. Repository dependency pins remain unchanged; full npm and Bun release gates will run locally and in CI."
   "2026-10-24T13:07:47.361Z",codex-agent,"Implementation: each compiler project maps the selected SDK public type exports through TypeScript paths, including imports reached through absolute external declarations. Unexported SDK subpaths resolve to an empty declaration rather than falling through to a foreign installation. Packed acceptance now installs npm and Bun consumers separately for each exact bound and verifies package metadata and SDK entry resolution at runtime. Regression uses real acquireLockLease, absent in the manifest minimum and present in 2026.10.24. Typecheck, test typecheck, lint, docstring gate and zero-duplication gate passed."
   "2026-10-24T13:07:47.949Z",codex-agent,"Fail-on-revert proof: restored only checkSdkContracts to its origin/main implementation, leaving the new regression and helper intact. node --test --test-name-pattern='absolute declaration imports report newer-only SDK APIs as minimum drift' test/sdk-contracts.test.ts failed 1/1: expected matrix.ok=false, got true, because the minimum inherited acquireLockLease from the external consumer's current SDK. Restored the fixed function immediately. Before revert the complete targeted suite passed 8/8 with 100% sdk-contracts.ts lines, branches and functions. Running the registered targeted suite again after restoration. Local strict tracker health passes after provisioning the same pm-github version as CI; an existing provenance advisory remains untouched."
@@ -71,6 +71,8 @@ comments[60]{created_at,author,text}:
   "2026-10-25T11:35:25.201Z",codex-agent,"Final focused PM-linked verification passed 12/12 with zero failures, skips, cancellations or TODOs: complete-table equality, composite membership/build-mode emission controls, preserved pretty/locale diagnostics, compiler entries in place with no option-value switches, nonexecutable shims and strict provenance. A separate PM-linked resolved-trace control passed 1/1: native tsc succeeds while printing three diagnostic-looking trace lines, and the checker correctly stays clean using the native successful exit. The earlier full local coverage run began before the final parser/property refinements and was interrupted as superseded; it is not approval evidence. Final full npm/Bun release and coverage evidence will come from exact-head CI. The differential corpus now has 44 configurations; generated settings also put watch options in their proper watchOptions table and compare those values, plus all compiler options and complete diagnostic code multisets. Registered the final two-property run. Automatic PM result tracking is disabled, so durable outcomes are recorded in comments without changing tracker policy."
   "2026-10-25T11:40:04.471Z",codex-agent,"Strengthened the filesystem snapshots to include mode, size, nanosecond modification and change times for files and directories, in addition to inventory and content hashes. This detects identical-byte rewrites and create/delete cycles outside the output sandbox. Only atime is excluded because compiler reads are allowed. The same stronger snapshots cover every differential/generated configuration and each escaping output/cache destination. The implementation semantics are unchanged; publishing this test refinement before final exact-head CI."
   "2026-10-25T11:42:16.387Z",codex-agent,"The metadata-sensitive filesystem controls passed through the PM runner: 2/2 tests, zero failures/skips/cancellations/TODOs, covering outDir and tsBuildInfoFile escapes at both bounds. Real compiler inspection also confirmed all seven watch options survive the extending overlay unchanged. Test compilation, lint and unchanged 0% duplication gate pass after the snapshot refinement. Releasing the claim again for orchestrator verification; the final full release gates remain CI work on the new pushed head."
+  "2026-10-25T11:55:24.593Z",codex-agent,"The complete local corpus/generated-option run found a remaining legitimate-output case: diagnostics=true emits compiler statistics after listFilesOnly, which the provenance parser refused. Both property tests failed rather than certifying a false pass. Fixing the provenance parser to accept strictly structured numeric statistic lines only when diagnostics or extendedDiagnostics is enabled, while keeping every compiler option value unchanged. No gate or threshold is being relaxed."
+  "2026-10-25T12:10:12.638Z",codex-agent,"Fixed the legitimate supplementary-output refusals without changing compiler values. Provenance now resolves explainFiles relative headers and verifies their real paths, and accepts numeric statistics only when diagnostics/extendedDiagnostics is enabled. Malformed statistics, a numeric-statistics-only empty file list, indented escaping files, relative external files and directory headers are still refused. PM-linked focused verification passed 2/2: all six supplementary options, 12 clean/error configurations, 24/24 native verdict/code comparisons, unchanged caller metadata, and five negative provenance controls. The complete corpus/generated-property rerun is in progress on this implementation. Earlier-head CI was canceled as superseded; only the next pushed head will count for final release approval."
 files[13]{path,scope}:
   dist/index.d.ts.map,project
   dist/index.js,project
@@ -85,7 +87,7 @@ files[13]{path,scope}:
   test/compiler-option-fixtures.ts,project
   test/sdk-compiler-policy.test.ts,project
   test/sdk-contracts.test.ts,project
-tests[21]:
+tests[22]:
   - command: node --test --experimental-test-coverage --test-coverage-include=sdk-contracts.ts test/sdk-contracts.test.ts
     scope: project
     timeout_seconds: 3600
@@ -255,6 +257,14 @@ tests[21]:
     provenance:
       author: codex-agent
       created_at: "2026-10-25T11:41:00.749Z"
+      source_kind: local_mutation
+      source_ref: fix/min-sdk-drift-check
+  - command: "node --test --test-name-pattern=\"all supplementary output|supplementary provenance\" test/sdk-contracts.test.ts"
+    scope: project
+    timeout_seconds: 600
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-25T12:03:11.367Z"
       source_kind: local_mutation
       source_ref: fix/min-sdk-drift-check
 docs[1]{path,scope}:

@@ -118,16 +118,21 @@ function runCompiler(project, compiler, args) {
     return result;
 }
 /** Read one compiler-produced file path per line, refusing empty or unstructured provenance. */
-function compilerFiles(project, compiler, config, trace) {
+function compilerFiles(project, compiler, config, options) {
     const output = runCompiler(project, compiler, ["--project", config, "--listFilesOnly"]).stdout.trim();
     const files = [];
     let diagnostic = false;
+    const explain = options.explainFiles === true, statistics = options.diagnostics === true || options.extendedDiagnostics === true;
     for (const line of output.split(/\r?\n/)) {
-        if (isAbsolute(line))
-            files.push(line);
+        const file = isAbsolute(line) ? line : explain && !/^\s/.test(line) && existsSync(resolve(project, line)) && statSync(resolve(project, line)).isFile() ? resolve(project, line) : undefined;
+        if (file !== undefined)
+            files.push(file);
         else if (/^(?:.+\(\d+,\d+\): )?error TS\d+:/.test(line))
             diagnostic = true;
-        else if (!(diagnostic && /^(?:$| {2,}|\d+ |Found \d+ errors?\b)/.test(line)) && !(trace && files.length === 0))
+        else if (!(diagnostic && /^(?:$| {2,}|\d+ |Found \d+ errors?\b)/.test(line)) &&
+            !(options.traceResolution === true && files.length === 0) &&
+            !(statistics && /^(?:$|[\p{L}][\p{L} /()-]*:\s+\d+(?:\.\d+)?[A-Za-z]*)$/u.test(line)) &&
+            !(explain && files.length > 0 && /^(?:$| {2,}\p{L})/u.test(line)))
             isolationRefusal();
     }
     if (files.length === 0 || files.some(file => !existsSync(file)))
@@ -196,9 +201,8 @@ function prepareCompilation(project, compiler, installed, policy) {
     mkdirSync(sandbox, { recursive: true });
     writeFileSync(join(project, ".sdk-contract.json"), JSON.stringify({ extends: "./tsconfig.json", files: config.files, include: [], exclude: [], references: config.references,
         compilerOptions: enforcedCompilerOptions(policy, config.compilerOptions, sandbox) }));
-    const trace = config.compilerOptions.traceResolution === true;
-    verifyCompilation(project, compiler, installed, trace);
-    return { config: ".sdk-contract.json", trace };
+    verifyCompilation(project, compiler, installed, config.compilerOptions);
+    return { config: ".sdk-contract.json", options: config.compilerOptions };
 }
 /** Allow only the invoked compiler's standard libraries outside the copied consumer. */
 function compilerLibrary(file) {
@@ -207,8 +211,8 @@ function compilerLibrary(file) {
         dirname(file) === join(owner.root, "lib") && /^lib\..*\.d\.ts$/.test(basename(file));
 }
 /** Fail closed before and after compilation if any file or SDK package escapes the selected installation. */
-function verifyCompilation(project, compiler, installed, trace) {
-    for (const file of compilerFiles(project, compiler, ".sdk-contract.json", trace)) {
+function verifyCompilation(project, compiler, installed, options) {
+    for (const file of compilerFiles(project, compiler, ".sdk-contract.json", options)) {
         if (!inside(project, file) && compilerLibrary(file))
             continue;
         const owner = owningPackage(file);
@@ -222,9 +226,9 @@ function verifyCompilation(project, compiler, installed, trace) {
 }
 /** Run only the consumer compiler; every error contributes to drift without filtering codes. */
 function compileConsumer(project, compiler, installed, policy) {
-    const { config, trace } = prepareCompilation(project, compiler, installed, policy);
+    const { config, options } = prepareCompilation(project, compiler, installed, policy);
     const result = runCompiler(project, compiler, ["--project", config]);
-    verifyCompilation(project, compiler, installed, trace);
+    verifyCompilation(project, compiler, installed, options);
     if (result.status === 0)
         return [];
     const diagnostics = [...result.stdout.matchAll(/^(?:(.+)\((\d+),(\d+)\): |)error (TS\d+):/gm)].map(match => {

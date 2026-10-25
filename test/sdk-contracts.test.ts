@@ -643,6 +643,43 @@ test("resolved trace text resembling diagnostics preserves a successful native c
   assert.equal(bytes(project), before);
 });
 
+test("supplementary provenance refuses malformed statistics and escaping explained files", async t => {
+  const root = scratch(t), entry = join(root, "compiler.cjs"), outside = join(root, "outside.d.ts");
+  writeFileSync(outside, "export declare const value: number;");
+  for (const mode of ["statistics", "empty-statistics", "indented", "relative", "directory"]) {
+    const explain = ["indented", "relative", "directory"].includes(mode);
+    writeFileSync(entry, `const cp = require('node:child_process'), path = require('node:path');
+const args = process.argv.slice(2);
+if (args.includes('--listFilesOnly')) {
+  const first = ${JSON.stringify(mode)} === 'empty-statistics' ? '' : path.join(process.cwd(),'consumer.ts') + '\\n';
+  const bad = ${JSON.stringify(mode)} === 'empty-statistics' ? 'Files: 1' : ${JSON.stringify(mode)} === 'relative' ? path.relative(process.cwd(),${JSON.stringify(outside)}) : ${JSON.stringify(mode === "directory" ? "." : mode === "indented" ? "  " + outside : "Files: " + outside)};
+  process.stdout.write(first + bad + '\\n'); process.exit(0);
+}
+const output = cp.spawnSync(process.execPath,[${JSON.stringify(compiler)},...args,${JSON.stringify(explain ? "--explainFiles" : "--diagnostics")}],{stdio:'inherit'}); process.exit(output.status ?? 1);`);
+    await assert.rejects(checkSdkContracts({minimum: target, current: target, compiler: entry, examples: [SDK_CONSUMER_EXAMPLES[0]!]}), refuses("isolation_refused"), mode);
+  }
+});
+
+test("all supplementary output options preserve plain compiler verdicts and unchanged caller metadata", async t => {
+  const project = linkedCompilerConsumer(t);
+  for (const name of ["traceResolution", "explainFiles", "diagnostics", "extendedDiagnostics", "listFiles", "listEmittedFiles"]) {
+    for (const failing of [false, true]) {
+      writeFileSync(join(project, "consumer.mts"), failing ? "export const use: string = 1;" : "export const use = 1;");
+      writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions: {target: "ES2022", module: "NodeNext", types: [], [name]: true, outDir: "dist"}, files: ["consumer.mts"]}));
+      const plain = spawnSync(process.execPath, [compiler, "--project", "tsconfig.json"], {cwd: project, encoding: "utf8"});
+      const before = filesystemSnapshot(project);
+      const matrix = await checkSdkContracts({minimum: target, current: target, consumer: project});
+      const codes = [...plain.stdout.matchAll(/error (TS\d+):/g)].map(match => match[1]);
+      for (const row of matrix.rows) {
+        assert.equal(row.ok, plain.status === 0, name);
+        assert.deepEqual(row.codes, codes, name);
+      }
+      assert.equal(filesystemSnapshot(project), before, name);
+    }
+  }
+  t.diagnostic("Supplementary output: 12 configurations and 24 bound comparisons agree with plain tsc; caller metadata remains unchanged.");
+});
+
 test("diagnostic presentation preserves locale and pretty values while retaining native error codes and locations", async t => {
   const project = linkedCompilerConsumer(t);
   writeFileSync(join(project, "consumer.mts"), "export const use: string = 1;");
@@ -1046,7 +1083,7 @@ test("original discovery differential corpus equals plain tsc file lists, verdic
     assert.equal(expected.status, 0, expected.stdout);
     const expectedOptions = (JSON.parse(expected.stdout) as {compilerOptions: Record<string, unknown>}).compilerOptions;
     const originalBytes = filesystemSnapshot(project);
-    const matrix = await checkSdkContracts({minimum: {root: endpoints.minimum, version: minimumVersion}, current: {root: endpoints.current, version: currentVersion}, consumer: project});
+    const matrix = await checkSdkContracts({minimum: {root: endpoints.minimum, version: minimumVersion}, current: {root: endpoints.current, version: currentVersion}, consumer: project}).catch((error: unknown) => { throw new Error(entry.name, {cause: error}); });
     assert.equal(filesystemSnapshot(project), originalBytes, `${entry.name}: original filesystem snapshot`);
     const records = discoveryRecords(receipt);
     assert.equal(records.length, 2, entry.name);
