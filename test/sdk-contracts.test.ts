@@ -646,10 +646,12 @@ test("hermetic project refuses outside imports, reference paths, config aliases 
   const config = consumerConfig(project, "nodenext", "esm");
   const external = join(root, "external.d.mts"); writeFileSync(external, "export declare const value: number;");
   const outside = external.replace(/\.d\.mts$/, ".mjs");
+  writeFileSync(join(project, "bridge.d.mts"), `export {value} from ${JSON.stringify(outside)};`);
   const sources = [`import {value} from ${JSON.stringify(outside)}; export const use = value;`,
     `/// <reference path=${JSON.stringify(external)} />\nexport const use = 1;`,
     `export * from ${JSON.stringify(join(root, "missing.mjs"))};`,
-    `/// <reference path=${JSON.stringify(join(root, "missing.d.ts"))} />\nexport const use = 1;`];
+    `/// <reference path=${JSON.stringify(join(root, "missing.d.ts"))} />\nexport const use = 1;`,
+    'import {value} from "./bridge.mjs"; export const use = value;'];
   for (const [index, source] of sources.entries()) {
     writeFileSync(join(project, "consumer.mts"), source);
     await assert.rejects(checkSdkContracts({ minimum: target, current: target, consumer: project }), refuses("isolation_refused"), `outside source ${index}`);

@@ -7,12 +7,10 @@ status: in_progress
 priority: 1
 tags[1]: "gh:unbraind/pm-ts-starter#154"
 created_at: "2026-10-24T13:07:42.652Z"
-updated_at: "2026-10-25T00:12:56.407Z"
-assignee: codex-agent
-claim_principal: codex-agent
+updated_at: "2026-10-25T00:32:31.033Z"
 author: codex-agent
 acceptance_criteria: Exact manifest minimum and explicit current SDK resolve inside separate packed npm and Bun consumers; a newer-only public API passes current and fails minimum; reverting only consumer provisioning fails the regression.
-comments[36]{created_at,author,text}:
+comments[40]{created_at,author,text}:
   "2026-10-24T13:07:46.558Z",codex-agent,"Scope: correct the packed-consumer compatibility gate added by PR 153. Use separate npm and Bun consumer installations per bound, select the minimum from manifest.json and current release 2026.10.24, and prove the actual resolver result from each consumer. Add a real newer-only SDK API use through emitted declarations, retaining the fixed compiler examples and no-git checks. Repository dependency pins remain unchanged; full npm and Bun release gates will run locally and in CI."
   "2026-10-24T13:07:47.361Z",codex-agent,"Implementation: each compiler project maps the selected SDK public type exports through TypeScript paths, including imports reached through absolute external declarations. Unexported SDK subpaths resolve to an empty declaration rather than falling through to a foreign installation. Packed acceptance now installs npm and Bun consumers separately for each exact bound and verifies package metadata and SDK entry resolution at runtime. Regression uses real acquireLockLease, absent in the manifest minimum and present in 2026.10.24. Typecheck, test typecheck, lint, docstring gate and zero-duplication gate passed."
   "2026-10-24T13:07:47.949Z",codex-agent,"Fail-on-revert proof: restored only checkSdkContracts to its origin/main implementation, leaving the new regression and helper intact. node --test --test-name-pattern='absolute declaration imports report newer-only SDK APIs as minimum drift' test/sdk-contracts.test.ts failed 1/1: expected matrix.ok=false, got true, because the minimum inherited acquireLockLease from the external consumer's current SDK. Restored the fixed function immediately. Before revert the complete targeted suite passed 8/8 with 100% sdk-contracts.ts lines, branches and functions. Running the registered targeted suite again after restoration. Local strict tracker health passes after provisioning the same pm-github version as CI; an existing provenance advisory remains untouched."
@@ -49,6 +47,10 @@ comments[36]{created_at,author,text}:
   "2026-10-25T00:00:56.497Z",codex-agent,"Compiler-entry revert proof: replaced only inlineConsumer with its reviewed copy/rename implementation, retaining hermetic checks and all tests. node --test --test-name-pattern=\"compiler entries run\" test/sdk-contracts.test.ts failed all five entry subtests (ESM wrapper, CJS wrapper, lib entry, executable shell shim, JavaScript bin shim); Node counted 6 failures including the parent. The original relative dependencies or module context were lost. Restored the fixed source in finally and verified SHA256 equality. Both classes now have independent behavioral revert receipts."
   "2026-10-25T00:03:00.777Z",codex-agent,"Fixed-source local validation: PM-linked round-4 regressions pass 12/12 and boundary/review regressions pass 8/8, with zero failures, skips or cancellations. Absolute imports cover d.mts, d.cts and d.ts, both quote styles and preserved module kinds; minimum rejects newer-only acquireLockLease and current accepts it. In-place compiler coverage includes ESM, CJS, lib/tsc.js, executable shell and JavaScript bin shims with inherited resolution variables cleared. Added missing-reference refusal, nested SDK provenance, malformed/changed file-list refusals, nested absolute relocation, triple-slash references, bounded external graphs, local project references and a public TypeScript declaration dependency. The local reference/public-types scenario also agrees with plain tsc. Merged main at 4267351 without conflicts, regenerated the changelog inside the merge, and verified strict tracker health; only the existing provenance advisory remains. CI full gates are pending."
   "2026-10-25T00:12:56.395Z",codex-agent,"Configuration-context follow-up: a flattened effective config changed the origin of aliases inherited from a nested config. The private noLib config now extends the original tsconfig and clears only lib, preserving native inheritance and project references. Alias targets with baseUrl are validated relative to that effective base. Added a plain-tsc differential case for an inherited alias plus explicit libraries and a malformed path-list refusal. The configuration/review group passes 5/5 with no failures or skips; original consumer bytes remain unchanged. Typecheck, test typecheck, lint, build and 0% duplication pass. The initial CI source head is superseded by this context-preservation fix; final full-gate evidence will use the updated head."
+  "2026-10-25T00:23:03.712Z",codex-agent,"Latest-source verification at 96be553: PM-linked round-4 regressions pass 13/13 with zero failures, skips or cancellations, including inherited alias origins and explicit library overrides. Both behavioral revert proofs were repeated against this source head: isolation again falsely passed minimum (1 failing regression); copied/renamed compiler entries again failed all five variants (6 Node failures including the parent). Each proof restored the fixed source with SHA256 equality, and git confirmed no source difference from the pushed commit. The earlier 8 boundary/review checks and the 5 configuration/review checks also passed. Full npm/Bun CI is running on this exact source head."
+  "2026-10-25T00:26:41.234Z",codex-agent,"Review handoff: final source is 96be553; subsequent receipt changes only tracker records. The latest round-4 suite passes 13/13, boundary/review suite 8/8, and configuration/review group 5/5; both class reverts were repeated on the latest source and restored byte-for-byte. Full npm run release:check and bun run release:check are supplied by CI on Node 22 and 26. Final gate evidence is linked from https://github.com/unbraind/pm-ts-starter/pull/154/checks and the PR description, which will carry the exact run URL, head and measured counts after completion. No CI success is claimed while gates are running. Tracker records are frozen before that final run so its tested head includes these receipts. Keep this item in progress for orchestrator verification; release the claim. Existing provenance advisory unchanged; no new PM CLI/SDK defect found."
+  "2026-10-25T00:28:57.061Z",codex-agent,"CI at 96be553 passed all 390/390 tests under both Node 22 and 26, including 144/144 matrix and 64/64 hostile differential verdicts, but the npm release gates correctly failed the unchanged 100% threshold: sdk-contracts branch coverage was 99.50% (aggregate 99.88%); lines and functions were 100%. Bun gates were not reached. Reclaimed the item and added a transitive outside-declaration case through an in-tree bridge, exercising refusal of an external file discovered only after native graph resolution. No production code or threshold changes are needed."
+  "2026-10-25T00:32:28.788Z",codex-agent,"Coverage completion: the in-tree bridge to an outside declaration passes the targeted refusal regression (1/1, zero failures/skips); its LCOV records the previously uncovered external-graph refusal branch as executed. Production code remains exactly 96be553. Latest local typecheck, test typecheck, lint and 0% duplication pass. Both Node CI rows already proved 390/390 tests and all 212 differential verdicts, but their prior release gates failed coverage and are not approval; full npm/Bun gates must pass on the next final head. Freeze these tracker/test receipts before that run, with exact run/head/count evidence linked from PR 154 checks and description after completion. Keep the item in progress for orchestrator verification and release the claim."
 files[10]{path,scope}:
   dist/index.d.ts.map,project
   dist/index.js,project
@@ -60,7 +62,7 @@ files[10]{path,scope}:
   index.ts,project
   sdk-contracts.ts,project
   test/sdk-contracts.test.ts,project
-tests[7]:
+tests[8]:
   - command: node --test --experimental-test-coverage --test-coverage-include=sdk-contracts.ts test/sdk-contracts.test.ts
     scope: project
     timeout_seconds: 3600
@@ -119,6 +121,14 @@ tests[7]:
     provenance:
       author: codex-agent
       created_at: "2026-10-25T00:10:42.277Z"
+      source_kind: local_mutation
+      source_ref: fix/min-sdk-drift-check
+  - command: "node --test --experimental-test-coverage --test-coverage-include=sdk-contracts.ts --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/sdk-contracts-transitive.lcov --test-name-pattern=\"hermetic project refuses\" test/sdk-contracts.test.ts"
+    scope: project
+    timeout_seconds: 600
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-25T00:28:58.413Z"
       source_kind: local_mutation
       source_ref: fix/min-sdk-drift-check
 docs[1]{path,scope}:
