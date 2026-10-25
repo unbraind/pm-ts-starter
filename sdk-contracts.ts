@@ -1,10 +1,11 @@
 /** Compile author-owned consumer examples against exact installed SDK declarations. */
-import { classifiedCompilerOptions, compilerInputPaths, enforcedCompilerArguments, enforcedCompilerOptions, inspectionCompilerArguments, type CompilerOptionPolicy } from "./sdk-compiler-policy.ts";
+import { classifiedCompilerOptions, compilerInputPaths, enforcedCompilerOptions, refusedCompilerOptions, type CompilerOptionPolicy } from "./sdk-compiler-policy.ts";
 import { spawnSync } from "node:child_process";
 import { cpSync, constants, existsSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { stripVTControlCharacters } from "node:util";
 
 /** An exact, independently provisioned published SDK installation; never modified. */
 export interface SdkContractTarget {
@@ -172,18 +173,21 @@ function runCompiler(project: string, compiler: string, args: string[]) {
     cwd: project, encoding: "utf8", timeout: 30000, maxBuffer: 8 * 1024 * 1024,
     env: { ...env, GIT_CEILING_DIRECTORIES: dirname(project) },
   });
+  result.stdout = stripVTControlCharacters(result.stdout ?? "")
+    .replace(/^((?:.+\(\d+,\d+\): )?)\p{L}+ (TS\d+:)/gmu, "$1error $2")
+    .replace(/^(.+):(\d+):(\d+) - \p{L}+ (TS\d+:)/gmu, "$1($2,$3): error $4");
   if (result.error || result.signal || result.status === null || (result.status !== 0 && !/error TS\d+:/.test(result.stdout))) throw new SdkContractRefusal("compiler_unavailable", "Provide the consumer's working TypeScript compiler; each invocation must finish within 30 seconds and 8 MiB of private output.");
   return result;
 }
 /** Read one compiler-produced file path per line, refusing empty or unstructured provenance. */
-function compilerFiles(project: string, compiler: string, config: string, policy: ReadonlyMap<string, CompilerOptionPolicy>): string[] {
-  const output = runCompiler(project, compiler, [...enforcedCompilerArguments(policy), "--project", config, "--listFilesOnly", "--pretty", "false", "--locale", "en"]).stdout.trim();
+function compilerFiles(project: string, compiler: string, config: string, trace: boolean): string[] {
+  const output = runCompiler(project, compiler, ["--project", config, "--listFilesOnly"]).stdout.trim();
   const files: string[] = [];
   let diagnostic = false;
   for (const line of output.split(/\r?\n/)) {
-    if (isAbsolute(line)) { files.push(line); diagnostic = false; }
+    if (isAbsolute(line)) files.push(line);
     else if (/^(?:.+\(\d+,\d+\): )?error TS\d+:/.test(line)) diagnostic = true;
-    else if (!diagnostic || !/^ {2,}/.test(line)) isolationRefusal();
+    else if (!(diagnostic && /^(?:$| {2,}|\d+ |Found \d+ errors?\b)/.test(line)) && !(trace && files.length === 0)) isolationRefusal();
   }
   if (files.length === 0 || files.some(file => !existsSync(file))) isolationRefusal();
   return files.map(file => realpathSync(file));
@@ -201,9 +205,11 @@ function guardReferences(project: string, file: string): void {
 function isolatedConfig(project: string, compiler: string, policy: ReadonlyMap<string, CompilerOptionPolicy>): { compilerOptions: Record<string, unknown>; files: string[]; references?: { path: string }[] } {
   guardReferences(project, join(project, "tsconfig.json"));
   let config: { compilerOptions?: Record<string, unknown>; files?: string[]; references?: { path: string }[] };
-  try { config = JSON.parse(runCompiler(project, compiler, [...inspectionCompilerArguments(policy), "--project", "tsconfig.json", "--showConfig", "--locale", "en"]).stdout) as typeof config; }
+  try { config = JSON.parse(runCompiler(project, compiler, ["--project", "tsconfig.json", "--showConfig"]).stdout) as typeof config; }
   catch (error) { if (error instanceof SdkContractRefusal) throw error; isolationRefusal(); }
   const options = config.compilerOptions ?? {};
+  const refused = refusedCompilerOptions(policy, options);
+  if (refused.length) throw new SdkContractRefusal("isolation_refused", `Disable checking bypasses or command modes (${refused.join(", ")}) in the consumer configuration before retrying; the checker preserves option values.`);
   const paths = [...compilerInputPaths(project, options), ...(config.files ?? []), ...(config.references ?? []).map(entry => entry.path)];
   if (paths.some(path => typeof path !== "string" || !inside(project, resolve(project, path))) || !config.files?.length) isolationRefusal();
   return { ...config, compilerOptions: options, files: config.files };
@@ -229,30 +235,27 @@ function isolateInline(source: string, project: string, copied = new Map<string,
     return prefix + JSON.stringify(prefix.startsWith("<reference") ? path : path.replace(/\.d\.mts$/, ".mjs").replace(/\.d\.cts$/, ".cjs").replace(/\.d\.ts$/, ".js"));
   });
 }
-/** Stage only compiler library declarations; executable compiler files are never copied or renamed. */
-function prepareCompilation(project: string, compiler: string, installed: string, policy: ReadonlyMap<string, CompilerOptionPolicy>): string {
+/** Freeze original discovery and relocate output paths without altering compiler semantics. */
+function prepareCompilation(project: string, compiler: string, installed: string, policy: ReadonlyMap<string, CompilerOptionPolicy>): { config: string; trace: boolean } {
   const config = isolatedConfig(project, compiler, policy);
-  writeFileSync(join(project, ".sdk-contract-safe.json"), JSON.stringify({ extends: "./tsconfig.json", files: config.files, include: [], exclude: [], references: config.references, compilerOptions: enforcedCompilerOptions(policy) }));
-  const libraries: string[] = [];
-  for (const file of config.files) if (existsSync(resolve(project, file))) guardReferences(project, resolve(project, file));
-  for (const file of compilerFiles(project, compiler, ".sdk-contract-safe.json", policy)) {
-    if (inside(project, file)) { libraries.push(relative(project, file)); continue; }
-    const owner = owningPackage(file);
-    if (!/^(typescript|@typescript\/typescript-[a-z0-9-]+)$/.test(owner.name) || dirname(file) !== join(owner.root, "lib") || !/^lib\..*\.d\.ts$/.test(basename(file))) isolationRefusal();
-    const destination = join(project, ".sdk-contract-libs", basename(file));
-    mkdirSync(dirname(destination), { recursive: true });
-    writeFileSync(destination, readFileSync(file));
-    libraries.push(relative(project, destination));
-  }
-  // Explicit roots retain the compiler's exact library set while noLib prevents fallback to its installation.
-  config.files.push(...libraries);
-  writeFileSync(join(project, ".sdk-contract.json"), JSON.stringify({ ...config, include: [], exclude: [], extends: "./.sdk-contract-safe.json", compilerOptions: { noLib: true, lib: null } }));
-  verifyCompilation(project, compiler, installed, policy);
-  return ".sdk-contract.json";
+  const sandbox = join(project, ".sdk-contract-output");
+  mkdirSync(sandbox, { recursive: true });
+  writeFileSync(join(project, ".sdk-contract.json"), JSON.stringify({ extends: "./tsconfig.json", files: config.files, include: [], exclude: [], references: config.references,
+    compilerOptions: enforcedCompilerOptions(policy, config.compilerOptions, sandbox) }));
+  const trace = config.compilerOptions.traceResolution === true;
+  verifyCompilation(project, compiler, installed, trace);
+  return { config: ".sdk-contract.json", trace };
+}
+/** Allow only the invoked compiler's standard libraries outside the copied consumer. */
+function compilerLibrary(file: string): boolean {
+  const owner = owningPackage(file);
+  return /^(typescript|@typescript\/typescript-[a-z0-9-]+)$/.test(owner.name) &&
+    dirname(file) === join(owner.root, "lib") && /^lib\..*\.d\.ts$/.test(basename(file));
 }
 /** Fail closed before and after compilation if any file or SDK package escapes the selected installation. */
-function verifyCompilation(project: string, compiler: string, installed: string, policy: ReadonlyMap<string, CompilerOptionPolicy>): void {
-  for (const file of compilerFiles(project, compiler, ".sdk-contract.json", policy)) {
+function verifyCompilation(project: string, compiler: string, installed: string, trace: boolean): void {
+  for (const file of compilerFiles(project, compiler, ".sdk-contract.json", trace)) {
+    if (!inside(project, file) && compilerLibrary(file)) continue;
     const owner = owningPackage(file);
     const path = file.replaceAll("\\", "/"), selected = installed.replaceAll("\\", "/");
     const sdk = "/node_modules/@unbrained/pm-cli/", offset = path.lastIndexOf(sdk);
@@ -263,15 +266,16 @@ function verifyCompilation(project: string, compiler: string, installed: string,
 }
 /** Run only the consumer compiler; every error contributes to drift without filtering codes. */
 function compileConsumer(project: string, compiler: string, installed: string, policy: ReadonlyMap<string, CompilerOptionPolicy>): SdkContractDiagnostic[] {
-  const config = prepareCompilation(project, compiler, installed, policy);
-  const result = runCompiler(project, compiler, [...enforcedCompilerArguments(policy), "--project", config, "--pretty", "false", "--locale", "en"]);
-  verifyCompilation(project, compiler, installed, policy);
+  const { config, trace } = prepareCompilation(project, compiler, installed, policy);
+  const result = runCompiler(project, compiler, ["--project", config]);
+  verifyCompilation(project, compiler, installed, trace);
+  if (result.status === 0) return [];
   const diagnostics = [...result.stdout.matchAll(/^(?:(.+)\((\d+),(\d+)\): |)error (TS\d+):/gm)].map(match => {
     const file = match[1] === undefined ? "<config>" : relative(project, resolve(project, match[1]));
     return { code: match[4]!, file: isAbsolute(file) || file.startsWith("..") ? "<external>" : file.replaceAll("\\", "/"),
       line: Number(match[2] ?? 0), column: Number(match[3] ?? 0) };
   });
-  if (result.status !== 0 && diagnostics.length === 0) throw new SdkContractRefusal("compiler_unavailable", "Use a working compiler that reports structured TypeScript diagnostics for every failing compilation.");
+  if (diagnostics.length === 0) throw new SdkContractRefusal("compiler_unavailable", "Use a working compiler that reports structured TypeScript diagnostics for every failing compilation.");
   return diagnostics;
 }
 /** Prepare strict inline sources and ambient dependencies without copying the compiler. */
@@ -298,7 +302,7 @@ export function resolveSdkContractCompiler(from: string = import.meta.url): stri
     throw new SdkContractRefusal("compiler_unavailable", "Install TypeScript or pass --compiler pointing to its executable JavaScript entry.");
   }
 }
-/** Compile real declarations in exclusive per-call scratch storage; never touch a tracker. */
+/** Compile real declarations with original option values and disposable output/cache storage. */
 export async function checkSdkContracts(options: SdkContractOptions): Promise<SdkContractMatrix> {
   if (options.consumer !== undefined && (typeof options.consumer !== "string" || !options.consumer.trim() || options.examples !== undefined || options.compiler !== undefined)) throw new SdkContractRefusal("invalid_input", "Provide either a self-contained consumer directory or inline examples and an optional compiler.");
   const examples = options.consumer === undefined ? parseSdkConsumerExamples(options.examples ?? SDK_CONSUMER_EXAMPLES) : [{ id: "consumer", source: "" }];

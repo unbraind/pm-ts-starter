@@ -87,6 +87,6 @@ export declare const SDK_CONSUMER_EXAMPLES: readonly SdkConsumerExample[];
 export declare function parseSdkConsumerExamples(value: unknown): readonly SdkConsumerExample[];
 /** Locate a compiler only when the caller did not supply one; omit-dev installs get a remedy. */
 export declare function resolveSdkContractCompiler(from?: string): string;
-/** Compile real declarations in exclusive per-call scratch storage; never touch a tracker. */
+/** Compile real declarations with original option values and disposable output/cache storage. */
 export declare function checkSdkContracts(options: SdkContractOptions): Promise<SdkContractMatrix>;
 //# sourceMappingURL=sdk-contracts.d.ts.map

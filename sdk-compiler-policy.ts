@@ -1,5 +1,5 @@
 /** Exhaustive, reasoned policy for the exact compiler invoked by the SDK oracle. */
-import { isAbsolute, resolve } from "node:path";
+import { basename, isAbsolute, resolve } from "node:path";
 
 /** One reviewed option with an explicit safety class and enforcement action. */
 export interface CompilerOptionPolicy {
@@ -8,7 +8,7 @@ export interface CompilerOptionPolicy {
   /** Why this option belongs in its class. */
   reason: string;
   /** Config override, or a command-only option that the checker never forwards. */
-  safe: boolean | null | "command" | "preserve" | "off";
+  safe: "relocate" | "refuse" | "command" | "preserve";
 }
 /** Expand reviewed groups into independently addressable policy rows. */
 function entries(category: CompilerOptionPolicy["category"], reason: string, safe: CompilerOptionPolicy["safe"], names: string): [string, CompilerOptionPolicy][] {
@@ -16,22 +16,17 @@ function entries(category: CompilerOptionPolicy["category"], reason: string, saf
 }
 /** The only option policy: adding a compiler option requires an explicit reviewed row. */
 export const COMPILER_OPTION_ROWS: readonly [string, CompilerOptionPolicy][] = [
-  ...entries("output", "Disable emitted files and persistent compiler state.", false, "assumeChangesOnlyAffectDirectDependencies incremental composite declaration declarationMap emitDeclarationOnly sourceMap inlineSourceMap inlineSources"),
-  ...entries("output", "Disable all emission even when a source has no errors.", true, "noEmit noEmitOnError"),
-  ...entries("output", "Clear output, debug, trace and cache destinations after original root discovery.", null, "outDir outFile declarationDir tsBuildInfoFile mapRoot sourceRoot generateCpuProfile generateTrace"),
-  ...entries("output", "Force watch mode off on every compiler invocation, including inherited invalid watch settings.", "off", "watch"),
-  ...entries("output", "Never forward build, init, watch or profiling commands; the checker invokes only bounded project reads and checks.", "command", "build init clean force dry verbose builders stopBuildOnErrors pprofDir"),
-  ...entries("output", "Disable supplementary diagnostic output: verbosity cannot change a verdict and must not pollute file provenance.", false, "traceResolution explainFiles diagnostics extendedDiagnostics listFiles listEmittedFiles"),
-  ...entries("checking", "Require semantic checking, resolution and checking of every declaration.", false, "noCheck noResolve skipLibCheck skipDefaultLibCheck"),
-  ...entries("checking", "Check JavaScript as well as TypeScript; allowJs cannot silently leave a JS consumer unchecked.", true, "allowJs checkJs"),
-  ...entries("checking", "Require the strict checking family even when a consumer disables an individual member.", true, "strict noImplicitAny noImplicitThis strictNullChecks strictFunctionTypes strictBindCallApply strictPropertyInitialization strictBuiltinIteratorReturn useUnknownInCatchVariables"),
-  ...entries("checking", "Check side-effect imports and canonical import casing.", true, "noUncheckedSideEffectImports forceConsistentCasingInFileNames"),
+  ...entries("output", "Relocate only output/cache destinations; preserve every other consumer option value.", "relocate", "outDir outFile declarationDir tsBuildInfoFile mapRoot sourceRoot generateCpuProfile generateTrace pprofDir"),
+  ...entries("output", "Preserve emission and diagnostic controls, including project membership and incremental checking semantics.", "preserve", "assumeChangesOnlyAffectDirectDependencies incremental composite declaration declarationMap emitDeclarationOnly sourceMap inlineSourceMap inlineSources noEmit noEmitOnError traceResolution explainFiles diagnostics extendedDiagnostics listFiles listEmittedFiles"),
+  ...entries("output", "Refuse active command modes rather than rewriting values or starting unbounded compiler processes.", "command", "watch build init clean force dry verbose builders stopBuildOnErrors all help ignoreConfig listFilesOnly quiet showConfig version"),
+  ...entries("checking", "Refuse active checking bypasses with a typed remedy; never silently change compiler diagnostics.", "refuse", "noCheck noResolve skipLibCheck skipDefaultLibCheck"),
+  ...entries("neutral", "Preserve consumer checking strength and defaults; these select which diagnostics TypeScript reports.", "preserve", "allowJs checkJs strict noImplicitAny noImplicitThis strictNullChecks strictFunctionTypes strictBindCallApply strictPropertyInitialization strictBuiltinIteratorReturn useUnknownInCatchVariables noUncheckedSideEffectImports forceConsistentCasingInFileNames"),
   ...entries("neutral", "Preserve consumer module and declaration selection; the provenance and reference guards independently require all selected inputs to stay isolated.", "preserve", "allowArbitraryExtensions allowImportingTsExtensions allowUmdGlobalAccess baseUrl customConditions module moduleResolution moduleSuffixes paths resolveJsonModule resolvePackageJsonExports resolvePackageJsonImports rootDir rootDirs typeRoots types preserveSymlinks lib noLib libReplacement jsxImportSource"),
   ...entries("neutral", "Preserve the consumer language and interop contract; these options change accepted syntax or modeled runtime semantics without bypassing binding or semantic checking.", "preserve", "allowSyntheticDefaultImports erasableSyntaxOnly esModuleInterop isolatedDeclarations isolatedModules verbatimModuleSyntax exactOptionalPropertyTypes noUncheckedIndexedAccess noPropertyAccessFromIndexSignature experimentalDecorators jsx jsxFactory jsxFragmentFactory moduleDetection reactNamespace target useDefineForClassFields"),
   ...entries("neutral", "Only adds supplementary control-flow or unused-code diagnostics; disabling it does not suppress SDK binding or declaration diagnostics.", "preserve", "allowUnreachableCode allowUnusedLabels alwaysStrict noFallthroughCasesInSwitch noImplicitOverride noImplicitReturns noUnusedLocals noUnusedParameters"),
-  ...entries("neutral", "Only controls emitted representation; noEmit and disabled persistent state prevent its output from being used as a verdict.", "preserve", "rewriteRelativeImportExtensions downlevelIteration emitBOM importHelpers newLine noEmitHelpers preserveConstEnums removeComments stripInternal emitDecoratorMetadata"),
+  ...entries("neutral", "Only controls emitted representation; the compiler may emit with unchanged values into disposable storage.", "preserve", "rewriteRelativeImportExtensions downlevelIteration emitBOM importHelpers newLine noEmitHelpers preserveConstEnums removeComments stripInternal emitDecoratorMetadata"),
   ...entries("neutral", "Only affects language-service or watch behavior; neither service nor watch mode is invoked.", "preserve", "disableReferencedProjectLoad disableSolutionSearching disableSourceOfProjectReferenceRedirect disableSizeLimit plugins watchInterval watchFile watchDirectory fallbackPolling synchronousWatchDirectory excludeDirectories excludeFiles preserveWatchOutput maxNodeModuleJsDepth"),
-  ...entries("neutral", "Only affects performance, diagnostic presentation or command selection; the checker supplies its own fixed command switches and parses every error.", "preserve", "all checkers help ignoreConfig listFilesOnly locale project quiet showConfig singleThreaded version noErrorTruncation pretty deduplicatePackages stableTypeOrdering"),
+  ...entries("neutral", "Preserve performance and diagnostic presentation values; only inspection passes select a bounded command mode.", "preserve", "checkers locale project singleThreaded noErrorTruncation pretty deduplicatePackages stableTypeOrdering"),
 ];
 /** Index the reviewed rows after retaining the array for duplicate-classification checks. */
 export const COMPILER_OPTION_POLICY: ReadonlyMap<string, CompilerOptionPolicy> = new Map(COMPILER_OPTION_ROWS);
@@ -50,23 +45,25 @@ export function classifiedCompilerOptions(help: string): ReadonlyMap<string, Com
     return [name, policy];
   }));
 }
-/** Apply safe values only after the original root file list has been resolved. */
-export function enforcedCompilerOptions(policy: ReadonlyMap<string, CompilerOptionPolicy>): Record<string, unknown> {
-  return Object.fromEntries([...policy].filter(([, row]) => typeof row.safe === "boolean" || row.safe === null).map(([name, row]) => [name, row.safe]));
+/** Return only relocated output paths; no boolean, enum, list or checking value may change. */
+export function enforcedCompilerOptions(policy: ReadonlyMap<string, CompilerOptionPolicy>, original: Record<string, unknown>, sandbox: string): Record<string, unknown> {
+  const overrides: Record<string, unknown> = {};
+  for (const [name, row] of policy) {
+    if (row.safe !== "relocate") continue;
+    if (original[name] !== undefined || name === "outDir" || (name === "tsBuildInfoFile" && (original.incremental === true || original.composite === true))) {
+      overrides[name] = resolve(sandbox, name, typeof original[name] === "string" ? basename(original[name]) : name === "tsBuildInfoFile" ? "project.tsbuildinfo" : "output");
+    }
+  }
+  return overrides;
 }
 
-/** Disable command-only modes before they can turn a bounded check into a watcher. */
-export function enforcedCompilerArguments(policy: ReadonlyMap<string, CompilerOptionPolicy>): string[] {
-  return [...policy].filter(([, row]) => row.safe === "off").flatMap(([name]) => [`--${name}`, "false"]);
+/** Identify enabled checking bypasses and command modes without changing their values. */
+export function refusedCompilerOptions(policy: ReadonlyMap<string, CompilerOptionPolicy>, original: Record<string, unknown>): string[] {
+  return [...policy].filter(([name, row]) => (row.safe === "refuse" || row.safe === "command") && original[name] === true).map(([name]) => name);
 }
 
 /** Enumerate resolution inputs for component-wise isolation checks, including unused aliases. */
 export function compilerInputPaths(project: string, options: Record<string, unknown>): unknown[] {
   return [options.baseUrl ?? ".", options.rootDir ?? ".", ...Object.values(options.paths ?? {}).flat().map(path => typeof path === "string" ? resolve(project, (options.baseUrl ?? ".") as string, path) : path),
     ...((options.typeRoots ?? []) as string[]), ...((options.rootDirs ?? []) as string[]), ...((options.types ?? []) as string[]).filter(value => isAbsolute(value) || value.startsWith("."))];
-}
-
-/** Read original discovery semantics; showConfig exits before checking or emitting files. */
-export function inspectionCompilerArguments(policy: ReadonlyMap<string, CompilerOptionPolicy>): string[] {
-  return enforcedCompilerArguments(policy);
 }

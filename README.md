@@ -257,14 +257,17 @@ package metadata, dependencies and tsconfig are copied into an exclusive directo
 for each bound. Each copy contains the selected SDK as a physical package in its
 own node_modules; links are dereferenced so resolution cannot follow a package
 back to the original installation. The consumer's own installed TypeScript entry
-runs in place, with its working directory set to the isolated consumer, using
-`--noEmit --skipLibCheck false --pretty false`. Compiler executables are neither
-copied nor renamed; TypeScript declaration files and package metadata remain
-available when the consumer imports its public types. The original tsconfig and
-sources are copied unchanged; a private config extends the original configuration
-to preserve inherited alias origins. It adds the exact discovered library
-declarations as roots and uses `noLib` with a cleared `lib` override to prevent
-fallback to the external compiler installation.
+runs in place, with its working directory set to the isolated consumer. Compiler
+executables are neither copied nor renamed. The original tsconfig and sources
+are copied unchanged; a private config extends the original configuration to
+preserve inherited alias origins and pins the compiler's original root-file list.
+Every compiler option value remains the consumer's own value or default, except
+output/cache paths, which are relocated into a disposable output sandbox.
+`composite`, `incremental`, `declaration`, `declarationMap`, `emitDeclarationOnly`,
+`noEmit`, `noEmitOnError`, `lib`, `noLib`, and all checking options keep their values.
+The compiler emits when the consumer configuration emits. Standard libraries stay
+in the invoked compiler's installation and are verified by package ownership and
+library-file location, without adding them to the project's root files.
 Project mode cannot be combined
 with `--examples` or `--compiler`. Include the project's dependencies and compiler
 in its node_modules before running the checker; use relative imports within the
@@ -293,10 +296,10 @@ locations use a safe marker; source text and raw compiler messages stay private.
 Every compiler invocation clears `NODE_PATH`, `NODE_OPTIONS` and inherited `TS*`
 environment variables. Before type checking, effective configuration paths and
 explicit references must remain inside the consumer, including unused `paths`
-and `typeRoots` entries. A discovery-only `--listFilesOnly` pass stages the
-compiler's library declarations, then canonical file lists are verified both
-before and after compilation. Every compiled file must be inside the isolated
-consumer; every SDK declaration must belong to its selected SDK installation.
+and `typeRoots` entries. Discovery-only `--listFilesOnly` passes verify canonical
+file lists before and after compilation. Every compiled file must be inside the isolated consumer or
+be a standard compiler library; every SDK declaration must belong to the selected
+SDK installation.
 External files, nested alternative SDKs, and missing or unstructured provenance
 fail closed with `isolation_refused` and a remedy. These checks use complete path
 components and package metadata, never substring matches on diagnostic messages.
@@ -305,31 +308,39 @@ usable diagnostics produce `compiler_unavailable`.
 
 The invoked compiler's `--help --all --locale en` table is read once per compiler
 per check, including watch and build declarations. `sdk-compiler-policy.ts` is the
-single reasoned policy for all 137 TypeScript 7.0.2 options: 35 output/cache/verbosity
-controls, 17 mandatory checking controls, and 85 options preserving consumer
-semantics or affecting only diagnostics, emit representation, or inactive services.
-Every newly discovered option receives a typed `isolation_refused` with guidance
-to classify it before retrying; the completeness test also fails on a new option.
+single reasoned policy for all 137 TypeScript 7.0.2 options. Its classes relocate
+path-valued output/cache destinations, refuse checking bypasses, or preserve the
+consumer's values. Every newly discovered option receives a typed
+`isolation_refused` with guidance to classify it before retrying; the completeness
+test also fails on a new option. Active `noCheck`, `noResolve`, `skipLibCheck`, and
+`skipDefaultLibCheck` receive a typed refusal naming the option and explaining how
+to disable it. They are never silently flipped. Strictness and JavaScript checking
+retain the consumer's semantics. Invalid or command-only configuration settings
+fail closed; the checker invokes project compilation, without build or watch mode.
+Referenced project declarations must already be built when plain project `tsc`
+requires them; the checker does not build project references automatically.
 
-Before applying checking or output policy, the same consumer compiler resolves
-root files and project references using `--showConfig` on the original configuration.
-Only watch mode is disabled during this read, which exits before checking or emitting.
-The private checking overlay pins those explicit roots, clears `include` and
-`exclude`, retains references, and then disables emission, persistent state and
-checking bypasses. This preserves implicit `outDir` and `declarationDir` exclusions
-and configuration inheritance by construction. Alias origins remain inherited;
-missing referenced build declarations remain errors. Build/init/clean and other
-command-only modes are never forwarded; invalid configuration uses fail closed.
-`traceResolution`, `explainFiles`, `diagnostics`, `extendedDiagnostics`, `listFiles`
-and `listEmittedFiles` are forced off: supplementary output cannot change a verdict
-or pollute file provenance. A 28-config differential corpus compares complete
-program file lists at both bounds and current-bound verdicts and error codes with
-plain tsc, including excluded stale ambient declarations and diagnostic options.
-Table-driven controls exercise every output option with escaping destinations
-and every checking option with a nonexistent SDK export at the published minimum
-(and current), including JavaScript consumers. File inventories and content hashes
-assert that no output or cache was created or overwritten outside the isolated
-consumer. The same exhaustive tests must fail with policy enforcement reverted.
+Before relocating outputs, the same consumer compiler resolves root files and
+project references using `--showConfig` on the original configuration. The private
+overlay pins those explicit roots, clears `include` and `exclude`, retains
+references, and overrides only path-valued outputs. This preserves implicit
+`outDir` and `declarationDir` exclusions, composite membership errors, and inherited
+input paths. Explicit output/cache destinations and default emit/cache locations
+move below the sandbox. Diagnostic presentation and supplementary tracing retain
+their original settings.
+
+A property test enumerates the compiler's entire option table, assigns each option
+a nondefault value, and asserts that only output paths may change. Instrumented
+real compiler invocations also compare complete effective option objects for the
+differential corpus and generated configurations. Corpus cases include composite
+unlisted imports, incremental caches, declaration maps, declaration-only emission,
+consumer `noEmit`, explicit libraries, and prebuilt or missing project references.
+Both SDK bounds compare program files, verdicts, diagnostic counts and error codes
+with plain tsc; its output paths are independently relocated for safe emission.
+Filesystem inventories and content hashes verify that compiler writes stay in the
+output sandbox, with separate snapshots protecting original inputs and escaping
+output/cache destinations. Reintroducing a `composite: false` override must fail
+the membership regression and the option-equality property.
 
 The differential suite covers node16, nodenext and bundler resolution, ESM imports
 and CJS requires, exports types conditions, versioned types conditions and

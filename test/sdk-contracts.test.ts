@@ -7,10 +7,11 @@ import { tmpdir } from "node:os";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import test, { after, type TestContext } from "node:test";
+import { optionValue } from "./compiler-option-fixtures.ts";
 import { PmClient } from "@unbrained/pm-cli/sdk";
 import { createExtensionTestHarness } from "@unbrained/pm-cli/sdk/testing";
 import extension from "../index.ts";
-import { classifiedCompilerOptions } from "../sdk-compiler-policy.ts";
+import { classifiedCompilerOptions, refusedCompilerOptions, COMPILER_OPTION_POLICY } from "../sdk-compiler-policy.ts";
 import { checkSdkContracts, parseSdkConsumerExamples, resolveSdkContractCompiler, SDK_CONSUMER_EXAMPLES, SdkContractRefusal, type SdkContractOptions, type SdkContractMatrix } from "../sdk-contracts.ts";
 
 const repo = resolve(import.meta.dirname, "..");
@@ -480,24 +481,21 @@ test("differential hostile specifiers in consumer and external declarations pres
   t.diagnostic(`Hostile differential: ${rows}/${rows} compiler verdicts agree.`);
 });
 
-test("all compiler errors drift, including external TS2304 hidden by a consumer skipLibCheck true", async t => {
+test("checking bypasses receive a typed refusal and remedy without changing consumer bytes", async t => {
   const project = installedConsumer("bun", "current");
-  const config = consumerConfig(project, "nodenext", "esm").replace('"skipLibCheck": false', '"skipLibCheck": true');
-  writeFileSync(join(project, "tsconfig.json"), config);
-  writeFileSync(join(project, "contract.d.mts"), "export declare const value: AbsentType;");
-  writeFileSync(join(project, "consumer.mts"), 'import {value} from "./contract.mjs"; export const use = value;');
-  // The product must override only this compiler flag; the source/config bytes survive.
-  const minimum = { root: join(installedConsumer("npm", "minimum"), "node_modules/@unbrained/pm-cli"), version: minimumVersion };
-  const current = { root: join(project, "node_modules/@unbrained/pm-cli"), version: currentVersion };
-  const before = bytes(project);
-  const matrix = await checkSdkContracts({ minimum, current, consumer: project });
-  assert.equal(matrix.failed, 2);
-  for (const row of matrix.rows) {
-    assert.deepEqual(row.codes, ["TS2304"]);
-    assert.deepEqual(row.diagnostics, [{ code: "TS2304", file: "contract.d.mts", line: 1, column: 29 }]);
+  for (const name of ["skipLibCheck", "skipDefaultLibCheck", "noCheck", "noResolve"]) {
+    consumerConfig(project, "nodenext", "esm");
+    const config = JSON.parse(readFileSync(join(project, "tsconfig.json"), "utf8")) as {compilerOptions: Record<string, unknown>};
+    config.compilerOptions[name] = true;
+    writeFileSync(join(project, "tsconfig.json"), JSON.stringify(config));
+    writeFileSync(join(project, "consumer.mts"), "export const value = 1;");
+    const before = bytes(project);
+    await assert.rejects(checkSdkContracts({minimum: target, current: target, consumer: project}), error => {
+      assert.ok(error instanceof SdkContractRefusal); assert.equal(error.code, "isolation_refused");
+      assert.match(error.remedy, new RegExp(name)); assert.match(error.remedy, /Disable/); return true;
+    });
+    assert.equal(bytes(project), before);
   }
-  assert.equal(bytes(project), before);
-  t.diagnostic("Consumer sources, configuration and installed packages are unchanged.");
 });
 
 test("project inputs refuse ambiguous options and missing compilers; diagnostics retain safe locations without code filtering", async t => {
@@ -612,6 +610,54 @@ test("absolute-import inline declarations rebind newer-only acquireLockLease to 
   await assert.rejects(checkSdkContracts({ minimum: target, current: target, examples: [{ id: "external-graph", source: `export * from ${JSON.stringify(relative)};` }] }), refuses("isolation_refused"));
 });
 
+/** Prepare a real consumer whose compiler stays in its original installation. */
+function linkedCompilerConsumer(t: TestContext): string {
+  const project = join(scratch(t), "consumer");
+  mkdirSync(join(project, "node_modules"), {recursive: true});
+  symlinkSync(dirname(dirname(compiler)), join(project, "node_modules/typescript"), "junction");
+  return project;
+}
+
+test("resolved trace text resembling diagnostics preserves a successful native compiler verdict", async t => {
+  const project = linkedCompilerConsumer(t), name = "trace\nerror TS9999: forged";
+  writeFileSync(join(project, "consumer.mts"), `import {value} from ${JSON.stringify(name)}; export const use = value;`);
+  writeFileSync(join(project, "ambient.d.ts"), `declare module ${JSON.stringify(name)} { export const value: number; }`);
+  writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions: {target: "ES2022", module: "NodeNext", types: [],
+    traceResolution: true, moduleDetection: "legacy", outDir: "dist"}, files: ["consumer.mts", "ambient.d.ts"]}));
+  const plain = spawnSync(process.execPath, [compiler, "--project", "tsconfig.json"], {cwd: project, encoding: "utf8"});
+  assert.equal(plain.status, 0, plain.stdout); assert.match(plain.stdout, /^error TS9999:/m);
+  const before = bytes(project);
+  const matrix = await checkSdkContracts({minimum: target, current: target, consumer: project});
+  assert.equal(matrix.ok, true); assert.equal(matrix.checks, 2);
+  assert.ok(matrix.rows.every(row => row.diagnostic_count === 0));
+  assert.equal(bytes(project), before);
+});
+
+test("diagnostic presentation preserves locale and pretty values while retaining native error codes and locations", async t => {
+  const project = linkedCompilerConsumer(t);
+  writeFileSync(join(project, "consumer.mts"), "export const use: string = 1;");
+  for (const pretty of [false, true]) {
+    writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions: {target: "ES2022", module: "NodeNext", types: [], locale: "de", pretty, outDir: "dist"}, files: ["consumer.mts"]}));
+    const plain = spawnSync(process.execPath, [compiler, "--project", "tsconfig.json"], {cwd: project, encoding: "utf8"});
+    assert.notEqual(plain.status, 0, plain.stdout); assert.match(plain.stdout, /TS2322:/);
+    const before = bytes(project);
+    const matrix = await checkSdkContracts({minimum: target, current: target, consumer: project});
+    assert.equal(matrix.failed, 2);
+    const expectedCodes = [...plain.stdout.matchAll(/\b(TS\d+):/g)].map(match => match[1]);
+    for (const row of matrix.rows) {
+      assert.deepEqual(row.codes, expectedCodes);
+      assert.deepEqual(row.diagnostics.find(diagnostic => diagnostic.code === "TS2322"), {code: "TS2322", file: "consumer.mts", line: 1, column: 14});
+    }
+    assert.equal(bytes(project), before);
+  }
+});
+
+test("nonexecutable compiler shims receive a typed tooling refusal", async t => {
+  const entry = join(scratch(t), "compiler-shim");
+  writeFileSync(entry, "#!/bin/sh\nexit 0\n");
+  await assert.rejects(checkSdkContracts({minimum: target, current: target, compiler: entry}), refuses("compiler_unavailable"));
+});
+
 test("compiler entries run in place: ESM wrapper, CJS wrapper, lib/tsc.js and bin shim", async t => {
   const root = scratch(t), receipt = join(root, "receipt.jsonl");
   const helper = `const {spawnSync} = require('node:child_process'); const {appendFileSync,existsSync} = require('node:fs');
@@ -638,7 +684,9 @@ const result = spawnSync(process.execPath,[${JSON.stringify(compiler)},...proces
     });
   } finally { for (const [index, key] of keys.entries()) { if (saved[index] === undefined) delete process.env[key]; else process.env[key] = saved[index]; } }
   const records = readFileSync(receipt, "utf8").trim().split("\n").map(line => JSON.parse(line) as {entry: string; cwd: string; args: string[]});
-  assert.equal(records.filter(row => row.args.includes("--pretty") && !row.args.includes("--showConfig") && !row.args.includes("--listFilesOnly")).length, 4);
+  const compilations = records.filter(row => !row.args.includes("--help") && !row.args.includes("--showConfig") && !row.args.includes("--listFilesOnly"));
+  assert.equal(compilations.length, 4);
+  assert.ok(compilations.every(row => JSON.stringify(row.args) === JSON.stringify(["--project", ".sdk-contract.json"])), "compilation adds no option-value overrides");
   assert.ok(records.every(row => [join(root, "wrapper.mjs"), join(root, "wrapper.cjs")].includes(row.entry) && row.cwd !== root));
   assert.equal(records.filter(row => row.args.includes("--help")).length, 2, "query each wrapper once across both targets");
 });
@@ -693,6 +741,20 @@ if (process.argv.includes('--listFilesOnly') && (!['post','config','diagnostics'
 const result=spawnSync(process.execPath,[${JSON.stringify(compiler)},...process.argv.slice(2)],{stdio:'inherit'});
 if (!process.argv.includes('--help') && !process.argv.includes('--showConfig') && !process.argv.includes('--listFilesOnly')) writeFileSync(marker,'compiled'); process.exit(result.status ?? 1);`);
     await assert.rejects(checkSdkContracts({ minimum: target, current: target, compiler: entry, examples: [SDK_CONSUMER_EXAMPLES[0]!] }), refuses(mode === "diagnostics" ? "compiler_unavailable" : "isolation_refused"));
+  }
+});
+
+test("external compiler provenance refuses package-owned declarations outside standard library locations", async t => {
+  const root = scratch(t), owner = join(root, "node_modules/typescript"), entry = join(root, "compiler.cjs");
+  mkdirSync(owner, {recursive: true});
+  writeFileSync(join(owner, "package.json"), JSON.stringify({name: "typescript"}));
+  for (const name of ["dist/lib.es5.d.ts", "lib/compiler.d.ts"]) {
+    const external = join(owner, name);
+    mkdirSync(dirname(external), {recursive: true}); writeFileSync(external, "export declare const value: number;");
+    writeFileSync(entry, `const {spawnSync} = require('node:child_process');
+if (process.argv.includes('--listFilesOnly')) { process.stdout.write(${JSON.stringify(external + "\n")}); process.exit(0); }
+const result = spawnSync(process.execPath,[${JSON.stringify(compiler)},...process.argv.slice(2)],{stdio:'inherit'}); process.exit(result.status ?? 1);`);
+    await assert.rejects(checkSdkContracts({minimum: target, current: target, compiler: entry}), refuses("isolation_refused"));
   }
 });
 
@@ -783,41 +845,21 @@ function realCompilerPolicy() {
 }
 
 for (const [name, row] of realCompilerPolicy()) {
-  if (row.category === "neutral") continue;
+  if (row.safe !== "relocate" && row.safe !== "command") continue;
   test(`compiler option ${row.category}: ${name}`, async t => {
-    const root = scratch(t), outside = join(root, "outside"), project = installedConsumer("npm", "minimum"), endpoints = publishedSdks();
-    mkdirSync(outside);
-    writeFileSync(join(outside, "sentinel"), "unchanged external data");
-    const expected = bytes(outside);
-    const minimum = {root: endpoints.minimum, version: minimumVersion};
-    const current = {root: endpoints.current, version: currentVersion};
-    const extension = name === "allowJs" || name === "checkJs" ? "mjs" : "mts";
-    const source = row.category === "checking"
-      ? 'import {nonexistentSdkExportForPolicyControl} from "@unbrained/pm-cli/sdk/authoring"; export const use = nonexistentSdkExportForPolicyControl;'
-      : "export const safe = 1;";
-    writeFileSync(join(project, `policy.${extension}`), source);
-    const attack = row.safe === null || name === "pprofDir" ? join(outside, name) : (row.safe === "command" || row.safe === "off") ? true : !row.safe;
-    const config = JSON.stringify({compilerOptions: {target: "ES2022", module: "NodeNext", types: ["node"],
-      // Every output control also carries the cache escape reported in review.
-      incremental: true, allowJs: true, checkJs: false, tsBuildInfoFile: join(outside, "build-info"), [name]: attack}, files: [`policy.${extension}`]});
+    const root = scratch(t), outside = join(root, "outside"), project = installedConsumer("npm", "minimum");
+    mkdirSync(outside); writeFileSync(join(outside, "sentinel"), "unchanged external data");
+    const expected = bytes(root);
+    const config = JSON.stringify({compilerOptions: {target: "ES2022", module: "NodeNext", types: [], incremental: true,
+      declaration: true, sourceMap: true, tsBuildInfoFile: join(outside, "build-info"), [name]: row.safe === "relocate" ? join(outside, name) : true}, files: ["policy.mts"]});
     writeFileSync(join(project, "tsconfig.json"), config);
-    if (row.safe === "command" || row.safe === "off") {
-      // Command-only modes are disabled or never forwarded. Invalid config uses
-      // must also stop without creating or overwriting an external file.
-      try { await checkSdkContracts({minimum, current, consumer: project}); }
-      catch (error) { assert.ok(refuses("isolation_refused")(error)); }
-    } else {
-      const matrix = await checkSdkContracts({minimum, current, consumer: project});
-      if (row.category === "checking") {
-        assert.equal(matrix.rows[0]!.target, "minimum");
-        assert.equal(matrix.rows[0]!.ok, false, name);
-        assert.ok(matrix.rows[0]!.codes.includes("TS2305"), `${name}: ${matrix.rows[0]!.codes}`);
-        assert.equal(matrix.failed, 2, name);
-      } else assert.equal(matrix.ok, true, `${name}: ${JSON.stringify(matrix.rows)}`);
-    }
-    assert.equal(bytes(outside), expected, `${name}: no outside file created or overwritten`);
+    writeFileSync(join(project, "policy.mts"), "export const safe = 1;");
+    try {
+      const matrix = await checkSdkContracts({minimum: target, current: target, consumer: project});
+      assert.equal(matrix.checks, 2);
+    } catch (error) { assert.ok(refuses("isolation_refused")(error)); }
+    assert.equal(bytes(root), expected, `${name}: filesystem snapshot outside sandbox is unchanged`);
     assert.equal(readFileSync(join(project, "tsconfig.json"), "utf8"), config);
-    assert.equal(readFileSync(join(project, `policy.${extension}`), "utf8"), source);
   });
 }
 
@@ -854,18 +896,71 @@ function instrumentDiscoveryOracle(project: string, receipt: string): void {
   writeFileSync(join(bin, "plain-tsc"), readFileSync(join(bin, "tsc")));
   unlinkSync(join(bin, "tsc"));
   writeFileSync(join(bin, "tsc"), `import {spawnSync} from 'node:child_process';
-import {appendFileSync,existsSync,statSync} from 'node:fs'; import {relative,basename,resolve} from 'node:path';
+import {appendFileSync,existsSync,statSync,readdirSync,readFileSync} from 'node:fs'; import {relative,basename,resolve,join} from 'node:path'; import {createHash} from 'node:crypto'; import {stripVTControlCharacters} from 'node:util';
 const plain = new URL('./plain-tsc', import.meta.url).pathname;
 const args = process.argv.slice(2);
-const run = args => { const result = spawnSync(process.execPath,[plain,...args],{encoding:'utf8',maxBuffer:64*1024*1024,timeout:30000}); if (result.error || result.signal || result.status === null) throw new Error('plain tsc oracle failed', {cause:result.error}); return result; };
-if (!args.includes('--help') && !args.includes('--showConfig') && !args.includes('--listFilesOnly')) {
-  const original = run(['--project','tsconfig.json','--noEmit','--pretty','false','--locale','en']);
-  const originalFiles = run(['--project','tsconfig.json','--listFilesOnly','--pretty','false','--locale','en']);
+const run = args => { const result = spawnSync(process.execPath,[plain,...args],{encoding:'utf8',maxBuffer:64*1024*1024,timeout:30000}); if (result.error || result.signal || result.status === null) throw new Error('plain tsc oracle failed', {cause:result.error}); result.stdout = stripVTControlCharacters(result.stdout); return result; };
+const checking = !args.includes('--help') && !args.includes('--showConfig') && !args.includes('--listFilesOnly');
+let record;
+// Snapshot all copied input bytes. The only allowed compiler writes are in the dedicated output sandbox.
+const snapshot = () => { const hash = createHash('sha256'); const visit = dir => { for (const name of readdirSync(dir).sort()) { const file = join(dir,name); if (file === resolve('.sdk-contract-output')) continue; hash.update(relative(process.cwd(),file)); if (statSync(file).isDirectory()) visit(file); else hash.update(readFileSync(file)); } }; visit(process.cwd()); return hash.digest('hex'); };
+let before;
+if (checking) {
+  const originalConfig = JSON.parse(run(['--project','tsconfig.json','--showConfig']).stdout);
+  const effectiveConfig = JSON.parse(run([...args,'--showConfig']).stdout);
+  const originalOptions = originalConfig.compilerOptions, effectiveOptions = effectiveConfig.compilerOptions;
+  const originalFiles = run(['--project','tsconfig.json','--listFilesOnly']);
   const checkedFiles = run([...args,'--listFilesOnly']);
-  const normalize = output => [...new Set(output.split(/\\r?\\n/).filter(line => line && existsSync(resolve(line)) && statSync(resolve(line)).isFile()).map(line => resolve(line)).map(file => /[/\\\\](?:lib|\\.sdk-contract-libs)[/\\\\]lib\\..*\\.d\\.ts$/.test(file) ? '<lib>/' + basename(file) : relative(process.cwd(),file).replaceAll('\\\\','/')))].sort();
-  appendFileSync(${JSON.stringify(receipt)},JSON.stringify({original:normalize(originalFiles.stdout),checked:normalize(checkedFiles.stdout),status:original.status,codes:[...original.stdout.matchAll(/error (TS\\d+):/g)].map(match => match[1]).sort()}) + '\\n');
+  const normalize = output => [...new Set(output.split(/\\r?\\n/).filter(line => line && existsSync(resolve(line)) && statSync(resolve(line)).isFile()).map(line => resolve(line)).map(file => /[/\\\\]lib[/\\\\]lib\\..*\\.d\\.ts$/.test(file) ? '<lib>/' + basename(file) : relative(process.cwd(),file).replaceAll('\\\\','/')))].sort();
+  // Plain tsc keeps its values; relocate its outputs independently so emission cannot alter root discovery.
+  const paths = ['outDir','outFile','declarationDir','tsBuildInfoFile','mapRoot','sourceRoot'];
+  const outputArgs = paths.filter(name => originalOptions[name] !== undefined || name === 'outDir' || (name === 'tsBuildInfoFile' && (originalOptions.composite || originalOptions.incremental))).flatMap(name => ['--'+name,resolve('.sdk-contract-output/oracle',name,typeof originalOptions[name] === 'string' ? basename(originalOptions[name]) : name === 'tsBuildInfoFile' ? 'cache.tsbuildinfo' : 'output')]);
+  const original = run(['--project','tsconfig.json',...outputArgs]);
+  record = {original:normalize(originalFiles.stdout),checked:normalize(checkedFiles.stdout),originalOptions,effectiveOptions,originalWatchOptions:originalConfig.watchOptions ?? {},effectiveWatchOptions:effectiveConfig.watchOptions ?? {},sandbox:resolve('.sdk-contract-output'),status:original.status,codes:original.status === 0 ? [] : [...original.stdout.matchAll(/\\p{L}+ (TS\\d+):/gu)].map(match => match[1])};
+  before = snapshot();
 }
-const result = run(args); process.stdout.write(result.stdout); process.stderr.write(result.stderr); process.exit(result.status ?? 1);`);
+const result = run(args);
+if (checking) appendFileSync(${JSON.stringify(receipt)},JSON.stringify({...record,checkedCodes:result.status === 0 ? [] : [...result.stdout.matchAll(/\\p{L}+ (TS\\d+):/gu)].map(match => match[1]),writesConfined:before === snapshot()}) + '\\n');
+process.stdout.write(result.stdout); process.stderr.write(result.stderr); process.exit(result.status ?? 1);`);
+}
+
+/** Independent compiler observations at the actual checker invocation. */
+interface DiscoveryRecord {
+  original: string[];
+  checked: string[];
+  originalOptions: Record<string, unknown>;
+  effectiveOptions: Record<string, unknown>;
+  originalWatchOptions: Record<string, unknown>;
+  effectiveWatchOptions: Record<string, unknown>;
+  sandbox: string;
+  status: number;
+  codes: string[];
+  writesConfined: boolean;
+  checkedCodes: string[];
+}
+/** Decode private oracle receipts without publishing compiler messages or machine paths. */
+function discoveryRecords(receipt: string): DiscoveryRecord[] {
+  return readFileSync(receipt, "utf8").trim().split("\n").map(line => JSON.parse(line) as DiscoveryRecord);
+}
+/** Compare watch exclusion paths relative to their unchanged copied project origin. */
+function normalizedWatchOptions(options: Record<string, unknown>, root: string): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(options).map(([key, value]) => [key, Array.isArray(value)
+    ? value.map(path => typeof path === "string" && path.startsWith(root + "/") ? path.slice(root.length + 1) : path) : value]));
+}
+/** Compare the entire compiler table plus every effective key, including defaults. */
+function assertOptionEquality(record: DiscoveryRecord, label: string, expected: Record<string, unknown>, watch: Record<string, unknown> = {}): void {
+  const root = dirname(record.sandbox);
+  assert.deepEqual(normalizedWatchOptions(record.originalWatchOptions, root), watch, `${label}: original watch options survive copying`);
+  assert.deepEqual(record.effectiveWatchOptions, record.originalWatchOptions, `${label}: watch values retain their original defaults and overrides`);
+  assert.deepEqual(record.originalOptions, expected, `${label}: original configuration survives copying unchanged`);
+  assert.deepEqual([...record.checkedCodes].sort(), [...record.codes].sort(), `${label}: complete diagnostic code multiset`);
+  const keys = new Set([...COMPILER_OPTION_POLICY.keys(), ...Object.keys(record.originalOptions), ...Object.keys(record.effectiveOptions)]);
+  for (const key of keys) {
+    const effective = record.effectiveOptions[key];
+    if (COMPILER_OPTION_POLICY.get(key)?.safe === "relocate" && effective !== undefined) {
+      assert.ok(resolve(dirname(record.sandbox), String(effective)).startsWith(record.sandbox + "/"), `${label}: ${key} relocated inside sandbox`);
+    } else assert.deepEqual(effective, record.originalOptions[key], `${label}: ${key} must retain its original value`);
+  }
 }
 
 /** Each corpus member changes original discovery or diagnostic presentation independently. */
@@ -903,6 +998,25 @@ test("original discovery differential corpus equals plain tsc file lists, verdic
     {name: "extends-include-exclude", config: {extends: "./input/config/base.json"}, files: {"config/base.json": JSON.stringify({include: ["../**/*"], exclude: ["../excluded"]}), "excluded/stale.d.ts": stale}},
     {name: "reference-built", config: {files: ["input/src/consumer.mts"], references: [{path: "input/reference"}]}, files: {"reference/tsconfig.json": JSON.stringify({compilerOptions: {composite: true, module: "NodeNext", target: "ES2022", types: [], outDir: "dist"}, files: ["index.ts"]}), "reference/index.ts": "export const value = 1;", "src/consumer.mts": 'import {value} from "../reference/index.js"; export const use = value;'}, build: true},
     {name: "reference-missing-build", config: {files: ["input/src/consumer.mts"], references: [{path: "input/reference"}]}, files: {"reference/tsconfig.json": JSON.stringify({compilerOptions: {composite: true, module: "NodeNext", target: "ES2022", types: [], outDir: "dist"}, files: ["index.ts"]}), "reference/index.ts": "export const value = 1;", "src/consumer.mts": 'import {value} from "../reference/index.js"; export const use = value;'}},
+    {name: "composite-unlisted-import", config: {compilerOptions: {composite: true}, files: ["input/src/consumer.mts"]}, files: {"src/consumer.mts": 'import {value} from "./helper.mjs"; export const use = value;', "src/helper.mts": "export const value = 1;"}},
+    {name: "composite-listed-import", config: {compilerOptions: {composite: true}, files: ["input/src/consumer.mts", "input/src/helper.mts"]}, files: {"src/consumer.mts": 'import {value} from "./helper.mjs"; export const use = value;', "src/helper.mts": "export const value = 1;"}},
+    {name: "incremental-default-cache", config: {compilerOptions: {incremental: true}, files: ["input/src/consumer.mts"]}},
+    {name: "incremental-explicit-cache", config: {compilerOptions: {incremental: true, tsBuildInfoFile: "input/cache/state.tsbuildinfo"}, files: ["input/src/consumer.mts"]}},
+    {name: "composite-cache-declarations", config: {compilerOptions: {composite: true, tsBuildInfoFile: "input/cache/composite.tsbuildinfo", declaration: true, declarationMap: true}, files: ["input/src/consumer.mts"]}},
+    {name: "declaration-map", config: {compilerOptions: {declaration: true, declarationMap: true}, files: ["input/src/consumer.mts"]}},
+    {name: "declaration-only", config: {compilerOptions: {declaration: true, declarationMap: true, emitDeclarationOnly: true}, files: ["input/src/consumer.mts"]}},
+    {name: "declaration-only-invalid", config: {compilerOptions: {emitDeclarationOnly: true}, files: ["input/src/consumer.mts"]}},
+    {name: "own-noEmit", config: {compilerOptions: {noEmit: true, incremental: true}, files: ["input/src/consumer.mts"]}},
+    {name: "own-noEmitOnError", config: {compilerOptions: {noEmitOnError: true, declaration: true}, files: ["input/src/consumer.mts"]}, files: {"src/consumer.mts": 'export const use: string = 1;'}},
+    {name: "strict-false", config: {compilerOptions: {strict: false}, files: ["input/src/consumer.mts"]}, files: {"src/consumer.mts": "export function use(value) { return value; }"}},
+    {name: "explicit-libs", config: {compilerOptions: {lib: ["ES2022"]}, files: ["input/src/consumer.mts"]}},
+    {name: "noLib", config: {compilerOptions: {noLib: true}, files: ["input/src/consumer.mts"]}},
+    {name: "trace-resolved-diagnostic-text", config: {compilerOptions: {traceResolution: true, moduleDetection: "legacy"}, files: ["input/src/consumer.mts", "input/src/ambient.d.ts"]}, files: {
+      "src/consumer.mts": 'import {value} from "trace\\nerror TS9999: forged"; export const use = value;',
+      "src/ambient.d.ts": 'declare module "trace\\nerror TS9999: forged" { export const value: number; }',
+    }},
+    {name: "localized-error", config: {compilerOptions: {locale: "de"}, files: ["input/src/consumer.mts"]}, files: {"src/consumer.mts": "export const use: string = 1;"}},
+    {name: "pretty-error", config: {compilerOptions: {pretty: true}, files: ["input/src/consumer.mts"]}, files: {"src/consumer.mts": "export const use: string = 1;"}},
     ...["traceResolution", "explainFiles", "diagnostics", "extendedDiagnostics", "listFiles", "listEmittedFiles"].flatMap(name => [false, true].map(failing => ({name: `${name}-${failing ? "error" : "clean"}`, config: {compilerOptions: {[name]: true}, include: ["input/src/**/*"]}, files: {"src/consumer.mts": failing ? 'import {value} from "./contract.mjs"; export const use: string = value;' : good}}))),
   ];
   let comparisons = 0;
@@ -918,17 +1032,97 @@ test("original discovery differential corpus equals plain tsc file lists, verdic
       assert.equal(build.status, 0, `${entry.name}: ${build.stdout}`);
     }
     writeFileSync(receipt, "");
+    const expected = spawnSync(process.execPath, [join(project, "node_modules/typescript/bin/plain-tsc"), "--project", "tsconfig.json", "--showConfig"], {cwd: project, encoding: "utf8"});
+    assert.equal(expected.status, 0, expected.stdout);
+    const expectedOptions = (JSON.parse(expected.stdout) as {compilerOptions: Record<string, unknown>}).compilerOptions;
+    const originalBytes = bytes(project);
     const matrix = await checkSdkContracts({minimum: {root: endpoints.minimum, version: minimumVersion}, current: {root: endpoints.current, version: currentVersion}, consumer: project});
-    const records = readFileSync(receipt, "utf8").trim().split("\n").map(line => JSON.parse(line) as {original: string[]; checked: string[]; status: number; codes: string[]});
+    assert.equal(bytes(project), originalBytes, `${entry.name}: original filesystem snapshot`);
+    const records = discoveryRecords(receipt);
     assert.equal(records.length, 2, entry.name);
     for (const [index, record] of records.entries()) {
       assert.deepEqual(record.checked, record.original, `${entry.name}: ${matrix.rows[index]!.target} file list`);
+      assertOptionEquality(record, entry.name, expectedOptions);
+      assert.equal(record.writesConfined, true, `${entry.name}: all writes confined to output sandbox`);
+      const checked = matrix.rows[index]!;
+      assert.equal(checked.ok, record.status === 0, `${entry.name}: ${checked.target} verdict`);
+      assert.deepEqual([...checked.codes].sort(), record.codes.slice(0, 3).sort(), `${entry.name}: ${checked.target} error codes`);
+      assert.equal(checked.diagnostic_count, record.codes.length, entry.name);
       comparisons++;
     }
-    const oracle = records[1]!, current = matrix.rows[1]!;
-    assert.equal(current.ok, oracle.status === 0, `${entry.name}: current verdict`);
-    assert.deepEqual([...current.codes].sort(), oracle.codes, `${entry.name}: current error codes`);
-    assert.equal(current.diagnostic_count, oracle.codes.length, entry.name);
+
   }
-  t.diagnostic(`Discovery differential: ${corpus.length} configs, ${comparisons} file-list comparisons, ${corpus.length} current verdict/error-code comparisons; zero disagreements.`);
+  t.diagnostic(`Discovery differential: ${corpus.length} configs, ${comparisons} file-list comparisons, ${comparisons} verdict/error-code and full-option comparisons; all filesystem snapshots unchanged outside output sandbox.`);
+});
+
+
+test("composite membership errors match plain build-mode tsc and never escape the output sandbox", async t => {
+  const project = scratch(t);
+  mkdirSync(join(project, "node_modules"));
+  symlinkSync(join(repo, "node_modules/typescript"), join(project, "node_modules/typescript"), "junction");
+  writeFileSync(join(project, "package.json"), JSON.stringify({type: "module"}));
+  writeFileSync(join(project, "consumer.mts"), 'import {value} from "./helper.mjs"; export const use = value;');
+  writeFileSync(join(project, "helper.mts"), "export const value = 1;");
+  for (const noEmit of [false, true]) {
+    writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions: {composite: true, incremental: true, declaration: true,
+      declarationMap: true, noEmit, module: "NodeNext", target: "ES2022", types: [], outDir: "dist", tsBuildInfoFile: "cache/build.tsbuildinfo"}, files: ["consumer.mts"]}));
+    const plain = spawnSync(process.execPath, [compiler, "--build", ".", "--force", "--pretty", "false"], {cwd: project, encoding: "utf8"});
+    assert.notEqual(plain.status, 0, plain.stdout);
+    assert.match(plain.stdout, /error TS6307:/);
+    const before = bytes(project);
+    const matrix = await checkSdkContracts({minimum: target, current: target, consumer: project});
+    for (const row of matrix.rows) {
+      assert.equal(row.ok, false);
+      assert.deepEqual(row.codes, [...plain.stdout.matchAll(/error (TS\d+):/g)].map(match => match[1]));
+    }
+    assert.equal(bytes(project), before, "no source, existing output or cache byte outside the sandbox changes");
+  }
+  t.diagnostic("Build-mode composite differential: 2 configurations, 4 bound comparisons, TS6307 retained with emission enabled and disabled.");
+});
+
+test("generated full-table nondefault configurations preserve effective options at actual compiler invocations", async t => {
+  const project = scratch(t), receipt = join(scratch(t), "generated.jsonl");
+  mkdirSync(join(project, "node_modules"));
+  // A private compiler entry keeps instrumented files separate from shared installations.
+  cpSync(join(repo, "node_modules/typescript"), join(project, "node_modules/typescript"), {recursive: true});
+  mkdirSync(join(project, "node_modules/@typescript"));
+  cpSync(join(repo, "node_modules/@typescript"), join(project, "node_modules/@typescript"), {recursive: true});
+  writeFileSync(join(project, "package.json"), JSON.stringify({type: "module"}));
+  writeFileSync(join(project, "consumer.mts"), "export const value = 1;");
+  const help = spawnSync(process.execPath, [compiler, "--help", "--all", "--locale", "en"], {encoding: "utf8"}).stdout;
+  const watchNames = new Set([...help.split("WATCH OPTIONS")[1]!.split("BUILD OPTIONS")[0]!.matchAll(/^--([^\s,]+)/gm)].map(match => match[1]!));
+  instrumentDiscoveryOracle(project, receipt);
+  let compared = 0, refused = 0;
+  for (const name of realCompilerPolicy().keys()) {
+    const value = optionValue(help, name), compilerOptions = {target: "ES2022", module: "NodeNext", types: []};
+    const config = watchNames.has(name) ? {compilerOptions, watchOptions: {[name]: value}, files: ["consumer.mts"]}
+      : {compilerOptions: {...compilerOptions, [name]: value}, files: ["consumer.mts"]};
+    writeFileSync(join(project, "tsconfig.json"), JSON.stringify(config));
+    writeFileSync(receipt, "");
+    const inspection = spawnSync(process.execPath, [join(project, "node_modules/typescript/bin/plain-tsc"), "--project", "tsconfig.json", "--showConfig"], {cwd: project, encoding: "utf8"});
+    const inspected = inspection.status === 0 ? JSON.parse(inspection.stdout) as {compilerOptions: Record<string, unknown>; watchOptions?: Record<string, unknown>} : {compilerOptions: {}};
+    const expectedOptions = inspected.compilerOptions, expectedWatch = normalizedWatchOptions(inspected.watchOptions ?? {}, project);
+    const rejectedConfig = inspection.status !== 0 || refusedCompilerOptions(COMPILER_OPTION_POLICY, expectedOptions).length > 0;
+    try {
+      const matrix = await checkSdkContracts({minimum: target, current: target, consumer: project});
+      const records = discoveryRecords(receipt);
+      assert.equal(records.length, 2, name);
+      for (const [index, record] of records.entries()) {
+        assertOptionEquality(record, name, expectedOptions, expectedWatch);
+        assert.equal(record.writesConfined, true, name);
+        assert.equal(matrix.rows[index]!.ok, record.status === 0, name);
+        assert.equal(matrix.rows[index]!.diagnostic_count, record.codes.length, name);
+      }
+      compared++;
+    } catch (error) {
+      assert.equal(rejectedConfig, true, `${name}: a valid configuration must reach compilation`);
+      assert.ok(error instanceof SdkContractRefusal, name);
+      assert.equal(error.code, "isolation_refused", `${name}: ${error.message}`);
+      assert.ok(error.remedy.length > 20, name);
+      refused++;
+    }
+  }
+  assert.ok(compared > 90, `${compared} configurations reached the real compiler`);
+  assert.equal(compared + refused, COMPILER_OPTION_POLICY.size);
+  t.diagnostic(`Generated effective-option equality: ${compared} configurations at both bounds; ${refused} typed refusals for bypasses, invalid or command-only settings; ${compared + refused} total options.`);
 });

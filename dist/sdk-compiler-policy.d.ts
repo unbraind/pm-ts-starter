@@ -5,7 +5,7 @@ export interface CompilerOptionPolicy {
     /** Why this option belongs in its class. */
     reason: string;
     /** Config override, or a command-only option that the checker never forwards. */
-    safe: boolean | null | "command" | "preserve" | "off";
+    safe: "relocate" | "refuse" | "command" | "preserve";
 }
 /** The only option policy: adding a compiler option requires an explicit reviewed row. */
 export declare const COMPILER_OPTION_ROWS: readonly [string, CompilerOptionPolicy][];
@@ -15,12 +15,10 @@ export declare const COMPILER_OPTION_POLICY: ReadonlyMap<string, CompilerOptionP
 export declare function compilerOptionNames(help: string): string[];
 /** Refuse every newly introduced option rather than silently assigning a default class. */
 export declare function classifiedCompilerOptions(help: string): ReadonlyMap<string, CompilerOptionPolicy>;
-/** Apply safe values only after the original root file list has been resolved. */
-export declare function enforcedCompilerOptions(policy: ReadonlyMap<string, CompilerOptionPolicy>): Record<string, unknown>;
-/** Disable command-only modes before they can turn a bounded check into a watcher. */
-export declare function enforcedCompilerArguments(policy: ReadonlyMap<string, CompilerOptionPolicy>): string[];
+/** Return only relocated output paths; no boolean, enum, list or checking value may change. */
+export declare function enforcedCompilerOptions(policy: ReadonlyMap<string, CompilerOptionPolicy>, original: Record<string, unknown>, sandbox: string): Record<string, unknown>;
+/** Identify enabled checking bypasses and command modes without changing their values. */
+export declare function refusedCompilerOptions(policy: ReadonlyMap<string, CompilerOptionPolicy>, original: Record<string, unknown>): string[];
 /** Enumerate resolution inputs for component-wise isolation checks, including unused aliases. */
 export declare function compilerInputPaths(project: string, options: Record<string, unknown>): unknown[];
-/** Read original discovery semantics; showConfig exits before checking or emitting files. */
-export declare function inspectionCompilerArguments(policy: ReadonlyMap<string, CompilerOptionPolicy>): string[];
 //# sourceMappingURL=sdk-compiler-policy.d.ts.map
