@@ -311,12 +311,17 @@ semantics or affecting only diagnostics, emit representation, or inactive servic
 Every newly discovered option receives a typed `isolation_refused` with guidance
 to classify it before retrying; the completeness test also fails on a new option.
 
-Before configuration inspection, a private overlay disables emission and
-incremental/composite state, clears output/cache/profile/trace paths, and requires
+Before configuration inspection, policy-generated command-line overrides disable
+emission and incremental/composite state, contain output/cache/profile/trace
+paths inside private scratch storage, and require
 semantic checking, resolution, declaration checking, strict checks, and JavaScript
 checking. Watch is explicitly disabled on the command line. Build/init/clean and
 other command-only modes are never forwarded; invalid uses in configuration fail
-closed. The original configuration inheritance chain retains alias origins.
+closed. A private overlay then clears output/cache destinations for file discovery
+and compilation and explicitly retains top-level project references, which
+TypeScript does not inherit through `extends`. The original configuration
+inheritance chain retains alias origins; missing referenced build declarations
+remain errors.
 Table-driven controls exercise every output option with escaping destinations
 and every checking option with a nonexistent SDK export at the published minimum
 (and current), including JavaScript consumers. File inventories and content hashes

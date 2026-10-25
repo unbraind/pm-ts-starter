@@ -1,5 +1,5 @@
 /** Exhaustive, reasoned policy for the exact compiler invoked by the SDK oracle. */
-import { isAbsolute, resolve } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 
 /** One reviewed option with an explicit safety class and enforcement action. */
 export interface CompilerOptionPolicy {
@@ -63,4 +63,10 @@ export function enforcedCompilerArguments(policy: ReadonlyMap<string, CompilerOp
 export function compilerInputPaths(project: string, options: Record<string, unknown>): unknown[] {
   return [options.baseUrl ?? ".", options.rootDir ?? ".", ...Object.values(options.paths ?? {}).flat().map(path => typeof path === "string" ? resolve(project, (options.baseUrl ?? ".") as string, path) : path),
     ...((options.typeRoots ?? []) as string[]), ...((options.rootDirs ?? []) as string[]), ...((options.types ?? []) as string[]).filter(value => isAbsolute(value) || value.startsWith("."))];
+}
+
+/** Inspect the original config without inheriting output/cache destinations or checking bypasses. */
+export function inspectionCompilerArguments(policy: ReadonlyMap<string, CompilerOptionPolicy>, project: string): string[] {
+  return [...enforcedCompilerArguments(policy), ...[...policy].filter(([, row]) => typeof row.safe === "boolean" || row.safe === null)
+    .flatMap(([name, row]) => [`--${name}`, row.safe === null ? join(project, ".sdk-contract-inspection", name) : String(row.safe)])];
 }

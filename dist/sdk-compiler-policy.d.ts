@@ -21,4 +21,6 @@ export declare function enforcedCompilerOptions(policy: ReadonlyMap<string, Comp
 export declare function enforcedCompilerArguments(policy: ReadonlyMap<string, CompilerOptionPolicy>): string[];
 /** Enumerate resolution inputs for component-wise isolation checks, including unused aliases. */
 export declare function compilerInputPaths(project: string, options: Record<string, unknown>): unknown[];
+/** Inspect the original config without inheriting output/cache destinations or checking bypasses. */
+export declare function inspectionCompilerArguments(policy: ReadonlyMap<string, CompilerOptionPolicy>, project: string): string[];
 //# sourceMappingURL=sdk-compiler-policy.d.ts.map

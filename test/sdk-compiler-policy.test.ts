@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import test from "node:test";
-import { classifiedCompilerOptions, compilerInputPaths, compilerOptionNames, COMPILER_OPTION_POLICY, COMPILER_OPTION_ROWS, enforcedCompilerArguments, enforcedCompilerOptions } from "../sdk-compiler-policy.ts";
+import { classifiedCompilerOptions, compilerInputPaths, compilerOptionNames, COMPILER_OPTION_POLICY, COMPILER_OPTION_ROWS, enforcedCompilerArguments, enforcedCompilerOptions, inspectionCompilerArguments } from "../sdk-compiler-policy.ts";
 
 const help = spawnSync(process.execPath, [resolve("node_modules/typescript/bin/tsc"), "--help", "--all", "--locale", "en"], { encoding: "utf8" });
 
@@ -30,6 +30,13 @@ test("incomplete and future option tables fail closed; overrides cover every enf
   assert.equal(compilerOptionNames(help.stdout + "\n--help, -?\n").length, classifiedCompilerOptions(help.stdout).size);
   assert.deepEqual(enforcedCompilerArguments(classifiedCompilerOptions(help.stdout)), ["--watch", "false"]);
   const policy = classifiedCompilerOptions(help.stdout), overrides = enforcedCompilerOptions(policy);
+  const inspection = inspectionCompilerArguments(policy, resolve("consumer"));
+  assert.deepEqual(inspection.slice(0, 2), ["--watch", "false"]);
+  for (const [name, value] of Object.entries(overrides)) {
+    const index = inspection.indexOf(`--${name}`);
+    assert.ok(index >= 0, name);
+    assert.equal(inspection[index + 1], value === null ? resolve("consumer", ".sdk-contract-inspection", name) : String(value), name);
+  }
   for (const [name, row] of policy) {
     if (row.safe === "preserve" || row.safe === "command" || row.safe === "off") assert.equal(Object.hasOwn(overrides, name), false);
     else assert.equal(overrides[name], row.safe, name);

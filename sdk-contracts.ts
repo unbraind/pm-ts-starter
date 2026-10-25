@@ -1,5 +1,5 @@
 /** Compile author-owned consumer examples against exact installed SDK declarations. */
-import { classifiedCompilerOptions, compilerInputPaths, enforcedCompilerArguments, enforcedCompilerOptions, type CompilerOptionPolicy } from "./sdk-compiler-policy.ts";
+import { classifiedCompilerOptions, compilerInputPaths, enforcedCompilerArguments, enforcedCompilerOptions, inspectionCompilerArguments, type CompilerOptionPolicy } from "./sdk-compiler-policy.ts";
 import { spawnSync } from "node:child_process";
 import { cpSync, constants, existsSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -198,10 +198,10 @@ function guardReferences(project: string, file: string): void {
   }
 }
 /** Validate effective JSON configuration paths before any type checking, including unused aliases. */
-function isolatedConfig(project: string, compiler: string, policy: ReadonlyMap<string, CompilerOptionPolicy>): { compilerOptions: Record<string, unknown>; files: string[] } {
+function isolatedConfig(project: string, compiler: string, policy: ReadonlyMap<string, CompilerOptionPolicy>): { compilerOptions: Record<string, unknown>; files: string[]; references?: { path: string }[] } {
   guardReferences(project, join(project, "tsconfig.json"));
   let config: { compilerOptions?: Record<string, unknown>; files?: string[]; references?: { path: string }[] };
-  try { config = JSON.parse(runCompiler(project, compiler, [...enforcedCompilerArguments(policy), "--project", ".sdk-contract-safe.json", "--showConfig", "--locale", "en"]).stdout) as typeof config; }
+  try { config = JSON.parse(runCompiler(project, compiler, [...inspectionCompilerArguments(policy, project), "--project", "tsconfig.json", "--showConfig", "--locale", "en"]).stdout) as typeof config; }
   catch (error) { if (error instanceof SdkContractRefusal) throw error; isolationRefusal(); }
   const options = config.compilerOptions ?? {};
   const paths = [...compilerInputPaths(project, options), ...(config.files ?? []), ...(config.references ?? []).map(entry => entry.path)];
@@ -231,8 +231,9 @@ function isolateInline(source: string, project: string, copied = new Map<string,
 }
 /** Stage only compiler library declarations; executable compiler files are never copied or renamed. */
 function prepareCompilation(project: string, compiler: string, installed: string, policy: ReadonlyMap<string, CompilerOptionPolicy>): string {
-  writeFileSync(join(project, ".sdk-contract-safe.json"), JSON.stringify({ extends: "./tsconfig.json", compilerOptions: enforcedCompilerOptions(policy) }));
+  mkdirSync(join(project, ".sdk-contract-inspection"), { recursive: true });
   const config = isolatedConfig(project, compiler, policy);
+  writeFileSync(join(project, ".sdk-contract-safe.json"), JSON.stringify({ extends: "./tsconfig.json", references: config.references, compilerOptions: enforcedCompilerOptions(policy) }));
   const libraries: string[] = [];
   for (const file of config.files) if (existsSync(resolve(project, file))) guardReferences(project, resolve(project, file));
   for (const file of compilerFiles(project, compiler, ".sdk-contract-safe.json", policy)) {

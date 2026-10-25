@@ -745,6 +745,16 @@ test("hermetic local config references and unused internal aliases agree with pl
   const plain = spawnSync(process.execPath, [compiler, "--project", "tsconfig.json", "--noEmit"], {cwd: root, encoding: "utf8"}); assert.equal(plain.status, 0, plain.stdout);
   const matrix = await checkSdkContracts({minimum: target, current: target, consumer: root});
   assert.equal(matrix.ok, plain.status === 0); assert.equal(matrix.checks, 2);
+  // A missing referenced build must remain an error; dropping references would
+  // silently compile the referenced source instead of checking its built contract.
+  writeFileSync(join(root, "consumer.mts"), 'import {value} from "./reference/index.js"; export const use = value;');
+  unlinkSync(join(reference, "dist/index.d.ts"));
+  const missing = spawnSync(process.execPath, [compiler, "--project", "tsconfig.json", "--noEmit"], {cwd: root, encoding: "utf8"});
+  assert.notEqual(missing.status, 0);
+  assert.match(missing.stdout, /TS6305/);
+  const rejected = await checkSdkContracts({minimum: target, current: target, consumer: root});
+  assert.equal(rejected.failed, 2, "retain project references and refuse missing build declarations");
+  assert.ok(rejected.rows.every(row => row.codes.includes("TS6305")));
 });
 
 test("hermetic inherited config preserves alias origins and explicit libraries against plain tsc", async t => {

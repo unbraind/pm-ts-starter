@@ -1,5 +1,5 @@
 /** Compile author-owned consumer examples against exact installed SDK declarations. */
-import { classifiedCompilerOptions, compilerInputPaths, enforcedCompilerArguments, enforcedCompilerOptions } from "./sdk-compiler-policy.js";
+import { classifiedCompilerOptions, compilerInputPaths, enforcedCompilerArguments, enforcedCompilerOptions, inspectionCompilerArguments } from "./sdk-compiler-policy.js";
 import { spawnSync } from "node:child_process";
 import { cpSync, constants, existsSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -147,7 +147,7 @@ function isolatedConfig(project, compiler, policy) {
     guardReferences(project, join(project, "tsconfig.json"));
     let config;
     try {
-        config = JSON.parse(runCompiler(project, compiler, [...enforcedCompilerArguments(policy), "--project", ".sdk-contract-safe.json", "--showConfig", "--locale", "en"]).stdout);
+        config = JSON.parse(runCompiler(project, compiler, [...inspectionCompilerArguments(policy, project), "--project", "tsconfig.json", "--showConfig", "--locale", "en"]).stdout);
     }
     catch (error) {
         if (error instanceof SdkContractRefusal)
@@ -186,8 +186,9 @@ function isolateInline(source, project, copied = new Map(), base = project) {
 }
 /** Stage only compiler library declarations; executable compiler files are never copied or renamed. */
 function prepareCompilation(project, compiler, installed, policy) {
-    writeFileSync(join(project, ".sdk-contract-safe.json"), JSON.stringify({ extends: "./tsconfig.json", compilerOptions: enforcedCompilerOptions(policy) }));
+    mkdirSync(join(project, ".sdk-contract-inspection"), { recursive: true });
     const config = isolatedConfig(project, compiler, policy);
+    writeFileSync(join(project, ".sdk-contract-safe.json"), JSON.stringify({ extends: "./tsconfig.json", references: config.references, compilerOptions: enforcedCompilerOptions(policy) }));
     const libraries = [];
     for (const file of config.files)
         if (existsSync(resolve(project, file)))
