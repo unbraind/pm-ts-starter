@@ -87,6 +87,25 @@ function npmInvocation() {
     }
     return { command: process.platform === "win32" ? "npm.cmd" : "npm", args: [] };
 }
+/** Disable npm 10's unconditional directory prepare in a disposable install artifact. */
+function installationArtifact(source, destination) {
+    const original = readFileSync(join(source, "package.json"));
+    let metadata;
+    try {
+        metadata = JSON.parse(original.toString());
+        if (!metadata || typeof metadata !== "object" || Array.isArray(metadata))
+            throw new Error("invalid package metadata");
+    }
+    catch {
+        throw new SdkContractRefusal("sdk_unavailable", "Provide installable dependency artifacts with valid package metadata before retrying.");
+    }
+    if (!metadata.scripts?.prepare)
+        return undefined;
+    copyConsumer(source, destination);
+    delete metadata.scripts.prepare;
+    writeFileSync(join(destination, "package.json"), JSON.stringify(metadata));
+    return original;
+}
 /** Install package artifacts separately; never carry the consumer node_modules tree into a project copy. */
 function installDependencies(project, modules, names) {
     if (!existsSync(modules))
@@ -106,10 +125,17 @@ function installDependencies(project, modules, names) {
                 }
             }
     }
+    const artifacts = mkdtempSync(join(dirname(project), "artifacts-")), originals = new Map();
     const sources = available.map(name => {
         // Reuse npm's exact-version native tarball cache instead of repacking the compiler binary on every bound.
         const source = locations.get(name);
-        return /^@typescript\/typescript-[a-z0-9-]+$/.test(name) ? name + "@" + JSON.parse(readFileSync(join(source, "package.json"), "utf8")).version : source;
+        if (/^@typescript\/typescript-[a-z0-9-]+$/.test(name))
+            return name + "@" + JSON.parse(readFileSync(join(source, "package.json"), "utf8")).version;
+        const artifact = join(artifacts, name), original = installationArtifact(source, artifact);
+        if (!original)
+            return source;
+        originals.set(name, original);
+        return artifact;
     });
     if (sources.length === 0)
         return;
@@ -126,6 +152,8 @@ function installDependencies(project, modules, names) {
         rmSync(metadata, { force: true });
     if (result.status !== 0)
         throw new SdkContractRefusal("sdk_unavailable", "Provision installable consumer dependencies and a working npm installer; sandbox dependency installation must complete without lifecycle scripts.");
+    for (const [name, original] of originals)
+        writeFileSync(join(project, "node_modules", name, "package.json"), original);
     for (const name of available.filter(name => name === "typescript" || /^@typescript\/typescript-[a-z0-9-]+$/.test(name))) {
         const source = locations.get(name);
         for (const path of readdirSync(source, { recursive: true }).map(String)) {

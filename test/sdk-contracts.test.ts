@@ -1284,6 +1284,27 @@ test("sandbox provisioning failures are typed and preserve consumer bytes", asyn
   }
 });
 
+test("sandbox dependency artifacts suppress prepare and restore original metadata", async t => {
+  const project = noEmitConsumer(t), dependency = join(project, "node_modules/artifact-fixture");
+  mkdirSync(dependency);
+  const metadata = join(dependency, "package.json");
+  writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions: {noEmit: true, types: [], module: "NodeNext", resolveJsonModule: true}, files: ["consumer.mts"]}));
+  for (const script of ["prepare", "postinstall"]) {
+    writeFileSync(metadata, JSON.stringify({name: "artifact-fixture", version: "1.0.0", scripts: {
+      [script]: 'node -e "require(\'node:fs\').writeFileSync(\'executed\',\'forbidden\');process.exit(42)"',
+    }}));
+    writeFileSync(join(project, "consumer.mts"), `import metadata from "artifact-fixture/package.json" with {type: "json"}; export const script: string = metadata.scripts.${script};`);
+    const expected = plainCopy(project, t), original = filesystemSnapshot(project);
+    assert.equal(expected.ok, true);
+    assertPlainRows(await checkSdkContracts({minimum: target, current: target, consumer: project}), expected);
+    assert.equal(filesystemSnapshot(project), original);
+  }
+  for (const malformed of ["{", "null", "[]", "42"]) {
+    writeFileSync(metadata, malformed);
+    await assert.rejects(checkSdkContracts({minimum: target, current: target, consumer: project}), refuses("sdk_unavailable"));
+  }
+});
+
 test("sandbox compiler artifacts must retain original native binary and library bytes", async t => {
   const project = join(scratch(t), "consumer"), nativeName = "@typescript/" + readdirSync(join(repo, "node_modules/@typescript"))[0]!;
   mkdirSync(join(project, "node_modules/@typescript"), {recursive: true});

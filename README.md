@@ -258,8 +258,11 @@ for each bound. Each copy contains the selected SDK as a physical package in its
 fresh node_modules. The project copy excludes every node_modules directory and
 Git metadata. npm installs the consumer's installed package artifacts separately,
 with lifecycle scripts disabled. A private template of those fresh artifacts is
-cloned into each bound, where the selected SDK replaces the SDK package. The consumer package metadata is restored byte for byte. The same
-installed compiler artifact runs inside the copy, so its standard libraries are
+cloned into each bound, where the selected SDK replaces the SDK package. Consumer
+package metadata is restored byte for byte. Disposable installation artifacts omit
+prepare scripts because npm 10 can run them even with ignore-scripts enabled.
+Their original metadata is restored byte for byte before compilation.
+The same installed compiler artifact runs inside the copy, so its standard libraries are
 also inside the isolation boundary. Compiler package and standard-library bytes
 are checked against the original installation before cloning; a mismatch receives
 `compiler_unavailable` instead of silently substituting another compiler.
