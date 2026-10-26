@@ -3,14 +3,16 @@ title: Compile packed contracts against each exact selected SDK bound
 description: "Follow-up to PR 153: packed declarations resolved SDK imports from a current-only consumer installation, leaving the minimum bound untested. Isolate each runtime and bound, verify the installed resolution, and regress a current-only public SDK API."
 type: Issue
 pm_format_version: 2
-status: blocked
+status: in_progress
 priority: 1
 tags[1]: "gh:unbraind/pm-ts-starter#154"
 created_at: "2026-10-24T13:07:42.652Z"
-updated_at: "2026-10-26T20:24:53.607Z"
+updated_at: "2026-10-26T21:43:58.732Z"
+assignee: codex-agent
+claim_principal: codex-agent
 author: codex-agent
 acceptance_criteria: Exact manifest minimum and explicit current SDK resolve inside separate packed npm and Bun consumers; a newer-only public API passes current and fails minimum; reverting only consumer provisioning fails the regression.
-comments[108]{created_at,author,text}:
+comments[112]{created_at,author,text}:
   "2026-10-24T13:07:46.558Z",codex-agent,"Scope: correct the packed-consumer compatibility gate added by PR 153. Use separate npm and Bun consumer installations per bound, select the minimum from manifest.json and current release 2026.10.24, and prove the actual resolver result from each consumer. Add a real newer-only SDK API use through emitted declarations, retaining the fixed compiler examples and no-git checks. Repository dependency pins remain unchanged; full npm and Bun release gates will run locally and in CI."
   "2026-10-24T13:07:47.361Z",codex-agent,"Implementation: each compiler project maps the selected SDK public type exports through TypeScript paths, including imports reached through absolute external declarations. Unexported SDK subpaths resolve to an empty declaration rather than falling through to a foreign installation. Packed acceptance now installs npm and Bun consumers separately for each exact bound and verifies package metadata and SDK entry resolution at runtime. Regression uses real acquireLockLease, absent in the manifest minimum and present in 2026.10.24. Typecheck, test typecheck, lint, docstring gate and zero-duplication gate passed."
   "2026-10-24T13:07:47.949Z",codex-agent,"Fail-on-revert proof: restored only checkSdkContracts to its origin/main implementation, leaving the new regression and helper intact. node --test --test-name-pattern='absolute declaration imports report newer-only SDK APIs as minimum drift' test/sdk-contracts.test.ts failed 1/1: expected matrix.ok=false, got true, because the minimum inherited acquireLockLease from the external consumer's current SDK. Restored the fixed function immediately. Before revert the complete targeted suite passed 8/8 with 100% sdk-contracts.ts lines, branches and functions. Running the registered targeted suite again after restoration. Local strict tracker health passes after provisioning the same pm-github version as CI; an existing provenance advisory remains untouched."
@@ -119,6 +121,10 @@ comments[108]{created_at,author,text}:
   "2026-10-26T19:12:44.203Z",codex-agent,"Four direct tsc differentials pass 4/4, comparing complete file/line/column/code/message arrays at both SDK bounds: mutual external links pass; unbuilt composite reference yields TS6305; invalid emitDeclarationOnly yields only TS5069 despite a type error; noLib yields ten TS2318 globals. Behavioral revert restored the prior checker implementation while retaining the new tests and cycle-safe test snapshot helper: 0/4 passed. Observed ENAMETOOLONG, compiler_unavailable for the unbuilt reference, extra fatal-option diagnostics, and compiler_unavailable for noLib. Fixed checker restored byte for byte. Symlinks remain links; real installed roots are visited once. Real tsc owns diagnostics, with no language-service/API imports or phase emulation. Ordinary project references retain project compilation; reference-only solutions delegate to build. Consumer config bytes are preserved while explicit noEmit/pretty-false/locale presentation flags implement the orchestrator decision."
   "2026-10-26T20:11:02.599Z",codex-agent,"Current immutable-source focused selection passes 12/12: nine real-executable differentials plus three compiler-policy checks, zero failures/skips/cancellations. Additional differentials cover full multiline messages with supplementary presentation enabled in config, reference-only builds, cyclic reference graphs, missing inputs and malformed config. Rows now report the actual numeric exit_code and every parsed diagnostic. Typecheck, test typecheck, lint, build, docstrings (63 declarations) and zero duplication pass. Measured ordinary project -p --noEmit reports TS6305 while --build --noEmit reports TS6310 for the unbuilt-reference repro, so ordinary project references retain -p and reference-only solutions use build. Build reference graphs are cycle-checked and inspected for confined cache paths before execution, then provenance-checked afterward. The initial broad migration run was superseded after seven passing source checks because its packed case ignored scripts and used stale dist; it is not passing gate evidence. Rebuilt dist before restarting the affected packed acceptance check. No APIs or semantic-phase emulation remain."
   "2026-10-26T20:24:47.602Z",codex-agent,"Fresh rebuilt packed npm/Bun acceptance passes 1/1: both exact SDK bounds, emitted declarations, no-Git runtime checks and installed CLI JSON/TOON checks. Focused native-compiler plus policy selection passes 12/12. Correction to the prior progress note: the broad migration run mixed source/build revisions and was superseded without a complete receipt; stale packaging was a risk, not an established cause of its duration. Fresh packed validation used rebuilt dist. Snapshot helpers now use lstat traversal and never follow directory-link cycles. The fixed candidate is ready for full unchanged-threshold npm and Bun gates with one test file and at most two property workers. Claim released while independent gate/orchestrator verification is pending; final CI receipts will be published in PR 154."
+  "2026-10-26T21:06:54.376Z",codex-agent,"Additional construction check confirmed SDK replacement can follow an external node_modules root or SDK-scope symlink and modify original package bytes. Two isolated synthetic fixtures reproduced original_changed=true before any compiler executed, using an onProgress stop at linked. Fixing writable container detachment while retaining read-only links for all other installed entries; add original-tree snapshot regressions. Candidate CI completed; inspect exact failures and coverage before the final correction."
+  "2026-10-26T21:27:41.969Z",codex-agent,"Resume audit: remote head and main reconciled; no committed work lost. CI candidate f96bf90 ran all 455 tests under npm and Bun on Node 22 and 26: 452 passed, 3 failed per run; lines/functions 100%, branches 99.79%. Fixing message parsing for Unicode separators, raw-trace control expectations, and canonical compiler library ownership. Additional disposable fixtures proved shared node_modules/scope links and external incremental caches could be written; detaching writable containers, allocating fresh subprocess homes, unlinking copied npmrc before sanitizing, and guarding canonical write ancestors. Real compiler delegation and four-repro revert proof remain intact."
+  "2026-10-26T21:41:07.951Z",codex-agent,"Focused validation: real compiler delegation plus policy tests passed 27/27; the Unicode-separator diagnostic check also passed independently. Eleven real-tsc differential shapes include all four reviewer cases. Thirteen additional fixtures cover shared modules/scope containers, broken/internal scope links, private subprocess home and linked npmrc, bin-only compiler ownership, linked config, external/dangling/cyclic/internal caches, and external/linked build references. Build, source/test typecheck, lint, duplication (0 clones), docstrings (14 files/65 declarations), audit (0 vulnerabilities), pack dry-run, release attestation/date checks, strict PM health, and append-only history/privacy checks pass. The three prior CI failures are under focused rerun; the linked PM command is running with one file worker. Full CI remains required."
+  "2026-10-26T21:43:58.661Z",codex-agent,"Behavioral revert proof for the added write guards: restore only sdk-contracts.ts and sdk-compiler-policy.ts from f96bf90 while retaining the new fixtures, then run node --test --test-concurrency=1 --test-reporter=spec --test-name-pattern=\"^write boundary retains original inputs: (modules|scope|process home|external cache)$\" test/sdk-delegation.test.ts. Result: 0/4 pass; shared module/scope/home snapshots change and the external-cache case misses its required refusal. Fixed source restored byte for byte in finally. The linked PM test command subsequently confirms 27/27 passing with no skipped or cancelled tests (reported_tests evidence); project policy does not persist test result records, so this comment retains the receipt. Four compiler-behavior repros also retain their earlier 0/4 revert proof. Preparing CI candidate; prior three-failure selection remains running."
 files[22]{path,scope}:
   .github/workflows/ci.yml,project
   dist/index.d.ts.map,project
@@ -142,7 +148,7 @@ files[22]{path,scope}:
   test/sdk-compiler-policy.test.ts,project
   test/sdk-contracts.test.ts,project
   test/sdk-delegation.test.ts,project
-tests[35]:
+tests[36]:
   - command: node --test --experimental-test-coverage --test-coverage-include=sdk-contracts.ts test/sdk-contracts.test.ts
     scope: project
     timeout_seconds: 3600
@@ -422,6 +428,13 @@ tests[35]:
     provenance:
       author: codex-agent
       created_at: "2026-10-26T19:12:40.103Z"
+      source_kind: local_mutation
+      source_ref: fix/min-sdk-drift-check
+  - command: node --test --test-concurrency=1 --test-reporter=spec test/sdk-delegation.test.ts test/sdk-compiler-policy.test.ts
+    scope: project
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-26T21:30:25.651Z"
       source_kind: local_mutation
       source_ref: fix/min-sdk-drift-check
 docs[3]{path,scope}:

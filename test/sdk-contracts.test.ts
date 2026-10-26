@@ -638,7 +638,7 @@ test("resolved trace text resembling diagnostics preserves a successful native c
   writeFileSync(join(project, "ambient.d.ts"), `declare module ${JSON.stringify(name)} { export const value: number; }`);
   writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions: {target: "ES2022", module: "NodeNext", types: [],
     traceResolution: true, moduleDetection: "legacy", outDir: "dist"}, files: ["consumer.mts", "ambient.d.ts"]}));
-  const plain = plainProject(project);
+  const plain = spawnSync(process.execPath, [compiler, "--project", "tsconfig.json", "--noEmit", "--pretty", "false", "--locale", "en"], {cwd: project, encoding: "utf8"});
   assert.equal(plain.status, 0, plain.stdout); assert.match(plain.stdout, /^error TS9999:/m);
   const before = filesystemSnapshot(project);
   const matrix = await checkSdkContracts({minimum: target, current: target, consumer: project});

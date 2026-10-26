@@ -13,7 +13,9 @@ Generated dist repeats the shipped source.
 
 Copies preserve installed names and symlinks. External installed package links
 remain read-only inputs rather than recursively copied trees. Mutual links are
-visited once per real path. There is no installation, reinstallation, npm-ci,
+visited once per real path. Writable node_modules/scope containers are detached
+before SDK replacement; compiler cache destinations are checked through their real
+ancestors. Each child gets a newly allocated private home. There is no installation, reinstallation, npm-ci,
 package-manager linking, lifecycle-script or API-runner subprocess.
 
 ## Other shipped runtime and repository tooling

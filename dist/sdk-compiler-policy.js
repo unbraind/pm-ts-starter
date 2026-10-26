@@ -1,4 +1,5 @@
 /** Exhaustive, reasoned policy for the exact compiler invoked by the SDK oracle. */
+import { existsSync, lstatSync, readlinkSync, realpathSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 /** Expand reviewed groups into independently addressable policy rows. */
 function entries(category, reason, safe, names) {
@@ -36,6 +37,20 @@ export function classifiedCompilerOptions(help) {
         return [name, policy];
     }));
 }
+/** Follow existing write ancestors without following a dangling or cyclic link outside the sandbox. */
+function containedWrite(project, target) {
+    const seen = new Set();
+    let path = target;
+    while (!existsSync(path)) {
+        if (seen.has(path))
+            return false;
+        seen.add(path);
+        const info = lstatSync(path, { throwIfNoEntry: false });
+        path = info?.isSymbolicLink() ? resolve(dirname(path), readlinkSync(path)) : dirname(path);
+    }
+    const relativePath = relative(realpathSync(project), realpathSync(path));
+    return !isAbsolute(relativePath) && relativePath !== ".." && !relativePath.startsWith("../") && !relativePath.startsWith("..\\");
+}
 /** Identify explicit paths that would emit outside the disposable project copy. */
 export function escapingCompilerOutputs(policy, original, project, config = join(project, "tsconfig.json")) {
     const context = dirname(config);
@@ -49,7 +64,7 @@ export function escapingCompilerOutputs(policy, original, project, config = join
         if (row.safe !== "confine" || typeof value !== "string")
             return false;
         const path = relative(project, resolve(context, value));
-        return isAbsolute(value) || path === ".." || path.startsWith("../") || path.startsWith("..\\");
+        return isAbsolute(value) || path === ".." || path.startsWith("../") || path.startsWith("..\\") || (existsSync(project) && !containedWrite(project, resolve(context, value)));
     }).map(([name]) => name);
 }
 /** Identify enabled checking bypasses and command modes without changing their values. */

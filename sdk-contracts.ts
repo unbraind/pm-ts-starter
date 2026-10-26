@@ -1,7 +1,7 @@
 /** Compile author-owned consumer examples against exact installed SDK declarations. */
 import { classifiedCompilerOptions, escapingCompilerOutputs, refusedCompilerOptions, type CompilerOptionPolicy } from "./sdk-compiler-policy.ts";
 import { spawnSync } from "node:child_process";
-import { cpSync, constants, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, readlinkSync, lstatSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { cpSync, constants, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, readlinkSync, lstatSync, realpathSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
@@ -152,9 +152,22 @@ function copyConsumer(source: string, destination: string): void {
       return false;
     } });
 }
+/** Detach writable containers while retaining their other entries as read-only installed links. */
+function privateDirectory(project: string, path: string): void {
+  const info = lstatSync(path, {throwIfNoEntry: false});
+  if (!info) { mkdirSync(path, {recursive: true}); return; }
+  if (!info.isSymbolicLink()) return;
+  const source = existsSync(path) ? realpathSync(path) : undefined;
+  if (source && inside(project, source)) return;
+  unlinkSync(path); mkdirSync(path, {recursive: true});
+  if (source) for (const name of readdirSync(source)) {
+    const entry = join(source, name);
+    symlinkSync(entry, join(path, name), existsSync(entry) && statSync(entry).isDirectory() ? "junction" : "file");
+  }
+}
 /** Give every child private homes, caches and temporary storage with no inherited npm execution settings. */
 function subprocessEnvironment(project: string): NodeJS.ProcessEnv {
-  const home = join(project, ".sdk-process"), cache = join(home, "cache"), temporary = join(home, "tmp");
+  const home = mkdtempSync(join(project, ".sdk-process-")), cache = join(home, "cache"), temporary = join(home, "tmp");
   mkdirSync(cache, {recursive: true}); mkdirSync(temporary, {recursive: true});
   return { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(npm_config_|NODE_PATH$|NODE_OPTIONS$|NODE_V8_COVERAGE$|TS)/i.test(key))),
     HOME: home, USERPROFILE: home, XDG_CACHE_HOME: cache, XDG_CONFIG_HOME: home, XDG_DATA_HOME: home,
@@ -168,29 +181,42 @@ function registryConfiguration(project: string): void {
     const key = line.match(/^\s*([^=;#]+?)\s*=/)?.[1];
     return key !== undefined && /^(?:registry|@[a-z0-9_.-]+:registry|strict-ssl|ca(?:\[\])?|cafile|\/\/[^\s=]+\/:(?:_authToken|_auth|username|_password|email|always-auth))$/i.test(key);
   });
+  rmSync(file, {force: true});
   writeFileSync(file, allowed.join("\n") + "\n");
 }
 /** Materialize existing entries by installed directory name; never ask a package manager to resolve them again. */
 function materializeDependencies(project: string, modules: string, names: string[]): void {
   if (!existsSync(modules)) return;
   const destination = join(project, "node_modules");
-  for (const name of names) if (existsSync(join(modules, name))) copyConsumer(join(modules, name), join(destination, name));
+  privateDirectory(project, destination);
+  for (const name of names) if (existsSync(join(modules, name))) {
+    privateDirectory(project, dirname(join(destination, name)));
+    copyConsumer(join(modules, name), join(destination, name));
+  }
   // A linked compiler can own native companions beside its canonical package root.
   const typescript = join(modules, "typescript");
   if (existsSync(typescript)) {
     const nativeRoot = join(dirname(realpathSync(typescript)), "@typescript");
     if (existsSync(nativeRoot)) for (const name of readdirSync(nativeRoot)) {
       const installed = join(destination, "@typescript", name);
-      if (/^typescript-[a-z0-9-]+$/.test(name) && !existsSync(installed)) copyConsumer(join(nativeRoot, name), installed);
+      if (/^typescript-[a-z0-9-]+$/.test(name) && !existsSync(installed)) {
+        privateDirectory(project, dirname(installed));
+        rmSync(installed, {recursive: true, force: true});
+        copyConsumer(join(nativeRoot, name), installed);
+      }
     }
   }
+}
+/** Enumerate installed directory names without dereferencing absent scoped links. */
+function installedNames(modules: string): string[] {
+  return readdirSync(modules).flatMap(name => name.startsWith("@")
+    ? existsSync(join(modules, name)) ? readdirSync(join(modules, name)).map(child => name + "/" + child) : [] : [name]);
 }
 /** Retain typed malformed installed-package refusals without using metadata to choose installation names. */
 function validateDependencies(project: string): void {
   const modules = join(project, "node_modules");
   if (!existsSync(modules)) return;
-  const names = readdirSync(modules).filter(name => !name.startsWith(".")).flatMap(name => name.startsWith("@")
-    ? readdirSync(join(modules, name)).map(child => name + "/" + child) : [name]);
+  const names = installedNames(modules).filter(name => !name.startsWith("."));
   for (const name of names) {
     const file = join(modules, name, "package.json");
     if (!existsSync(file)) continue;
@@ -249,11 +275,11 @@ function compilerFiles(project: string, compiler: string, empty: boolean, config
   return files;
 }
 /** Resolve package links once per real path, including mutually linked external dependencies. */
-function dependencyRoots(project: string, context: string): Set<string> {
+function dependencyRoots(project: string, context: string, compiler: string): Set<string> {
   const visited = new Set<string>();
   const visit = (modules: string): void => {
     if (!existsSync(modules)) return;
-    const names = readdirSync(modules).flatMap(name => name.startsWith("@") ? readdirSync(join(modules, name)).map(child => name + "/" + child) : [name]);
+    const names = installedNames(modules);
     for (const name of names) {
       const path = join(modules, name);
       if (!existsSync(path) || !statSync(path).isDirectory()) continue;
@@ -265,8 +291,11 @@ function dependencyRoots(project: string, context: string): Set<string> {
   };
   visit(join(project, "node_modules"));
   if (context !== project) visit(join(context, "node_modules"));
-  const typescript = join(project, "node_modules/typescript");
-  visit(join(dirname(realpathSync(typescript)), "@typescript"));
+  const typescript = join(project, "node_modules/typescript"), owner = owningPackage(realpathSync(compiler));
+  const compilers = new Set<string>();
+  if (existsSync(typescript)) compilers.add(realpathSync(typescript));
+  if (owner.name && owner.root !== dirname(owner.root)) compilers.add(owner.root);
+  for (const root of compilers) { visited.add(root); visit(join(dirname(root), "@typescript")); }
   return visited;
 }
 /** Inspect effective output paths and checking bypasses without altering configuration. */
@@ -291,7 +320,7 @@ function isolatedConfig(project: string, compiler: string, policy: ReadonlyMap<s
 }
 /** Check actual compiler-resolved inputs; installed external packages stay linked and read-only. */
 function verifyCompilation(project: string, compiler: string, installed: string, empty: boolean, config: string): void {
-  const roots = dependencyRoots(project, dirname(config));
+  const roots = dependencyRoots(project, dirname(config), compiler);
   for (const file of compilerFiles(project, compiler, empty, config)) {
     const contained = inside(project, file), owner = owningPackage(file);
     if ((!contained && ![...roots].some(root => inside(root, file))) || (owner.name === "@unbrained/pm-cli" && owner.root !== installed)) {
@@ -305,7 +334,7 @@ function compilerDiagnostics(project: string, output: string): SdkContractDiagno
   const diagnostics: SdkContractDiagnostic[] = [];
   let previous: SdkContractDiagnostic | undefined;
   for (const line of output.split(/\r?\n/)) {
-    const match = /^(?:(.+)\((\d+),(\d+)\): )?error (TS\d+): (.*)$/.exec(line);
+    const match = /^(?:([^\n]+)\((\d+),(\d+)\): )?error (TS\d+): ([\s\S]*)$/.exec(line);
     if (!match) {
       if (previous) previous.message += "\n" + line.replaceAll(project, ".");
       continue;
@@ -320,14 +349,15 @@ function compilerDiagnostics(project: string, output: string): SdkContractDiagno
 /** Delegate verdict, fatal-error ordering, global diagnostics and references to the actual tsc. */
 function compileConsumer(project: string, compiler: string, installed: string, policy: ReadonlyMap<string, CompilerOptionPolicy>): {ok: boolean; exit_code: number; diagnostics: SdkContractDiagnostic[]} {
   const config = join(project, "tsconfig.json"), root = isolatedConfig(project, compiler, policy, config);
-  const projects = new Map([[realpathSync(config), root]]);
+  const projects = new Map([[config, root]]), seen = new Set([realpathSync(config)]);
   // Build can write incremental metadata: inspect its self-contained reference graph first.
   const visit = (path: string): void => {
     const file = existsSync(path) && statSync(path).isDirectory() ? join(path, "tsconfig.json") : path;
     if (!inside(project, file) || (existsSync(file) && !inside(project, realpathSync(file)))) isolationRefusal();
-    if (!existsSync(file) || projects.has(realpathSync(file))) return;
+    if (!existsSync(file) || seen.has(realpathSync(file))) return;
+    seen.add(realpathSync(file));
     const settings = isolatedConfig(project, compiler, policy, file);
-    projects.set(realpathSync(file), settings);
+    projects.set(file, settings);
     for (const reference of settings.references) visit(reference);
   };
   if (root.empty) for (const reference of root.references) visit(reference);
@@ -390,6 +420,7 @@ export async function checkSdkContracts(options: SdkContractOptions): Promise<Sd
       copyConsumer(template, project);
       const entry = inside(template, preparedCompiler) ? resolve(project, relative(template, preparedCompiler)) : preparedCompiler;
       const installed = join(project, "node_modules", "@unbrained", "pm-cli");
+      privateDirectory(project, dirname(installed));
       rmSync(installed, { recursive: true, force: true });
       copyConsumer(targets[target].root, installed);
       targetRoot({ root: installed, version: targets[target].version });
