@@ -1620,15 +1620,21 @@ test("round 10 dependency-shape differential preserves aliases file link workspa
 });
 
 test("round 10 property preserves 200 random alias scoped file dependency graphs by installed import name", async t => {
-  const results = await Promise.all(Array.from({length: 4}, (_, shard) => new Promise<{graphs: number; edges: number}>((resolveWorker, reject) => {
+  const results: {graphs: number; edges: number}[] = [];
+  // Keep every deterministic graph while limiting active compiler workers to two.
+  for (const shards of [[0, 1], [2, 3]]) results.push(...await Promise.all(shards.map(shard => new Promise<{graphs: number; edges: number}>((resolveWorker, reject) => {
     const worker = new Worker(new URL("./dependency-property-worker.ts", import.meta.url), {workerData: {shard, compiler}});
+    let result: {graphs: number; edges: number} | undefined;
     t.after(() => worker.terminate());
-    worker.once("message", resolveWorker);
+    worker.once("message", message => { result = message; });
     worker.once("error", reject);
-    worker.once("exit", code => { if (code !== 0) reject(new Error(`dependency property worker exited ${code}`)); });
-  })));
+    worker.once("exit", code => {
+      if (code === 0 && result) resolveWorker(result);
+      else reject(new Error(`dependency property worker exited ${code} without a completed result`));
+    });
+  }))));
   assert.equal(results.reduce((sum, row) => sum + row.graphs, 0), 200);
-  t.diagnostic(`Dependency property: 4 deterministic shards, 200 independent random graphs, ${results.reduce((sum, row) => sum + row.edges, 0)} edges, alias/scoped/file shapes and nested aliases; 200 passing plain-tsc oracles, 400 checker rows without drift; all original tree snapshots unchanged.`);
+  t.diagnostic(`Dependency property: 4 deterministic shards, at most 2 active workers, 200 independent random graphs, ${results.reduce((sum, row) => sum + row.edges, 0)} edges, alias/scoped/file shapes and nested aliases; 200 passing plain-tsc oracles, 400 checker rows without drift; all original tree snapshots unchanged.`);
 });
 
 

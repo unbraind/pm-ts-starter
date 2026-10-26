@@ -359,6 +359,8 @@ export function runCoverageGate(
     [
       ...runner.args,
       "--test",
+      // A property test owns up to two compiler workers; avoid overlapping files.
+      "--test-concurrency=1",
       "--experimental-test-coverage",
       // Scope the report to exactly the files the presence check requires.
       // Passing the enumerated paths rather than a directory glob keeps the two

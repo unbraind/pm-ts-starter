@@ -366,7 +366,8 @@ TS2322 controls: npm and scoped aliases, file copies and links, link dependencie
 workspaces, peers, bundled dependencies, differing metadata names, nested aliases
 and hidden stores. A separate property runs 200 independent seeded dependency
 graphs through plain tsc and the checker, with imports by installed name. It uses
-four test workers; these are ordinary test processes, with no agent or model calls.
+at most two active test workers; these are ordinary test processes, with no agent
+or model calls. The test and coverage entrypoints run one test file at a time.
 Both bounds must retain the independent verdict and codes without changing the
 consumer tree. The alias-fixture/actual-fixture review case has a dedicated regression.
 
