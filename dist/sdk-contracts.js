@@ -1,7 +1,7 @@
 /** Compile author-owned consumer examples against exact installed SDK declarations. */
 import { classifiedCompilerOptions, escapingCompilerOutputs, enforcedCompilerOptions, refusedCompilerOptions } from "./sdk-compiler-policy.js";
 import { spawnSync } from "node:child_process";
-import { cpSync, constants, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, constants, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, readlinkSync, lstatSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
@@ -65,51 +65,23 @@ function targetRoot(target) {
         throw new SdkContractRefusal("sdk_unavailable", "Install the exact declared SDK versions in separate directories and pass their package roots; package name and version must match. Registry provenance remains the provisioner's responsibility.");
     }
 }
-/** Copy bytes and dereference links so compiler resolution stays inside the consumer. */
-function copyConsumer(source, destination, projectOnly = false) {
-    cpSync(source, destination, { recursive: true, dereference: true, mode: constants.COPYFILE_FICLONE,
-        filter: file => {
-            const path = relative(source, file).replaceAll("\\", "/");
-            return path !== ".git" && !(projectOnly && /(^|\/)node_modules(?:\/|$)/.test(path));
+/** Copy installed names and bytes without writes to caller files; rebase internal links into the copy. */
+function copyConsumer(source, destination) {
+    source = realpathSync(source);
+    cpSync(source, destination, { recursive: true, mode: constants.COPYFILE_FICLONE,
+        filter: (file, copied) => {
+            if (relative(source, file) === ".git")
+                return false;
+            if (!lstatSync(file).isSymbolicLink())
+                return true;
+            const linked = resolve(dirname(file), readlinkSync(file));
+            mkdirSync(dirname(copied), { recursive: true });
+            if (inside(source, linked))
+                symlinkSync(resolve(destination, relative(source, linked)), copied);
+            else
+                copyConsumer(linked, copied);
+            return false;
         } });
-}
-/** Locate an installed npm CLI without requiring Git or executable search paths. */
-function npmInvocation() {
-    const configured = process.env.npm_node_execpath;
-    const runtime = configured && existsSync(configured) ? configured : process.execPath;
-    const candidates = [process.env.npm_execpath, join(dirname(runtime), "npm"),
-        join(dirname(runtime), "node_modules/npm/bin/npm-cli.js"), join(dirname(runtime), "../lib/node_modules/npm/bin/npm-cli.js")];
-    for (const candidate of candidates) {
-        if (!candidate || !existsSync(candidate))
-            continue;
-        const cli = realpathSync(candidate);
-        if (basename(cli) === "npm-cli.js")
-            return { command: runtime, args: [cli] };
-    }
-    return { command: process.platform === "win32" ? "npm.cmd" : "npm", args: [] };
-}
-/** Disable npm 10's unconditional directory prepare in a disposable install artifact. */
-function installationArtifact(source, destination, nativeInstalled) {
-    const original = readFileSync(join(source, "package.json"));
-    let metadata;
-    try {
-        metadata = JSON.parse(original.toString());
-        if (!metadata || typeof metadata !== "object" || Array.isArray(metadata))
-            throw new Error("invalid package metadata");
-    }
-    catch {
-        throw new SdkContractRefusal("sdk_unavailable", "Provide installable dependency artifacts with valid package metadata before retrying.");
-    }
-    if (!metadata.scripts?.prepare && !(metadata.name === "typescript" && metadata.optionalDependencies && nativeInstalled))
-        return undefined;
-    copyConsumer(source, destination);
-    if (metadata.scripts)
-        delete metadata.scripts.prepare;
-    // All available native companions are explicit artifacts; do not resolve unrelated platforms.
-    if (metadata.name === "typescript" && nativeInstalled)
-        delete metadata.optionalDependencies;
-    writeFileSync(join(destination, "package.json"), JSON.stringify(metadata));
-    return original;
 }
 /** Give every child private homes, caches and temporary storage with no inherited npm execution settings. */
 function subprocessEnvironment(project) {
@@ -131,66 +103,44 @@ function registryConfiguration(project) {
     });
     writeFileSync(file, allowed.join("\n") + "\n");
 }
-/** Install package artifacts separately; never carry the consumer node_modules tree into a project copy. */
-function installDependencies(project, modules, names) {
+/** Materialize existing entries by installed directory name; never ask a package manager to resolve them again. */
+function materializeDependencies(project, modules, names) {
     if (!existsSync(modules))
         return;
-    const packages = names ?? readdirSync(modules).filter(name => !name.startsWith(".")).flatMap(name => name.startsWith("@")
-        ? readdirSync(join(modules, name)).map(child => name + "/" + child) : [name]);
-    const available = packages.filter(name => name !== "@unbrained/pm-cli" && existsSync(join(modules, name, "package.json")));
-    const locations = new Map(available.map(name => [name, join(modules, name)]));
-    if (locations.has("typescript")) {
-        const nativeRoot = join(dirname(realpathSync(locations.get("typescript"))), "@typescript");
+    const destination = join(project, "node_modules");
+    for (const name of names)
+        if (existsSync(join(modules, name)))
+            copyConsumer(join(modules, name), join(destination, name));
+    // A linked compiler can own native companions beside its canonical package root.
+    const typescript = join(modules, "typescript");
+    if (existsSync(typescript)) {
+        const nativeRoot = join(dirname(realpathSync(typescript)), "@typescript");
         if (existsSync(nativeRoot))
             for (const name of readdirSync(nativeRoot)) {
-                const key = "@typescript/" + name;
-                if (/^typescript-[a-z0-9-]+$/.test(name) && !locations.has(key)) {
-                    available.push(key);
-                    locations.set(key, join(nativeRoot, name));
-                }
+                const installed = join(destination, "@typescript", name);
+                if (/^typescript-[a-z0-9-]+$/.test(name) && !existsSync(installed))
+                    copyConsumer(join(nativeRoot, name), installed);
             }
     }
-    const artifacts = mkdtempSync(join(dirname(project), "artifacts-")), originals = new Map();
-    const sources = available.map(name => {
-        const source = locations.get(name);
-        const artifact = join(artifacts, name), original = installationArtifact(source, artifact, available.some(key => /^@typescript\/typescript-[a-z0-9-]+$/.test(key)));
-        if (!original)
-            return source;
-        originals.set(name, original);
-        return artifact;
-    });
-    if (sources.length === 0)
+}
+/** Retain typed malformed installed-package refusals without using metadata to choose installation names. */
+function validateDependencies(project) {
+    const modules = join(project, "node_modules");
+    if (!existsSync(modules))
         return;
-    const metadata = join(project, "package.json"), original = existsSync(metadata) ? readFileSync(metadata) : undefined;
-    // Install only explicitly provisioned artifacts; peer SDK auto-installation would select an unrelated bound.
-    writeFileSync(metadata, JSON.stringify({ private: true }));
-    const env = subprocessEnvironment(project), home = env.HOME;
-    registryConfiguration(project);
-    const userconfig = join(home, "user.npmrc"), globalconfig = join(home, "global.npmrc");
-    writeFileSync(userconfig, "");
-    writeFileSync(globalconfig, "");
-    const npm = npmInvocation();
-    const result = spawnSync(npm.command, [...npm.args, "install", "--prefix", project, "--global=false", "--location=project",
-        "--userconfig", userconfig, "--globalconfig", globalconfig, "--cache", join(home, "cache"),
-        "--workspaces=false", "--include-workspace-root=false", "--install-strategy=hoisted", "--global-style=false",
-        "--bin-links=false", "--script-shell", process.execPath, "--node-options=", "--foreground-scripts=false", "--link=false",
-        "--tmp=" + join(home, "tmp"), "--tmpdir=" + join(home, "tmp"),
-        "--ignore-scripts", "--no-audit", "--no-fund", "--no-package-lock", "--install-links", "--prefer-offline", "--legacy-peer-deps", ...sources], { cwd: project, encoding: "utf8", timeout: 120000, maxBuffer: 8 * 1024 * 1024, env });
-    if (original)
-        writeFileSync(metadata, original);
-    else
-        rmSync(metadata, { force: true });
-    if (result.status !== 0)
-        throw new SdkContractRefusal("sdk_unavailable", "Provision installable consumer dependencies and a working npm installer; sandbox dependency installation must complete without lifecycle scripts.");
-    for (const [name, original] of originals)
-        writeFileSync(join(project, "node_modules", name, "package.json"), original);
-    for (const name of available.filter(name => name === "typescript" || /^@typescript\/typescript-[a-z0-9-]+$/.test(name))) {
-        const source = locations.get(name);
-        for (const path of readdirSync(source, { recursive: true }).map(String)) {
-            const file = join(source, path), installed = join(project, "node_modules", name, path);
-            if (statSync(file).isFile() && (!existsSync(installed) || !readFileSync(file).equals(readFileSync(installed)))) {
-                throw new SdkContractRefusal("compiler_unavailable", "Provision installable compiler artifacts whose sandbox bytes match the original toolchain; the checker must use the same compiler and standard libraries.");
-            }
+    const names = readdirSync(modules).filter(name => !name.startsWith(".")).flatMap(name => name.startsWith("@")
+        ? readdirSync(join(modules, name)).map(child => name + "/" + child) : [name]);
+    for (const name of names) {
+        const file = join(modules, name, "package.json");
+        if (!existsSync(file))
+            continue;
+        try {
+            const metadata = JSON.parse(readFileSync(file, "utf8"));
+            if (!metadata || typeof metadata !== "object" || Array.isArray(metadata))
+                throw new Error("invalid metadata");
+        }
+        catch {
+            throw new SdkContractRefusal("sdk_unavailable", "Provide installed dependency packages with valid package metadata before retrying; installed directory names are preserved.");
         }
     }
 }
@@ -410,7 +360,7 @@ function inlineConsumer(project, compiler) {
     const modules = parts.length > 1 ? join(parts.slice(0, -1).join("/node_modules/"), "node_modules") : dirname(dirname(dirname(resolveSdkContractCompiler())));
     const ambient = existsSync(join(modules, "@types")) ? readdirSync(join(modules, "@types")).map(name => "@types/" + name) : [];
     const native = existsSync(join(modules, "@typescript")) ? readdirSync(join(modules, "@typescript")).map(name => "@typescript/" + name) : [];
-    installDependencies(project, modules, ["typescript", "undici-types", ...ambient, ...native]);
+    materializeDependencies(project, modules, ["typescript", "undici-types", ...ambient, ...native]);
     return installedCompiler(project, entry);
 }
 /** Locate a compiler only when the caller did not supply one; omit-dev installs get a remedy. */
@@ -439,13 +389,15 @@ export async function checkSdkContracts(options) {
         if (options.consumer === undefined)
             preparedCompiler = inlineConsumer(template, compiler);
         else {
-            copyConsumer(resolve(options.consumer), template, true);
-            installDependencies(template, resolve(options.consumer, "node_modules"));
+            copyConsumer(resolve(options.consumer), template);
+            materializeDependencies(template, resolve(options.consumer, "node_modules"), []);
             preparedCompiler = join(template, "node_modules", "typescript", "bin", "tsc");
         }
+        validateDependencies(template);
+        registryConfiguration(template);
         for (const target of ["minimum", "current"]) {
             const project = join(scratch, target);
-            // Clone only our freshly installed artifacts, never the consumer's node_modules tree.
+            // Clone the consumer-owned resolution unchanged, then replace only the selected SDK.
             copyConsumer(template, project);
             const entry = inside(template, preparedCompiler) ? resolve(project, relative(template, preparedCompiler)) : preparedCompiler;
             const installed = join(project, "node_modules", "@unbrained", "pm-cli");

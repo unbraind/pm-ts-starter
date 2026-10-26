@@ -255,17 +255,16 @@ paths never appear in these diagnostics. `invalid_input`, `sdk_unavailable`,
 Pass `--consumer ./consumer` to check a self-contained consumer project. Its sources,
 package metadata, dependencies and tsconfig are copied into an exclusive directory
 for each bound. Each copy contains the selected SDK as a physical package in its
-fresh node_modules. The project copy excludes every node_modules directory and
-Git metadata. npm installs the consumer's installed package artifacts separately,
-with lifecycle scripts disabled. A private template of those fresh artifacts is
-cloned into each bound, where the selected SDK replaces the SDK package. Consumer
-package metadata is restored byte for byte. Disposable installation artifacts omit
-prepare scripts because npm 10 can run them even with ignore-scripts enabled.
-Their original metadata is restored byte for byte before compilation.
-The same installed compiler artifact runs inside the copy, so its standard libraries are
-also inside the isolation boundary. Compiler package and standard-library bytes
-are checked against the original installation before cloning; a mismatch receives
-`compiler_unavailable` instead of silently substituting another compiler.
+private node_modules. The template copies the consumer's complete installed tree
+under its installed directory names, including hidden stores, scoped aliases,
+nested and bundled dependencies, workspaces and local links. It never invokes a
+package manager, re-resolves manifests or lockfiles, executes lifecycle scripts,
+or derives an installation name from package metadata. Lockfiles can describe a
+different installation from the one actually being checked, so the installed tree
+is authoritative. Internal links are rebased into the copy; external link targets
+are copied rather than shared. Compiler libraries and native companions retain
+their original bytes, including files excluded by npm pack rules. Only the SDK
+package at the selected bound is replaced in each cloned project.
 The original tsconfig, in-project extends targets, project references, sources and
 existing build artifacts retain their relative layout and bytes. Compilation runs
 `tsc --project tsconfig.json` with no option overrides, generated config, injected
@@ -273,10 +272,10 @@ outDir, or output relocation. Native emits and build-info stay in the project
 copy. Absolute or project-escaping output/cache paths receive `isolation_refused`
 with a remedy to use contained relative destinations.
 Project mode cannot be combined with `--examples` or `--compiler`. Include the
-project's installable dependencies and compiler in its node_modules before running
-the checker. Sandbox provisioning requires npm; it locates npm's JavaScript entry
-beside the Node runtime even when executable search paths are empty. It does not
-run lifecycle scripts.
+project's installed dependencies and compiler in its node_modules before running
+the checker. Neither project nor inline provisioning needs npm or network access.
+Copying never modifies caller files or shares writable hard links with them.
+
 
 The round-9 interface changes are an unmerged candidate. The pinned TypeScript 7
 API redirects project references differently from project `tsc`, so the unchanged
@@ -306,12 +305,11 @@ Every checker subprocess gets an explicit environment: `HOME`, `USERPROFILE`,
 XDG directories, npm cache and temporary directories are inside its sandbox.
 All inherited `npm_config_*` variables (in either casing), `NODE_PATH`,
 `NODE_OPTIONS`, `NODE_V8_COVERAGE` and `TS*` variables are removed; child coverage
-is disabled. npm receives explicit project prefix, non-global project location,
-private user/global config and cache paths, disabled scripts/workspaces/bin links,
-and fixed install/link/shell settings. The copy's `.npmrc` retains only `registry`,
-scoped registries, host-scoped auth keys, `strict-ssl`, `ca` and `cafile`.
-The original `.npmrc` is unchanged. Native compiler packages are installed from
-local artifacts and checked byte for byte, without relying on a real-home cache.
+is disabled. The copy's `.npmrc` retains only `registry`, scoped registries,
+host-scoped auth keys, `strict-ssl`, `ca` and `cafile`; the original is unchanged.
+No installer child exists. Native compiler packages and their libraries are copied
+from the consumer's toolchain without relying on a real-home cache.
+
 
 A small runner loads the **same copied TypeScript package's API** with the original
 parsed configuration. TypeScript 7 supplies config, program/options/emit-validation,
@@ -358,7 +356,17 @@ filenames, including newline and ANSI bytes, under random presentation flags.
 The npm property covers location/execution settings from project configuration
 and both environment casings, comparing consumer, fake HOME and prefix tripwire
 tree hashes with an empty-config verdict. An authenticated scoped-registry fixture
-proves that private dependency installation still works. Filesystem snapshots protect original inputs and neighboring bounds.
+proves that an already installed private dependency survives without further
+registry requests. Filesystem snapshots protect original inputs and neighboring bounds.
+
+The dependency differential corpus covers 11 installed shapes with passing and
+TS2322 controls: npm and scoped aliases, file copies and links, link dependencies,
+workspaces, peers, bundled dependencies, differing metadata names, nested aliases
+and hidden stores. A separate property runs 200 independent seeded dependency
+graphs through plain tsc and the checker, with imports by installed name. It uses
+four test workers; these are ordinary test processes, with no agent or model calls.
+Both bounds must retain the independent verdict and codes without changing the
+consumer tree. The alias-fixture/actual-fixture review case has a dedicated regression.
 
 The differential suite covers node16, nodenext and bundler resolution, ESM imports
 and CJS requires, exports types conditions, versioned types conditions and

@@ -1,6 +1,6 @@
 # Subprocess and output boundary inventory
 
-Round 9 inventory of package-owned TypeScript source, including runner/wrapper
+Round 10 inventory of package-owned TypeScript source, including runner/wrapper
 source strings and test fixtures. Generated `dist` repeats the shipped source;
 installed dependencies are described at their invoking boundary. Line numbers
 identify the current review snapshot. Source locations are grouped below so every
@@ -10,10 +10,16 @@ spawn and every stream read is enumerated, including developer tooling.
 
 | Boundary | Configuration and environment | Output interpretation |
 | --- | --- | --- |
-| `sdk-contracts.ts`: npm dependency installation | Explicit sandbox HOME, USERPROFILE, XDG/cache/temp directories; all npm configuration environment keys removed case-insensitively. Registry/auth/TLS-only project npmrc. Highest-precedence CLI prefix, global=false, location=project, private user/global config, cache, workspace=false, installation/link/bin/shell/script settings. Tool selection comes from the caller's installed npm toolchain. | Only completion status is consumed; both text streams are discarded. No installer text becomes a diagnostic. |
 | `sdk-contracts.ts`: compiler help, config, file discovery and emission | Same explicit sandbox environment, no Node/TS injection or child coverage. Argument arrays use the original compiler entry and unchanged project config. Output/cache policies guard emission before the CLI runs. | Help is checked against the complete option policy; showConfig is JSON. Resolved file paths are canonicalized and checked after compilation. The same-package API supplies ambiguous newline/ANSI filenames, with CLI file-list corroboration. Emission uses status only; human diagnostics never populate results. |
-| `sdk-contracts.ts`: structured API runner | Absolute import of the byte-verified TypeScript package in the copy, unchanged parsed config, same environment and resource limits. Classic emit diagnostics use a discard write callback; the unchanged CLI owns actual emission. | stdout is one validated JSON object: file list and code/category/file/position records. Trace and other presentation use stderr and are discarded. Only error-category records enter rows; API/CLI status disagreement refuses. |
-| TypeScript dependency: CLI native binary and API RPC child | Package-owned native binary is installed as a local artifact and byte-verified; descendants inherit the explicit sandbox environment. Optional platform discovery is omitted from the disposable artifact only when native companions were explicitly supplied, and original package metadata is restored before compilation. | CLI human text has no diagnostic authority; the API RPC uses its own binary protocol and runner JSON. |
+| `sdk-contracts.ts`: structured API runner | Absolute import of the byte-copied TypeScript package in the copy, unchanged parsed config, same environment and resource limits. Classic emit diagnostics use a discard write callback; the unchanged CLI owns actual emission. | stdout is one validated JSON object: file list and code/category/file/position records. Trace and other presentation use stderr and are discarded. Only error-category records enter rows; API/CLI status disagreement refuses. |
+| TypeScript dependency: CLI native binary and API RPC child | Compiler package, libraries and native companions are copied byte for byte under their existing names. Descendants inherit the explicit sandbox environment. | CLI human text has no diagnostic authority; the API RPC uses its own binary protocol and runner JSON. |
+
+The checker has no install, reinstall, npm-ci or package-manager link path.
+`copyConsumer` copies the complete installed tree and rebases internal links;
+`materializeDependencies` only copies selected inline toolchain entries and missing
+canonical compiler companions. Bound setup removes the copied SDK entry and copies
+the selected SDK bytes into that entry. No lifecycle or registry command executes.
+The installed directory name is independent of package.json's name field.
 
 ## Other shipped runtime and repository tooling
 
@@ -58,17 +64,16 @@ strings are included because those calls execute in child processes too.
 | `scripts/coverage-gate.ts` | 167,357 | 172,178,182 |
 | `scripts/docstring-gate.ts` | none | 108,109 |
 | `scripts/prepare-merge-driver.ts` | 39 | none |
-| `scripts/verify-release-changelog-date.ts` | 305,321 | 361,362 |
+| `scripts/verify-release-changelog-date.ts` | none | 361,362 |
 | `scripts/verify-release-publish-attestation.ts` | none | 52 |
-| `sdk-contracts.ts` | 228,278,385 | 282,283,318,356,357,375,398,476 |
+| `sdk-contracts.ts` | 231,338 | 235,236,271,309,310,328,351,431 |
 | `test/backend.test.ts` | 60 | 75,98,139,141,265,270,271,275,279,292 |
+| `test/dependency-property-worker.ts` | 55 | 57,62 |
 | `test/docstring-gate.test.ts` | none | 29,30,31,42,43,47,65,90,91,94,103,118,119,122,131 |
-| `test/identity-audit.test.ts` | 17 | none |
 | `test/prepare-merge-driver.test.ts` | 42,71,76,147 | 81,82,94,102,103,110,118,119,124,130,138,139,152,153 |
 | `test/rehearsal.test.ts` | 44,256,262,304,400,412,414,421,434,440,444,463,769 | 46,47,257,263,264,305,401,413,415,422,435,441,445,450,451,464,465,470,772,773 |
-| `test/release-workflow.test.ts` | 27,88,112,116,119,122 | none |
 | `test/sdk-compiler-policy.test.ts` | 9 | 12,14,15,30,31,32,41,53,56 |
-| `test/sdk-contracts.test.ts` | 39,214,266,274,296,297,310,313,323,345,348,378,382,387,526,652,673,684,703,731,778,814,830,884,925,953,966,985,1122,1126,1179,1189,1221,1365,1366,1442,1492,1495,1524,1530 | 40,184,219,267,268,277,296,298,299,311,317,318,319,326,327,347,352,353,386,527,653,671,687,704,708,781,809,810,812,829,884,926,927,954,965,985,993,994,1004,1008,1009,1123,1127,1128,1179,1190,1223,1367,1493,1494,1507,1525,1532,1533,1555,1556,1562,1563,1564 |
-| `test/smoke.test.ts` | 658,659,846 | 675,677,756 |
+| `test/sdk-contracts.test.ts` | 41,206,258,266,288,289,302,305,315,337,340,370,374,379,518,644,665,676,695,723,770,806,822,876,917,945,958,977,1114,1118,1171,1181,1213,1355,1356,1427,1477,1480,1498,1515,1521 | 42,176,211,259,260,269,288,290,291,303,309,310,311,318,319,339,344,345,378,519,645,663,679,696,700,773,801,802,804,821,876,918,919,946,957,977,985,986,996,1000,1001,1115,1119,1120,1171,1182,1215,1357,1478,1479,1492,1499,1516,1523,1524,1546,1547,1553,1554,1555 |
+| `test/smoke.test.ts` | none | 675,677,756,926 |
 | `test/verify-release-changelog-date.test.ts` | none | 246,247,249,250,260,261 |
-| `test/verify-release-publish-attestation.test.ts` | 162,163 | 209,210,213,217,246 |
+| `test/verify-release-publish-attestation.test.ts` | none | 192,209,210,213,217,246 |

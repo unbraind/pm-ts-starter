@@ -7,6 +7,8 @@ import { tmpdir } from "node:os";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import test, { after, type TestContext } from "node:test";
+import { Worker } from "node:worker_threads";
+import {dependencyEntry, dependencyBound, filesystemSnapshot, boundaryRandom} from "./dependency-fixtures.ts";
 import { optionValue } from "./compiler-option-fixtures.ts";
 import { PmClient } from "@unbrained/pm-cli/sdk";
 import { createExtensionTestHarness } from "@unbrained/pm-cli/sdk/testing";
@@ -125,16 +127,6 @@ function bytes(root: string): string {
   for (const name of readdirSync(root, { recursive: true }).map(String).sort()) {
     const file = join(root, name);
     if (lstatSync(file).isFile()) digest.update(name).update(readFileSync(file));
-  }
-  return digest.digest("hex");
-}
-/** Detect writes even when a compiler rewrites identical bytes or restores the file inventory. */
-function filesystemSnapshot(root: string): string {
-  const digest = createHash("sha256");
-  for (const name of [".", ...readdirSync(root, {recursive: true}).map(String).sort()]) {
-    const file = join(root, name), info = lstatSync(file, {bigint: true});
-    digest.update(name).update([info.mode, info.size, info.mtimeNs, info.ctimeNs].join(":"));
-    if (info.isFile()) digest.update(readFileSync(file));
   }
   return digest.digest("hex");
 }
@@ -1254,7 +1246,7 @@ test("unmodified copy accepts JSON imports and ordinary quoted path literals", a
   assert.equal(filesystemSnapshot(project), before);
 });
 
-test("sandbox provisioning failures are typed and preserve consumer bytes", async t => {
+test("missing compilers refuse but dependency copies never invoke broken npm installers", async t => {
   const project = join(scratch(t), "consumer");
   mkdirSync(join(project, "node_modules/empty-scope"), {recursive: true});
   writeFileSync(join(project, "tsconfig.json"), '{"files":["consumer.ts"]}');
@@ -1270,11 +1262,11 @@ test("sandbox provisioning failures are typed and preserve consumer bytes", asyn
     const fakeNode = join(bin, "node"), fakeNpm = join(bin, "npm-cli.js");
     writeFileSync(fakeNode, "unavailable runtime"); writeFileSync(fakeNpm, "process.exit(42);");
     process.env.npm_node_execpath = process.execPath; process.env.npm_execpath = fakeNpm;
-    await assert.rejects(checkSdkContracts({minimum: target, current: target}), refuses("sdk_unavailable"));
+    assert.equal((await checkSdkContracts({minimum: target, current: target})).ok, true);
     process.env.npm_node_execpath = fakeNode; delete process.env.npm_execpath;
     for (const platform of ["linux", "win32"]) {
       Object.defineProperty(process, "platform", {value: platform});
-      await assert.rejects(checkSdkContracts({minimum: target, current: target}), refuses("sdk_unavailable"));
+      assert.equal((await checkSdkContracts({minimum: target, current: target})).ok, true);
     }
   } finally {
     Object.defineProperty(process, "platform", {value: previousPlatform});
@@ -1284,7 +1276,7 @@ test("sandbox provisioning failures are typed and preserve consumer bytes", asyn
   }
 });
 
-test("sandbox dependency artifacts suppress prepare and restore original metadata", async t => {
+test("sandbox dependency artifacts copy original metadata without executing prepare or postinstall", async t => {
   const project = noEmitConsumer(t), dependency = join(project, "node_modules/artifact-fixture");
   mkdirSync(dependency);
   const metadata = join(dependency, "package.json");
@@ -1305,7 +1297,7 @@ test("sandbox dependency artifacts suppress prepare and restore original metadat
   }
 });
 
-test("sandbox compiler artifacts must retain original native binary and library bytes", async t => {
+test("sandbox compiler artifacts retain all native binary and library bytes regardless of npmignore", async t => {
   const project = join(scratch(t), "consumer"), nativeName = "@typescript/" + readdirSync(join(repo, "node_modules/@typescript"))[0]!;
   mkdirSync(join(project, "node_modules/@typescript"), {recursive: true});
   cpSync(join(repo, "node_modules/typescript"), join(project, "node_modules/typescript"), {recursive: true});
@@ -1318,11 +1310,9 @@ test("sandbox compiler artifacts must retain original native binary and library 
     const changed = missing ? join(native, "lib/extra-library.d.ts") : library;
     writeFileSync(changed, missing ? 'declare const fixture: number;' : Buffer.concat([original, Buffer.from('\n// fixture compiler patch\n')]));
     writeFileSync(join(native, 'lib/.npmignore'), missing ? 'extra-library.d.ts\n' : 'lib.es5.d.ts\n');
-    await assert.rejects(checkSdkContracts({minimum: target, current: target, consumer: project}), error => {
-      assert.ok(refuses("compiler_unavailable")(error));
-      assert.match((error as SdkContractRefusal).remedy, /same compiler and standard libraries/);
-      return true;
-    });
+    const before = filesystemSnapshot(project);
+    assertPlainRows(await checkSdkContracts({minimum: target, current: target, consumer: project}), plainCopy(project, t));
+    assert.equal(filesystemSnapshot(project), before);
     unlinkSync(join(native, "lib/.npmignore"));
     if (missing) unlinkSync(changed); else writeFileSync(library, original);
   }
@@ -1369,7 +1359,7 @@ const result=cp.spawnSync(process.execPath,[path.join(process.cwd(),'node_module
   assertPlainRows(matrix, {ok: true, codes: []});
 });
 
-test("direct SDK callers locate npm without npm script environment or executable search paths", async t => {
+test("direct SDK callers need no npm script environment or executable search paths", async t => {
   const project = noEmitConsumer(t);
   const keys = ["PATH", "npm_execpath", "npm_node_execpath"], previous = keys.map(key => process.env[key]);
   try {
@@ -1395,11 +1385,6 @@ test("solution references preserve a valid empty compiler source-file list", asy
   const matrix = await checkSdkContracts({minimum: target, current: target, consumer: project});
   assertPlainRows(matrix, expected);
 });
-
-/** Deterministic generator, independent of compiler diagnostics and npm behavior. */
-function boundaryRandom(seed: number): () => number {
-  return () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return (seed ^ (seed >>> 16)) >>> 0; };
-}
 
 test("round 9 npm location tripwires survive the fixed global-prefix case and generated configurations", async t => {
   const project = noEmitConsumer(t), outside = scratch(t), home = join(outside, "home"), prefix = join(outside, "prefix");
@@ -1484,7 +1469,7 @@ test("round 9 generated diagnostic oracle counts genuine errors without forged t
 });
 
 
-test("round 9 scoped registry must-allow installs a real authenticated private dependency", async t => {
+test("round 9 scoped registry must-allow preserves a real authenticated private dependency without network", async t => {
   const project = noEmitConsumer(t), root = scratch(t), artifact = join(root, "artifact"), receipt = join(root, "requests.jsonl");
   mkdirSync(artifact);
   writeFileSync(join(artifact, "package.json"), JSON.stringify({name: "@fixture/private", version: "1.0.0", types: "index.d.ts"}));
@@ -1507,13 +1492,19 @@ const server=createServer((req,res)=>{
     server.stdout.once("data", chunk => resolvePort(String(chunk).trim()));
     server.once("error", reject); server.once("exit", () => reject(new Error("registry exited before readiness")));
   });
-  const bridge = join(project, "node_modules/fixture-bridge"); mkdirSync(bridge);
-  writeFileSync(join(bridge, "package.json"), JSON.stringify({name: "fixture-bridge", version: "1.0.0", dependencies: {"@fixture/private": "1.0.0"}}));
-  writeFileSync(join(project, ".npmrc"), `@fixture:registry=http://127.0.0.1:${port}/\n//127.0.0.1:${port}/:_authToken=synthetic-fixture-token\nglobal=true\nprefix=../../tripwire\n`);
+  const provision = join(root, "provision"); mkdirSync(provision);
+  const npmrc = `@fixture:registry=http://127.0.0.1:${port}/\n//127.0.0.1:${port}/:_authToken=synthetic-fixture-token\n`;
+  writeFileSync(join(provision, ".npmrc"), npmrc);
+  const install = spawnSync("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund", "@fixture/private@1.0.0"], {cwd: provision, encoding: "utf8", timeout: 30000, env: installationEnv()});
+  assert.equal(install.status, 0, install.stderr);
+  cpSync(join(provision, "node_modules/@fixture"), join(project, "node_modules/@fixture"), {recursive: true});
+  writeFileSync(join(project, ".npmrc"), npmrc + "global=true\nprefix=../../tripwire\n");
+  const requestBytes = readFileSync(receipt, "utf8");
   writeFileSync(join(project, "consumer.mts"), 'import {value} from "@fixture/private"; export const use: number = value;');
   const before = filesystemSnapshot(project);
   assert.equal((await checkSdkContracts({minimum: target, current: target, consumer: project})).ok, true);
-  const requests = readFileSync(receipt, "utf8").trim().split("\n").map(line => JSON.parse(line) as {authenticated: boolean});
+  assert.equal(readFileSync(receipt, "utf8"), requestBytes, "checker never contacts the registry");
+  const requests = requestBytes.trim().split("\n").map(line => JSON.parse(line) as {authenticated: boolean});
   assert.ok(requests.length >= 2); assert.ok(requests.every(request => request.authenticated));
   assert.equal(filesystemSnapshot(project), before);
 });
@@ -1564,4 +1555,91 @@ const write=process.stdout.write.bind(process.stdout);
 process.stdout.write=(chunk,...rest)=>write(typeof chunk==='string'&&chunk.startsWith('{"files":')?${JSON.stringify(JSON.stringify({files: [], diagnostics: [{code: 9999, category: 0, line: 0, column: 0}]}))}:chunk,...rest);`);
   const matrix = await checkSdkContracts({minimum: target, current: target, consumer: project});
   assert.ok(matrix.rows.every(row => row.ok && row.diagnostic_count === 0));
+});
+
+/** Compare the current checker bound to an untouched independent copy, including failing controls. */
+async function dependencyOracle(project: string, bound: SdkContractOptions["current"], t: TestContext): Promise<{ok: boolean; codes: string[]}> {
+  const expected = plainCopy(project, t), original = filesystemSnapshot(project);
+  const matrix = await checkSdkContracts({consumer: project, minimum: bound, current: bound});
+  assert.equal(matrix.rows[1]!.ok, expected.ok);
+  assert.equal(matrix.rows[1]!.diagnostic_count, expected.codes.length);
+  assert.deepEqual([...matrix.rows[1]!.codes].sort(), [...expected.codes].sort());
+  assertPlainRows(matrix, expected);
+  assert.equal(filesystemSnapshot(project), original, "consumer dependency files, links, metadata and timestamps remain untouched");
+  return expected;
+}
+
+test("round 10 dependency-shape differential preserves aliases file link workspaces peers bundled and installed names", async t => {
+  const cases = ["review-npm-alias", "scoped-alias", "file-copy", "file-link", "link", "workspace", "peer", "bundled", "metadata-mismatch", "nested-alias", "hidden-store"];
+  let comparisons = 0;
+  for (const shape of cases) {
+    const project = noEmitConsumer(t), bound = dependencyBound(project);
+    const installed = shape === "scoped-alias" ? "@scope/alias-fixture" : "alias-fixture";
+    const dependencies: Record<string, string> = {[installed]: shape === "scoped-alias" ? "npm:@actual/fixture@1" : "npm:actual-fixture@1"};
+    let workspace: string[] | undefined;
+    if (["file-link", "link", "workspace", "hidden-store"].includes(shape)) {
+      const location = shape === "hidden-store" ? "node_modules/.store/actual-fixture" : "packages/actual-fixture";
+      dependencyEntry(project, location, "actual-fixture");
+      symlinkSync(join(project, location), join(project, "node_modules", installed), "junction");
+      dependencies[installed] = shape === "workspace" ? "workspace:*" : (shape === "link" ? "link:" : "file:") + "./packages/actual-fixture";
+      if (shape === "workspace") {
+        workspace = ["packages/*"];
+        dependencyEntry(project, "packages/sibling", "sibling");
+        writeFileSync(join(project, location, "index.d.ts"), 'export {value} from "../sibling/index.js";');
+      }
+    } else {
+      dependencyEntry(join(project, "node_modules"), installed, shape === "scoped-alias" ? "@actual/fixture" : "actual-fixture");
+      if (shape === "file-copy") {
+        dependencyEntry(project, "packages/actual-fixture", "actual-fixture");
+        dependencies[installed] = "file:./packages/actual-fixture";
+      }
+    }
+    if (["peer", "bundled", "nested-alias"].includes(shape)) {
+      const owner = join(project, "node_modules", installed), leaf = shape === "peer" ? "peer-fixture" : "child-alias";
+      dependencyEntry(join(project, "node_modules"), leaf, "actual-child", 'export declare const value: "wrong-hoist";');
+      const nested = shape === "peer" ? join(project, "node_modules") : join(owner, "node_modules");
+      dependencyEntry(nested, leaf, "actual-child");
+      writeFileSync(join(owner, "index.d.ts"), `export {value} from ${JSON.stringify(leaf)};`);
+      const metadata = JSON.parse(readFileSync(join(owner, "package.json"), "utf8")) as Record<string, unknown>;
+      metadata[shape === "peer" ? "peerDependencies" : "dependencies"] = {[leaf]: shape === "nested-alias" ? "npm:actual-child@1" : "1.0.0"};
+      if (shape === "bundled") metadata.bundledDependencies = [leaf];
+      writeFileSync(join(owner, "package.json"), JSON.stringify(metadata));
+    }
+    writeFileSync(join(project, "package.json"), JSON.stringify({private: true, type: "module", dependencies, workspaces: workspace}));
+    // A stale lock must not cause re-resolution of the actual installed tree.
+    writeFileSync(join(project, "package-lock.json"), JSON.stringify({name: "fixture", lockfileVersion: 3, packages: {}}));
+    for (const valid of [true, false]) {
+      writeFileSync(join(project, "consumer.mts"), `import {value} from ${JSON.stringify(installed)}; import {sdk} from "@unbrained/pm-cli"; export const use: ${valid ? '"selected"' : '"wrong"'} = value; export {sdk};`);
+      const expected = await dependencyOracle(project, bound, t);
+      assert.equal(expected.ok, valid, shape);
+      if (!valid) assert.deepEqual(expected.codes, ["TS2322"], shape);
+      comparisons += 2;
+    }
+  }
+  t.diagnostic(`Dependency corpus: ${cases.length} installed shapes, 22 untouched plain-tsc oracles, ${comparisons} bound comparisons; matching verdicts and error codes, including the alias-fixture/actual-fixture review case.`);
+});
+
+test("round 10 property preserves 200 random alias scoped file dependency graphs by installed import name", async t => {
+  const results = await Promise.all(Array.from({length: 4}, (_, shard) => new Promise<{graphs: number; edges: number}>((resolveWorker, reject) => {
+    const worker = new Worker(new URL("./dependency-property-worker.ts", import.meta.url), {workerData: {shard, compiler}});
+    t.after(() => worker.terminate());
+    worker.once("message", resolveWorker);
+    worker.once("error", reject);
+    worker.once("exit", code => { if (code !== 0) reject(new Error(`dependency property worker exited ${code}`)); });
+  })));
+  assert.equal(results.reduce((sum, row) => sum + row.graphs, 0), 200);
+  t.diagnostic(`Dependency property: 4 deterministic shards, 200 independent random graphs, ${results.reduce((sum, row) => sum + row.edges, 0)} edges, alias/scoped/file shapes and nested aliases; 200 passing plain-tsc oracles, 400 checker rows without drift; all original tree snapshots unchanged.`);
+});
+
+
+test("round 10 review alias-fixture resolves by installed name rather than actual-fixture metadata", async t => {
+  const project = noEmitConsumer(t), bound = dependencyBound(project);
+  dependencyEntry(join(project, "node_modules"), "alias-fixture", "actual-fixture");
+  writeFileSync(join(project, "node_modules/alias-fixture/package.json"), JSON.stringify({name:"actual-fixture",version:"1.0.0",types:"index.d.ts"}));
+  writeFileSync(join(project, "package.json"), JSON.stringify({type: "module", dependencies: {"alias-fixture": "npm:actual-fixture@1"}}));
+  writeFileSync(join(project, "consumer.mts"), 'import {value} from "alias-fixture"; export const use: "selected" = value;');
+  const expected = plainCopy(project, t);
+  assert.deepEqual(expected, {ok: true, codes: []});
+  const matrix = await checkSdkContracts({consumer: project, minimum: bound, current: bound});
+  assertPlainRows(matrix, expected);
 });
