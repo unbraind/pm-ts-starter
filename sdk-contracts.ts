@@ -5,6 +5,7 @@ import { cpSync, constants, existsSync, mkdtempSync, mkdirSync, readFileSync, re
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { stripVTControlCharacters } from "node:util";
 
 /** An exact, independently provisioned published SDK installation; never modified. */
@@ -157,19 +158,39 @@ function npmInvocation(): {command: string; args: string[]} {
   return {command: process.platform === "win32" ? "npm.cmd" : "npm", args: []};
 }
 /** Disable npm 10's unconditional directory prepare in a disposable install artifact. */
-function installationArtifact(source: string, destination: string): Buffer | undefined {
+function installationArtifact(source: string, destination: string, nativeInstalled: boolean): Buffer | undefined {
   const original = readFileSync(join(source, "package.json"));
-  let metadata: {scripts?: {prepare?: string}};
+  let metadata: {name?: string; scripts?: {prepare?: string}; optionalDependencies?: Record<string, string>};
   try {
     metadata = JSON.parse(original.toString()) as typeof metadata;
     if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) throw new Error("invalid package metadata");
   }
   catch { throw new SdkContractRefusal("sdk_unavailable", "Provide installable dependency artifacts with valid package metadata before retrying."); }
-  if (!metadata.scripts?.prepare) return undefined;
+  if (!metadata.scripts?.prepare && !(metadata.name === "typescript" && metadata.optionalDependencies && nativeInstalled)) return undefined;
   copyConsumer(source, destination);
-  delete metadata.scripts.prepare;
+  if (metadata.scripts) delete metadata.scripts.prepare;
+  // All available native companions are explicit artifacts; do not resolve unrelated platforms.
+  if (metadata.name === "typescript" && nativeInstalled) delete metadata.optionalDependencies;
   writeFileSync(join(destination, "package.json"), JSON.stringify(metadata));
   return original;
+}
+/** Give every child private homes, caches and temporary storage with no inherited npm execution settings. */
+function subprocessEnvironment(project: string): NodeJS.ProcessEnv {
+  const home = join(project, ".sdk-process"), cache = join(home, "cache"), temporary = join(home, "tmp");
+  mkdirSync(cache, {recursive: true}); mkdirSync(temporary, {recursive: true});
+  return { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(npm_config_|NODE_PATH$|NODE_OPTIONS$|NODE_V8_COVERAGE$|TS)/i.test(key))),
+    HOME: home, USERPROFILE: home, XDG_CACHE_HOME: cache, XDG_CONFIG_HOME: home, XDG_DATA_HOME: home,
+    TMPDIR: temporary, TMP: temporary, TEMP: temporary, NODE_V8_COVERAGE: "", GIT_CEILING_DIRECTORIES: dirname(project) };
+}
+/** Retain only registry connection and scoped credentials; installation policy belongs to the checker. */
+function registryConfiguration(project: string): void {
+  const file = join(project, ".npmrc");
+  if (!existsSync(file)) return;
+  const allowed = readFileSync(file, "utf8").split(/\r?\n/).filter(line => {
+    const key = line.match(/^\s*([^=;#]+?)\s*=/)?.[1];
+    return key !== undefined && /^(?:registry|@[a-z0-9_.-]+:registry|strict-ssl|ca(?:\[\])?|cafile|\/\/[^\s=]+\/:(?:_authToken|_auth|username|_password|email|always-auth))$/i.test(key);
+  });
+  writeFileSync(file, allowed.join("\n") + "\n");
 }
 /** Install package artifacts separately; never carry the consumer node_modules tree into a project copy. */
 function installDependencies(project: string, modules: string, names?: string[]): void {
@@ -189,10 +210,8 @@ function installDependencies(project: string, modules: string, names?: string[])
   }
   const artifacts = mkdtempSync(join(dirname(project), "artifacts-")), originals = new Map<string, Buffer>();
   const sources = available.map(name => {
-    // Reuse npm's exact-version native tarball cache instead of repacking the compiler binary on every bound.
     const source = locations.get(name)!;
-    if (/^@typescript\/typescript-[a-z0-9-]+$/.test(name)) return name + "@" + (JSON.parse(readFileSync(join(source, "package.json"), "utf8")) as {version: string}).version;
-    const artifact = join(artifacts, name), original = installationArtifact(source, artifact);
+    const artifact = join(artifacts, name), original = installationArtifact(source, artifact, available.some(key => /^@typescript\/typescript-[a-z0-9-]+$/.test(key)));
     if (!original) return source;
     originals.set(name, original);
     return artifact;
@@ -201,10 +220,17 @@ function installDependencies(project: string, modules: string, names?: string[])
   const metadata = join(project, "package.json"), original = existsSync(metadata) ? readFileSync(metadata) : undefined;
   // Install only explicitly provisioned artifacts; peer SDK auto-installation would select an unrelated bound.
   writeFileSync(metadata, JSON.stringify({private: true}));
-  // Node propagates coverage automatically unless the child explicitly disables it.
-  const env = { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(NODE_PATH$|NODE_OPTIONS$|NODE_V8_COVERAGE$|TS)/i.test(key) && key.toLowerCase() !== "npm_config_allow_scripts")), NODE_V8_COVERAGE: "" };
+  const env = subprocessEnvironment(project), home = env.HOME!;
+  registryConfiguration(project);
+  const userconfig = join(home, "user.npmrc"), globalconfig = join(home, "global.npmrc");
+  writeFileSync(userconfig, ""); writeFileSync(globalconfig, "");
   const npm = npmInvocation();
-  const result = spawnSync(npm.command, [...npm.args, "install", "--ignore-scripts", "--no-audit", "--no-fund", "--no-package-lock", "--install-links", "--prefer-offline", "--legacy-peer-deps", ...sources],
+  const result = spawnSync(npm.command, [...npm.args, "install", "--prefix", project, "--global=false", "--location=project",
+    "--userconfig", userconfig, "--globalconfig", globalconfig, "--cache", join(home, "cache"),
+    "--workspaces=false", "--include-workspace-root=false", "--install-strategy=hoisted", "--global-style=false",
+    "--bin-links=false", "--script-shell", process.execPath, "--node-options=", "--foreground-scripts=false", "--link=false",
+    "--tmp=" + join(home, "tmp"), "--tmpdir=" + join(home, "tmp"),
+    "--ignore-scripts", "--no-audit", "--no-fund", "--no-package-lock", "--install-links", "--prefer-offline", "--legacy-peer-deps", ...sources],
     {cwd: project, encoding: "utf8", timeout: 120000, maxBuffer: 8 * 1024 * 1024, env});
   if (original) writeFileSync(metadata, original); else rmSync(metadata, {force: true});
   if (result.status !== 0) throw new SdkContractRefusal("sdk_unavailable", "Provision installable consumer dependencies and a working npm installer; sandbox dependency installation must complete without lifecycle scripts.");
@@ -245,32 +271,39 @@ function owningPackage(file: string): { root: string; name: string } {
 }
 /** Invoke JavaScript compiler entries in their original module context with clean resolution state. */
 function runCompiler(project: string, compiler: string, args: string[]) {
-  // Node propagates coverage automatically unless the child explicitly disables it.
-  const env = { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(NODE_PATH$|NODE_OPTIONS$|NODE_V8_COVERAGE$|TS)/i.test(key))), NODE_V8_COVERAGE: "" };
+  const env = subprocessEnvironment(project);
   let shellShim: boolean;
   try { shellShim = existsSync(compiler) && /^#![^\n]*\b(?:sh|bash)\b/.test(readFileSync(compiler, "utf8").slice(0, 256)); }
   catch { throw new SdkContractRefusal("compiler_unavailable", "Provide a readable JavaScript compiler entry or an executable shell shim with its original dependencies."); }
   const result = spawnSync(shellShim ? compiler : process.execPath, shellShim ? args : [compiler, ...args], {
     cwd: project, encoding: "utf8", timeout: 30000, maxBuffer: 8 * 1024 * 1024,
-    env: { ...env, GIT_CEILING_DIRECTORIES: dirname(project) },
+    env,
   });
-  result.stdout = stripVTControlCharacters(result.stdout ?? "")
+  const rawStdout = result.stdout ?? "";
+  result.stdout = stripVTControlCharacters(rawStdout)
     .replace(/^((?:.+\(\d+,\d+\): )?)\p{L}+ (TS\d+:)/gmu, "$1error $2")
     .replace(/^(.+):(\d+):(\d+) - \p{L}+ (TS\d+:)/gmu, "$1($2,$3): error $4");
-  if (result.error || result.signal || result.status === null || (result.status !== 0 && !/error TS\d+:/.test(result.stdout))) throw new SdkContractRefusal("compiler_unavailable", "Provide the consumer's working TypeScript compiler; each invocation must finish within 30 seconds and 8 MiB of private output.");
-  return result;
+  if (result.error || result.signal || result.status === null || ![0, 1, 2].includes(result.status) || (args.includes("--help") && result.status !== 0)) throw new SdkContractRefusal("compiler_unavailable", "Provide the consumer's working TypeScript compiler; each invocation must finish within 30 seconds and 8 MiB of private output.");
+  return {...result, rawStdout};
 }
 /** Read one compiler-produced file path per line, refusing empty or unstructured provenance. */
-function compilerFiles(project: string, compiler: string, config: string, options: Record<string, unknown>, empty: boolean): string[] {
-  const output = runCompiler(project, compiler, ["--project", config, "--listFilesOnly"]).stdout.trim();
+function compilerFiles(project: string, compiler: string, config: string, options: Record<string, unknown>, empty: boolean, structured: readonly string[]): string[] {
+  const output = runCompiler(project, compiler, ["--project", config, "--listFilesOnly"]).rawStdout.trimEnd();
   if (!output && empty) return [];
+  if (structured.some(file => /[\r\n\u001b]/.test(file))) {
+    if (structured.some(file => !output.includes(file) && !(options.explainFiles === true && output.includes(relative(project, file))))) isolationRefusal();
+    return structured.map(file => realpathSync(file));
+  }
   const files: string[] = [];
   let diagnostic = false;
   const explain = options.explainFiles === true, statistics = options.diagnostics === true || options.extendedDiagnostics === true;
-  for (const line of output.split(/\r?\n/)) {
-    const file = isAbsolute(line) ? line : explain && !/^\s/.test(line) && existsSync(resolve(project, line)) && statSync(resolve(project, line)).isFile() ? resolve(project, line) : undefined;
+  const lines = output.split("\n");
+  for (let index = 0; index < lines.length; index++) {
+    const raw = lines[index]!;
+    const line = raw.replace(/\r$/, "");
+    const file = existsSync(raw) && isAbsolute(raw) ? raw : isAbsolute(line) ? line : explain && !/^\s/.test(line) && existsSync(resolve(project, line)) && statSync(resolve(project, line)).isFile() ? resolve(project, line) : undefined;
     if (file !== undefined) files.push(file);
-    else if (/^(?:.+\(\d+,\d+\): )?error TS\d+:/.test(line)) diagnostic = true;
+    else if (/^(?:.+\(\d+,\d+\): )?\p{L}+ TS\d+:/u.test(stripVTControlCharacters(line))) diagnostic = true;
     else if (!(diagnostic && /^(?:$| {2,}|\d+ |Found \d+ errors?\b)/.test(line)) &&
       !(options.traceResolution === true && files.length === 0) &&
       !(statistics && /^(?:$|[\p{L}][\p{L} /()-]*:\s+\d+(?:\.\d+)?[A-Za-z]*)$/u.test(line)) &&
@@ -293,8 +326,9 @@ function isolatedConfig(project: string, compiler: string, policy: ReadonlyMap<s
   return {options: enforcedCompilerOptions(options), empty: !config.files?.length && !!config.references?.length};
 }
 /** Verify only compiler-resolved inputs after compilation; source strings are never scanned. */
-function verifyCompilation(project: string, compiler: string, installed: string, options: Record<string, unknown>, empty: boolean): void {
-  for (const file of compilerFiles(project, compiler, "tsconfig.json", options, empty)) {
+function verifyCompilation(project: string, compiler: string, installed: string, options: Record<string, unknown>, empty: boolean, observed: readonly string[]): void {
+  const files = observed.some(file => /[\r\n\u001b]/.test(file)) ? structuredDiagnostics(project).files : observed;
+  for (const file of compilerFiles(project, compiler, "tsconfig.json", options, empty, files)) {
     const contained = inside(project, file), owner = contained ? owningPackage(file) : {root: "", name: ""};
     if (!contained || (owner.name === "@unbrained/pm-cli" && owner.root !== installed)) {
       const name = contained ? relative(project, file).replaceAll("\\", "/") : basename(file);
@@ -303,29 +337,83 @@ function verifyCompilation(project: string, compiler: string, installed: string,
   }
 }
 /** Refuse implicit escaping emits before tsc can write beside an external resolved source. */
-function guardImplicitOutputs(project: string, compiler: string, options: Record<string, unknown>, empty: boolean): void {
+function guardImplicitOutputs(project: string, compiler: string, options: Record<string, unknown>, empty: boolean, observed: readonly string[]): void {
   if (options.noEmit === true || options.outFile !== undefined) return;
   const root = typeof options.rootDir === "string" ? resolve(project, options.rootDir) : options.composite === true ? project : undefined;
-  for (const file of compilerFiles(project, compiler, "tsconfig.json", options, empty)) {
+  for (const file of compilerFiles(project, compiler, "tsconfig.json", options, empty, observed)) {
     if (!inside(project, file) && !/\.d\.[cm]?ts$/.test(file) &&
       (options.outDir === undefined || (root !== undefined && !inside(root, file)))) {
       throw new SdkContractRefusal("isolation_refused", `Resolved source ${JSON.stringify(basename(file))} has an implicit output outside the project copy; move the source inside the project and use contained output/cache paths before retrying.`);
     }
   }
 }
-/** Run only the consumer compiler; every error contributes to drift without filtering codes. */
+/** Read diagnostics through the installed package API; all presentation output has a separate discarded channel. */
+function structuredDiagnostics(project: string): {diagnostics: SdkContractDiagnostic[]; files: string[]} {
+  const root = join(project, "node_modules", "typescript");
+  const native = existsSync(join(root, "dist/api/sync/api.js"));
+  const prelude = `import {readFileSync} from 'node:fs';
+import {resolve} from 'node:path';
+const output = process.stdout.write.bind(process.stdout);
+process.stdout.write = process.stderr.write.bind(process.stderr);
+const config = resolve('tsconfig.json');
+let diagnostics, files;
+`;
+  const runner = native ? `import {API} from ${JSON.stringify(pathToFileURL(join(root, "dist/api/sync/api.js")).href)};
+const api = new API({cwd:process.cwd()});
+try {
+  const snapshot = api.updateSnapshot({openProjects:[config]});
+  const project = snapshot.getProject(config);
+  if (!project) throw new Error('Compiler API did not open the original configuration');
+  const program = project.program;
+  files = program.getSourceFileNames();
+  diagnostics = [...program.getConfigFileParsingDiagnostics(), ...program.getProgramDiagnostics(),
+    ...program.getSyntacticDiagnostics(), ...program.getSemanticDiagnostics(), ...program.getDeclarationDiagnostics()]
+    .map(d => ({code:d.code,category:d.category,file:d.fileName,start:d.pos}));
+  snapshot.dispose();
+} finally { api.close(); }
+` : `import ts from ${JSON.stringify(pathToFileURL(join(root, "lib/typescript.js")).href)};
+const host = {...ts.sys, write:process.stderr.write.bind(process.stderr)};
+const parsed = ts.getParsedCommandLineOfConfigFile(config, {}, {...host,onUnRecoverableConfigFileDiagnostic:d => {throw new Error('Invalid compiler configuration');}});
+const compilerHost = ts.createIncrementalCompilerHost(parsed.options);
+compilerHost.trace = host.write;
+const program = ts.createProgram({rootNames:parsed.fileNames, options:parsed.options, projectReferences:parsed.projectReferences, host:compilerHost, configFileParsingDiagnostics:parsed.errors});
+files = program.getSourceFiles().map(file => file.fileName);
+const emitted = program.emit(undefined, () => {});
+diagnostics = [...ts.getPreEmitDiagnostics(program), ...emitted.diagnostics]
+  .map(d => ({code:d.code,category:d.category,file:d.file?.fileName,start:d.start ?? -1}));
+`;
+  const result = spawnSync(process.execPath, ["--input-type=module", "-e", prelude + runner + `
+const seen = new Set();
+const rows = diagnostics.filter(d => {const key=JSON.stringify(d); if(seen.has(key)) return false; seen.add(key); return true;});
+output(JSON.stringify({files, diagnostics:rows.map(d => {
+  let line=0, column=0;
+  if (d.file && d.start >= 0) {
+    const prefix=readFileSync(d.file,'utf8').slice(0,d.start).split(/\\r\\n|[\\r\\n\\u2028\\u2029]/);
+    line=prefix.length; column=prefix[prefix.length-1].length+1;
+  }
+  return {...d,line,column};
+})}));`], {cwd: project, encoding: "utf8", timeout: 30000, maxBuffer: 8 * 1024 * 1024, env: subprocessEnvironment(project)});
+  try {
+    if (result.error || result.signal || result.status !== 0) throw new Error("API runner failed");
+    const data = JSON.parse(result.stdout) as {files: string[]; diagnostics: {code: number; category: number; file?: string; start?: number; line: number; column: number}[]};
+    if (!Array.isArray(data.files) || data.files.some(file => typeof file !== "string")) throw new Error("Invalid API file list");
+    const rows = data.diagnostics;
+    if (!Array.isArray(rows) || rows.some(row => !Number.isInteger(row.code) || !Number.isInteger(row.category) ||
+      (row.file !== undefined && typeof row.file !== "string") || !Number.isInteger(row.line) || !Number.isInteger(row.column))) throw new Error("Invalid API diagnostics");
+    return {files: data.files, diagnostics: rows.filter(row => row.category === 1).map(row => {
+      const file = row.file === undefined ? "<config>" : relative(project, resolve(project, row.file));
+      return {code: "TS" + row.code, file: isAbsolute(file) || file.startsWith("..") ? "<external>" : file.replaceAll("\\", "/"), line: row.line, column: row.column};
+    })};
+  } catch { throw new SdkContractRefusal("compiler_unavailable", "Provide the same installed TypeScript package with a working structured diagnostics API; compiler output is never interpreted as diagnostics."); }
+}
+/** Preserve the original compiler invocation and post-compile provenance, accepting only API diagnostics. */
 function compileConsumer(project: string, compiler: string, installed: string, policy: ReadonlyMap<string, CompilerOptionPolicy>): SdkContractDiagnostic[] {
   const {options, empty} = isolatedConfig(project, compiler, policy);
-  guardImplicitOutputs(project, compiler, options, empty);
+  const {diagnostics, files} = structuredDiagnostics(project);
+  guardImplicitOutputs(project, compiler, options, empty, files);
   const result = runCompiler(project, compiler, ["--project", "tsconfig.json"]);
-  verifyCompilation(project, compiler, installed, options, empty);
-  if (result.status === 0) return [];
-  const diagnostics = [...result.stdout.matchAll(/^(?:(.+)\((\d+),(\d+)\): |)error (TS\d+):/gm)].map(match => {
-    const file = match[1] === undefined ? "<config>" : relative(project, resolve(project, match[1]));
-    return { code: match[4]!, file: isAbsolute(file) || file.startsWith("..") ? "<external>" : file.replaceAll("\\", "/"),
-      line: Number(match[2] ?? 0), column: Number(match[3] ?? 0) };
-  });
-  if (diagnostics.length === 0) throw new SdkContractRefusal("compiler_unavailable", "Use a working compiler that reports structured TypeScript diagnostics for every failing compilation.");
+  verifyCompilation(project, compiler, installed, options, empty, files);
+  if ((result.status === 0) !== (diagnostics.length === 0)) throw new SdkContractRefusal("compiler_unavailable", "Use the consumer's matching compiler and diagnostics API; their success and error verdicts must agree.");
   return diagnostics;
 }
 /** Prepare strict inline sources and install matching compiler and ambient artifacts. */

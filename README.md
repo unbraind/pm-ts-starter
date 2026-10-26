@@ -278,6 +278,11 @@ the checker. Sandbox provisioning requires npm; it locates npm's JavaScript entr
 beside the Node runtime even when executable search paths are empty. It does not
 run lifecycle scripts.
 
+The round-9 interface changes are an unmerged candidate. The pinned TypeScript 7
+API redirects project references differently from project `tsc`, so the unchanged
+differential contract remains blocked; see the [compatibility evidence](docs/sdk-contract-api-compatibility.md)
+and [complete subprocess inventory](docs/sdk-contract-process-inventory.md).
+
 The default inline examples exercise typed authoring composition and certified
 complete tracker reads. Use `--examples docs/examples/sdk-contracts.json` for a
 JSON array of `{id, source}` consumers (1–16 examples, each at most 64 KiB).
@@ -297,9 +302,25 @@ TypeScript alone selects import/require conditions, versioned `types@` condition
 and typesVersions. Each row retains the full diagnostic count, at most three
 codes, and corresponding project-relative file/line/column locations. External
 locations use a safe marker; source text and raw compiler messages stay private.
-Every compiler invocation clears `NODE_PATH`, `NODE_OPTIONS`, `NODE_V8_COVERAGE`
-and inherited `TS*` environment variables. Dependency installers also exclude
-child-tool coverage instrumentation; checker coverage stays in the calling process. After compilation, a discovery-only `--listFilesOnly` pass
+Every checker subprocess gets an explicit environment: `HOME`, `USERPROFILE`,
+XDG directories, npm cache and temporary directories are inside its sandbox.
+All inherited `npm_config_*` variables (in either casing), `NODE_PATH`,
+`NODE_OPTIONS`, `NODE_V8_COVERAGE` and `TS*` variables are removed; child coverage
+is disabled. npm receives explicit project prefix, non-global project location,
+private user/global config and cache paths, disabled scripts/workspaces/bin links,
+and fixed install/link/shell settings. The copy's `.npmrc` retains only `registry`,
+scoped registries, host-scoped auth keys, `strict-ssl`, `ca` and `cafile`.
+The original `.npmrc` is unchanged. Native compiler packages are installed from
+local artifacts and checked byte for byte, without relying on a real-home cache.
+
+A small runner loads the **same copied TypeScript package's API** with the original
+parsed configuration. TypeScript 7 supplies config, program/options/emit-validation,
+syntactic, semantic and declaration diagnostics through its native API; classic
+TypeScript supplies pre-emit and emit diagnostics. Only JSON records containing
+code, category, file and position cross the result boundary. Trace, list, explain,
+statistics and pretty output uses a separate discarded channel. Error records
+populate the displayed slots. The unchanged CLI invocation performs normal emission;
+an API/CLI verdict disagreement fails closed. After compilation, a discovery-only `--listFilesOnly` pass
 checks the compiler's own resolved inputs. Every canonical file must be inside the
 copy, and every SDK declaration must belong to the selected SDK installation.
 An escaping resolved file receives `isolation_refused` naming that file without
@@ -308,7 +329,7 @@ are never interpreted as filesystem references. Missing imports retain native
 compiler diagnostics. Empty or unstructured provenance fails closed, except for
 valid empty solution configurations with project references.
 Each invocation is bounded to 30 seconds and 8 MiB. Compiler failures without
-usable diagnostics produce `compiler_unavailable`.
+usable API diagnostics produce `compiler_unavailable`.
 
 The invoked compiler's `--help --all --locale en` table is read once per compiler
 per check, including watch and build declarations. `sdk-compiler-policy.ts` is the
@@ -331,7 +352,13 @@ include allowJs TS5055 output collisions, JSON imports and quoted path literals,
 composite membership, incremental caches, declaration maps, declaration-only
 emission, consumer noEmit, explicit libraries and built or missing references.
 Both SDK bounds compare verdicts, diagnostic counts and complete error-code
-multisets. Filesystem snapshots protect original inputs and neighboring bounds.
+multisets for non-forged inputs. A separate generator-known oracle combines
+real TS2322/TS2307 errors with forged messages in module names, literals and
+filenames, including newline and ANSI bytes, under random presentation flags.
+The npm property covers location/execution settings from project configuration
+and both environment casings, comparing consumer, fake HOME and prefix tripwire
+tree hashes with an empty-config verdict. An authenticated scoped-registry fixture
+proves that private dependency installation still works. Filesystem snapshots protect original inputs and neighboring bounds.
 
 The differential suite covers node16, nodenext and bundler resolution, ESM imports
 and CJS requires, exports types conditions, versioned types conditions and

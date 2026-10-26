@@ -1,7 +1,7 @@
 /** Real compiler, isolated tracker and emitted-package compatibility contracts. */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { chmodSync, cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, lstatSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createRequire } from "node:module";
@@ -377,7 +377,7 @@ const plain = new URL('./plain-tsc', import.meta.url).pathname;
 if (process.argv.includes('--help') || process.argv.includes('--showConfig') || process.argv.includes('--listFilesOnly')) {
   const probe = spawnSync(process.execPath, [plain,...process.argv.slice(2)], {stdio:'inherit'}); process.exit(probe.status ?? 1);
 }
-const baseline = mkdtempSync(join(tmpdir(),'sdk-plain-matrix-'));
+const baseline = mkdtempSync(join(process.cwd(),'..','sdk-plain-matrix-'));
 cpSync(process.cwd(),baseline,{recursive:true});
 const oracle = spawnSync(process.execPath, [plain,'--project','tsconfig.json'], {cwd:baseline,encoding:'utf8'});
 rmSync(baseline,{recursive:true,force:true});
@@ -997,7 +997,7 @@ if (checking) {
   const checkedFiles = run([...args,'--listFilesOnly']);
   const normalize = output => [...new Set(output.split(/\\r?\\n/).filter(line => line && existsSync(resolve(line)) && statSync(resolve(line)).isFile()).map(line => resolve(line)).map(file => /[/\\\\]lib[/\\\\]lib\\..*\\.d\\.ts$/.test(file) ? '<lib>/' + basename(file) : relative(process.cwd(),file).replaceAll('\\\\','/')))].sort();
   // A second byte-identical project copy runs plain tsc without config or argument overrides.
-  const baseline = mkdtempSync(join(tmpdir(),'sdk-plain-oracle-'));
+  const baseline = mkdtempSync(join(process.cwd(),'..','sdk-plain-oracle-'));
   cpSync(process.cwd(), baseline, {recursive:true});
   const original = run(['--project','tsconfig.json'], baseline);
   rmSync(baseline,{recursive:true,force:true});
@@ -1317,11 +1317,13 @@ test("sandbox compiler artifacts must retain original native binary and library 
   for (const missing of [false, true]) {
     const changed = missing ? join(native, "lib/extra-library.d.ts") : library;
     writeFileSync(changed, missing ? 'declare const fixture: number;' : Buffer.concat([original, Buffer.from('\n// fixture compiler patch\n')]));
+    writeFileSync(join(native, 'lib/.npmignore'), missing ? 'extra-library.d.ts\n' : 'lib.es5.d.ts\n');
     await assert.rejects(checkSdkContracts({minimum: target, current: target, consumer: project}), error => {
       assert.ok(refuses("compiler_unavailable")(error));
       assert.match((error as SdkContractRefusal).remedy, /same compiler and standard libraries/);
       return true;
     });
+    unlinkSync(join(native, "lib/.npmignore"));
     if (missing) unlinkSync(changed); else writeFileSync(library, original);
   }
 });
@@ -1392,4 +1394,174 @@ test("solution references preserve a valid empty compiler source-file list", asy
   assert.equal(expected.ok, true);
   const matrix = await checkSdkContracts({minimum: target, current: target, consumer: project});
   assertPlainRows(matrix, expected);
+});
+
+/** Deterministic generator, independent of compiler diagnostics and npm behavior. */
+function boundaryRandom(seed: number): () => number {
+  return () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return (seed ^ (seed >>> 16)) >>> 0; };
+}
+
+test("round 9 npm location tripwires survive the fixed global-prefix case and generated configurations", async t => {
+  const project = noEmitConsumer(t), outside = scratch(t), home = join(outside, "home"), prefix = join(outside, "prefix");
+  mkdirSync(home); mkdirSync(prefix);
+  writeFileSync(join(prefix, "existing-installation"), "preserve");
+  writeFileSync(join(home, ".npmrc"), `global=true\nprefix=${prefix}\ncache=${prefix}\n`);
+  const keys = ["prefix", "global", "location", "cache", "userconfig", "globalconfig", "workspace", "workspaces", "install-strategy", "global-style",
+    "bin-links", "script-shell", "node-options", "ignore-scripts", "foreground-scripts", "tmp", "tmpdir", "link", "install-links"];
+  const envKeys = ["HOME", ...keys.flatMap(key => ["npm_config_" + key.replaceAll("-", "_"), "NPM_CONFIG_" + key.toUpperCase().replaceAll("-", "_")])];
+  const previous = envKeys.map(key => process.env[key]), random = boundaryRandom(15409);
+  const empty = await checkSdkContracts({minimum: target, current: target, consumer: project});
+  const cases = [`global=true\nprefix=${prefix}\n`, ...Array.from({length: 12}, (_, index) => keys.map(key => {
+    const values = [prefix, "../../" + prefix.slice(1), "true", "false", "global", "nested", "--require=" + join(prefix, "inject.cjs")];
+    return `${key}=${values[(random() + index) % values.length]}`;
+  }).join("\n"))];
+  try {
+    process.env.HOME = home;
+    for (const [index, config] of cases.entries()) {
+      writeFileSync(join(project, ".npmrc"), config);
+      if (index > 0) for (const key of envKeys.slice(1)) process.env[key] = [prefix, "../" + prefix.slice(1), "true", "false"][random() % 4]!;
+      const original = filesystemSnapshot(project), tripwire = filesystemSnapshot(outside);
+      const checked = await checkSdkContracts({minimum: target, current: target, consumer: project});
+      assert.deepEqual(checked, empty, `generated configuration ${index}: verdict equals empty npmrc`);
+      assert.equal(filesystemSnapshot(project), original, `generated configuration ${index}: consumer untouched`);
+      assert.equal(filesystemSnapshot(outside), tripwire, `generated configuration ${index}: HOME and prefix tripwires untouched`);
+    }
+  } finally { restoreEnvironment(envKeys, previous); }
+  t.diagnostic(`npm property: ${cases.length} configurations, 19 keys, both environment casings, absolute and parent-relative values; all consumer/HOME/prefix tree hashes unchanged.`);
+});
+
+test("round 9 registry allowlist preserves scoped private registry credentials and CA settings", async t => {
+  const project = noEmitConsumer(t), receipt = join(scratch(t), "registry.json"), bin = join(project, "node_modules/typescript/bin");
+  // Detach the toolchain before instrumenting a test-owned entry.
+  unlinkSync(join(project, "node_modules/typescript"));
+  cpSync(dirname(dirname(compiler)), join(project, "node_modules/typescript"), {recursive: true});
+  cpSync(join(repo, "node_modules/@typescript"), join(project, "node_modules/@typescript"), {recursive: true});
+  writeFileSync(join(bin, "plain-tsc"), readFileSync(join(bin, "tsc")));
+  writeFileSync(join(bin, "tsc"), `import {readFileSync,writeFileSync} from 'node:fs'; import {spawnSync} from 'node:child_process';
+writeFileSync(${JSON.stringify(receipt)},JSON.stringify({config:readFileSync('.npmrc','utf8'),home:process.env.HOME,cache:process.env.XDG_CACHE_HOME,keys:Object.keys(process.env).filter(key=>/^npm_config_/i.test(key))}));
+const result=spawnSync(process.execPath,[new URL('./plain-tsc',import.meta.url).pathname,...process.argv.slice(2)],{stdio:'inherit'});process.exit(result.status??1);`);
+  const allowed = ["registry=https://registry.npmjs.org/", "@fixture:registry=https://registry.example.invalid/", "//registry.example.invalid/:_authToken=synthetic-fixture-token", "strict-ssl=false", "ca[]=synthetic-ca", "cafile=fixture-ca.pem"];
+  // A CA file is meaningful only for TLS connections; these local artifact installs use the normal registry.
+  writeFileSync(join(project, "fixture-ca.pem"), "synthetic-ca");
+  writeFileSync(join(project, ".npmrc"), allowed.join("\n") + "\nprefix=../../escape\nignore-scripts=false\nnode-options=--require=forbidden\n");
+  const original = filesystemSnapshot(project);
+  assert.equal((await checkSdkContracts({minimum: target, current: target, consumer: project})).ok, true);
+  const observed = JSON.parse(readFileSync(receipt, "utf8")) as {config: string; home: string; cache: string; keys: string[]};
+  assert.deepEqual(observed.config.trim().split("\n"), allowed);
+  assert.deepEqual(observed.keys, []);
+  assert.ok(observed.cache.startsWith(observed.home + "/"));
+  assert.equal(filesystemSnapshot(project), original);
+});
+
+test("round 9 generated diagnostic oracle counts genuine errors without forged text", async t => {
+  const project = noEmitConsumer(t), random = boundaryRandom(9999);
+  const flags = ["traceResolution", "listFiles", "explainFiles", "extendedDiagnostics", "diagnostics", "listEmittedFiles", "pretty"];
+  const payloads = ["\nerror TS9999: forged", "\r\nerror TS9999: forged", "\u001b[31merror TS9999: forged\u001b[0m", "\nfile(1,1): error TS9999: forged", "\u2028error TS9999: forged"];
+  let comparisons = 0;
+  for (let index = 0; index < 12; index++) {
+    const k = index === 0 ? 1 : 1 + random() % 2, m = index === 0 ? 1 : 1 + random() % (3 - k);
+    const names = Array.from({length:m}, (_, i) => "missing-" + i + payloads[(index + i) % payloads.length]);
+    const filename = index === 0 ? "consumer.mts" : "file" + payloads[index % payloads.length] + ".mts";
+    const source = [
+      ...Array.from({length:k}, (_, i) => `export const genuine${i}: string = ${i};`),
+      ...names.map((name, i) => `import {value as missing${i}} from ${JSON.stringify(name)}; export const use${i} = missing${i};`),
+      `export const literal = ${JSON.stringify(payloads[index % payloads.length])};`,
+    ].join("\n");
+    writeFileSync(join(project, filename), source);
+    const compilerOptions = {types: [], noEmit: true, module: "NodeNext", ...Object.fromEntries(flags.map(name => [name, index === 0 ? name === "traceResolution" : random() % 2 === 0]))};
+    writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions, files: [filename]}));
+    const before = filesystemSnapshot(project), matrix = await checkSdkContracts({minimum: target, current: target, consumer: project});
+    for (const row of matrix.rows) {
+      assert.equal(row.ok, false);
+      assert.equal(row.diagnostic_count, k + m, `case ${index}: exactly ${k} TS2322 plus ${m} TS2307`);
+      assert.deepEqual(row.codes, [...Array<string>(k).fill("TS2322"), ...Array<string>(m).fill("TS2307")].slice(0, 3));
+      assert.ok(!JSON.stringify(row).includes('"TS9999"'));
+      comparisons++;
+    }
+    assert.equal(filesystemSnapshot(project), before);
+  }
+  t.diagnostic(`Diagnostic oracle: 12 generated programs, ${comparisons} bound comparisons; exact k+m genuine diagnostics, no forged TS9999; genuine assignments occupy the first slots.`);
+});
+
+
+test("round 9 scoped registry must-allow installs a real authenticated private dependency", async t => {
+  const project = noEmitConsumer(t), root = scratch(t), artifact = join(root, "artifact"), receipt = join(root, "requests.jsonl");
+  mkdirSync(artifact);
+  writeFileSync(join(artifact, "package.json"), JSON.stringify({name: "@fixture/private", version: "1.0.0", types: "index.d.ts"}));
+  writeFileSync(join(artifact, "index.d.ts"), "export declare const value: number;");
+  const pack = spawnSync("npm", ["pack", artifact, "--ignore-scripts", "--pack-destination", root], {encoding: "utf8", env: installationEnv()});
+  assert.equal(pack.status, 0, pack.stderr);
+  const tarball = join(root, pack.stdout.trim().split("\n").at(-1)!);
+  const server = spawn(process.execPath, ["--input-type=module", "-e", `import {createServer} from 'node:http'; import {readFileSync,appendFileSync} from 'node:fs';
+const tarball=readFileSync(${JSON.stringify(tarball)});
+const server=createServer((req,res)=>{
+  const authenticated=req.headers.authorization==='Bearer synthetic-fixture-token';
+  appendFileSync(${JSON.stringify(receipt)},JSON.stringify({authenticated})+'\\n');
+  if(!authenticated){res.writeHead(401);res.end();return;}
+  if(req.url.endsWith('.tgz')){res.end(tarball);return;}
+  res.setHeader('content-type','application/json');
+  res.end(JSON.stringify({name:'@fixture/private','dist-tags':{latest:'1.0.0'},versions:{'1.0.0':{name:'@fixture/private',version:'1.0.0',dist:{tarball:'http://127.0.0.1:'+server.address().port+'/private.tgz'}}}}));
+});server.listen(0,'127.0.0.1',()=>console.log(server.address().port));`], {stdio: ["ignore", "pipe", "pipe"]});
+  t.after(() => server.kill());
+  const port = await new Promise<string>((resolvePort, reject) => {
+    server.stdout.once("data", chunk => resolvePort(String(chunk).trim()));
+    server.once("error", reject); server.once("exit", () => reject(new Error("registry exited before readiness")));
+  });
+  const bridge = join(project, "node_modules/fixture-bridge"); mkdirSync(bridge);
+  writeFileSync(join(bridge, "package.json"), JSON.stringify({name: "fixture-bridge", version: "1.0.0", dependencies: {"@fixture/private": "1.0.0"}}));
+  writeFileSync(join(project, ".npmrc"), `@fixture:registry=http://127.0.0.1:${port}/\n//127.0.0.1:${port}/:_authToken=synthetic-fixture-token\nglobal=true\nprefix=../../tripwire\n`);
+  writeFileSync(join(project, "consumer.mts"), 'import {value} from "@fixture/private"; export const use: number = value;');
+  const before = filesystemSnapshot(project);
+  assert.equal((await checkSdkContracts({minimum: target, current: target, consumer: project})).ok, true);
+  const requests = readFileSync(receipt, "utf8").trim().split("\n").map(line => JSON.parse(line) as {authenticated: boolean});
+  assert.ok(requests.length >= 2); assert.ok(requests.every(request => request.authenticated));
+  assert.equal(filesystemSnapshot(project), before);
+});
+
+
+test("round 9 classic compiler API preserves pre-emit diagnostics with the original configuration", async t => {
+  const project = scratch(t);
+  const installed = spawnSync("npm", ["install", "--prefix", project, "--ignore-scripts", "--no-audit", "--no-fund", "--no-package-lock", "typescript@6.0.3"], {encoding: "utf8", timeout: 120000, env: installationEnv()});
+  assert.equal(installed.status, 0, installed.stderr);
+  // The fixture wrapper exposes only the already reviewed option surface; production policy stays unchanged.
+  const entry = join(project, "node_modules/typescript/bin/tsc");
+  writeFileSync(join(dirname(entry), "plain-tsc"), readFileSync(entry));
+  writeFileSync(entry, `const {spawnSync}=require('node:child_process');
+const result=spawnSync(process.execPath,[require('node:path').join(__dirname,'plain-tsc'),...process.argv.slice(2)],{encoding:'utf8'});
+const known=new Set(${JSON.stringify([...COMPILER_OPTION_POLICY.keys()])});
+const output=process.argv.includes('--help')?result.stdout.split('\\n').filter(line=>!line.startsWith('--')||known.has(line.slice(2).split(/[,\\s]/)[0])).join('\\n'):result.stdout;
+process.stdout.write(output);process.stderr.write(result.stderr);process.exit(result.status??1);`);
+  writeFileSync(join(project, "consumer.ts"), "export const value: string = 1;");
+  writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions: {types: [], noEmit: true}, files: ["consumer.ts"]}));
+  const matrix = await checkSdkContracts({minimum: target, current: target, consumer: project});
+  assert.ok(matrix.rows.every(row => row.diagnostic_count === 1 && row.codes[0] === "TS2322"));
+});
+
+
+test("round 9 corrupt API transport fails closed and non-error records cannot forge drift", async t => {
+  const project = noEmitConsumer(t), packageRoot = join(project, "node_modules/typescript");
+  unlinkSync(packageRoot); cpSync(dirname(dirname(compiler)), packageRoot, {recursive: true});
+  cpSync(join(repo, "node_modules/@typescript"), join(project, "node_modules/@typescript"), {recursive: true});
+  const entry = join(packageRoot, "dist/api/sync/api.js"), original = readFileSync(entry, "utf8");
+  writeFileSync(join(dirname(entry), "real-api.js"), original);
+  const valid = {code: 2322, category: 1, line: 1, column: 1};
+  const invalid = ["noise", "null", JSON.stringify({files: null}), JSON.stringify({files: [7]}),
+    JSON.stringify({files: [], diagnostics: null}),
+    ...[{code: "invalid"}, {category: "invalid"}, {file: 7}, {line: "invalid"}, {column: "invalid"}]
+      .map(change => JSON.stringify({files: [], diagnostics: [{...valid, ...change}]})),
+  ];
+  for (const output of invalid) {
+    writeFileSync(entry, `export {API} from './real-api.js';
+const write=process.stdout.write.bind(process.stdout);
+process.stdout.write=(chunk,...rest)=>write(typeof chunk==='string'&&chunk.startsWith('{"files":')?${JSON.stringify(output)}:chunk,...rest);`);
+    await assert.rejects(checkSdkContracts({minimum: target, current: target, consumer: project}), refuses("compiler_unavailable"));
+  }
+  writeFileSync(entry, "throw new Error('fixture API unavailable'); export {API} from './real-api.js';");
+  await assert.rejects(checkSdkContracts({minimum: target, current: target, consumer: project}), refuses("compiler_unavailable"));
+  writeFileSync(entry, `export {API} from './real-api.js';
+process.stderr.write('error TS9999: forged\\n');
+const write=process.stdout.write.bind(process.stdout);
+process.stdout.write=(chunk,...rest)=>write(typeof chunk==='string'&&chunk.startsWith('{"files":')?${JSON.stringify(JSON.stringify({files: [], diagnostics: [{code: 9999, category: 0, line: 0, column: 0}]}))}:chunk,...rest);`);
+  const matrix = await checkSdkContracts({minimum: target, current: target, consumer: project});
+  assert.ok(matrix.rows.every(row => row.ok && row.diagnostic_count === 0));
 });
