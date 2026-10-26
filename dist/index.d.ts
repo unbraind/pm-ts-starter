@@ -130,54 +130,54 @@ interface PmRunResult {
  */
 export declare function runPm(pmRoot: string, args: string[]): PmRunResult;
 declare const demoProfile: {
-    name: string;
-    title: string;
-    summary: string;
-    types: {
-        name: string;
-        description: string;
-        folder: string;
-        aliases: string[];
-    }[];
-    statuses: {
-        id: string;
-        description: string;
-        roles: string[];
-    }[];
-    fields: {
-        key: string;
-        type: string;
-        description: string;
-    }[];
-    workflows: {
-        type: string;
-        allowed_transitions: [string, string][];
-    }[];
-    config: {
-        key: string;
-        value: string;
-        summary: string;
-    }[];
-    templates: {
-        name: string;
-        options: {
-            type: string;
-            title: string;
+    readonly name: "ts_starter_demo";
+    readonly title: "TS Starter Demo Profile";
+    readonly summary: "A minimal demonstration profile with one custom type, one status, one field, and one template.";
+    readonly types: readonly [{
+        readonly name: "Spike";
+        readonly description: "A time-boxed research or exploration task.";
+        readonly folder: "spikes";
+        readonly aliases: ["spike"];
+    }];
+    readonly statuses: readonly [{
+        readonly id: "explored";
+        readonly description: "Spike has been explored and findings recorded.";
+        readonly roles: ["terminal", "terminal_done"];
+    }];
+    readonly fields: readonly [{
+        readonly key: "ts_starter_ref";
+        readonly type: "string";
+        readonly description: "Cross-reference marker for the TS starter demo.";
+    }];
+    readonly workflows: readonly [{
+        readonly type: "Spike";
+        readonly allowed_transitions: [["open", "explored"]];
+    }];
+    readonly config: readonly [{
+        readonly key: "search_provider";
+        readonly value: "bm25";
+        readonly summary: "Use the built-in BM25 keyword search provider.";
+    }];
+    readonly templates: readonly [{
+        readonly name: "spike";
+        readonly options: {
+            readonly type: "Spike";
+            readonly title: "Investigate ...";
         };
-    }[];
-    packages: {
-        spec: string;
-        reason: string;
-    }[];
+    }];
+    readonly packages: readonly [{
+        readonly spec: "npm:@unbrained/pm-todos";
+        readonly reason: "Provides a todo import/export package compatible with this profile.";
+    }];
 };
 declare const blueprint: ExtensionBlueprint;
 declare const derivedCapabilities: ("commands" | "hooks" | "importers" | "parser" | "preflight" | "renderers" | "schema" | "search" | "services")[];
 declare const manifestMirror: {
-    name: string;
-    version: string;
-    entry: string;
-    priority: number;
-    capabilities: ("commands" | "hooks" | "importers" | "parser" | "preflight" | "renderers" | "schema" | "search" | "services")[];
+    readonly name: "pm-ts-starter";
+    readonly version: string;
+    readonly entry: "./dist/index.js";
+    readonly priority: 90;
+    readonly capabilities: ("commands" | "hooks" | "importers" | "parser" | "preflight" | "renderers" | "schema" | "search" | "services")[];
 };
 declare const composedModule: ExtensionModule;
 declare const packagedModule: ExtensionModule, synthesizedManifest: import("@unbrained/pm-cli/sdk").ExtensionManifest;
