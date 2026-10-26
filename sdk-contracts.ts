@@ -214,7 +214,6 @@ function installedNames(modules: string): string[] {
 /** Retain typed malformed installed-package refusals without using metadata to choose installation names. */
 function validateDependencies(project: string): void {
   const modules = join(project, "node_modules");
-  if (!existsSync(modules)) return;
   const names = installedNames(modules).filter(name => !name.startsWith("."));
   for (const name of names) {
     const file = join(modules, name, "package.json");
