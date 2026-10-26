@@ -24,12 +24,15 @@
 ### Fixed
 
 - Propagate the docstring gate entry guard fix ([pm-ts-starter-dcep](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-dcep.toon))
-- Fix release publish ordering before protected main push ([pm-ts-starter-8xyb](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-8xyb.toon))
 - plan-demo forwards a nested pm usage error instead of validating its required id, unlike its sibling demos ([pm-ts-starter-github-38a2e98e983e-61](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-github-38a2e98e983e-61.toon))
 - The changelog gate stamps an untagged version with the current date, so its verdict flips every midnight with no commit ([pm-ts-starter-ov68](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-ov68.toon))
-- Full development audit is blocked by unpatched braces through required latest pm-ops ([pm-ts-starter-audit104](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-audit104.toon))
 - The release job authenticated with a stored npm token that expired, so publishing stopped while every other gate stayed green ([pm-ts-starter-epz5](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-epz5.toon))
 - A release run bumped and committed a new version every night while publishing was impossible, because the only externally-failable step runs last ([pm-ts-starter-2l5j](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-2l5j.toon))
+
+### Closed
+
+- Closed: Fix release publish ordering before protected main push ([pm-ts-starter-8xyb](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-8xyb.toon))
+- Closed: Full development audit is blocked by unpatched braces through required latest pm-ops ([pm-ts-starter-audit104](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-audit104.toon))
 
 ## 2026.10.5 - 2026-10-05
 
@@ -48,11 +51,14 @@
 ### Fixed
 
 - A publish that npm accepts late is reported as failed and the GitHub Release is skipped on bun mirror lag ([pm-ts-starter-beto](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-beto.toon))
-- Add fail-closed docstring, duplication, lint, and authored-TypeScript gates ([pm-ts-starter-s2kh](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-s2kh.toon))
 
 ### Other
 
 - Certify pm CLI 2026.9.21 and move onto the canonical pm-ops merge-driver, lint and duplication gates ([pm-ts-starter-jwgz](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/tasks/pm-ts-starter-jwgz.toon))
+
+### Closed
+
+- Closed: Add fail-closed docstring, duplication, lint, and authored-TypeScript gates ([pm-ts-starter-s2kh](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-s2kh.toon))
 
 ## 2026.9.18 - 2026-09-18
 
@@ -93,17 +99,23 @@
 
 ### Fixed
 
-- Pin pm-changelog 2026.8.30 before the next release ([pm-ts-starter-uciv](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-uciv.toon))
 - Regenerate the changelog after the release tag exists ([pm-ts-starter-hwu0](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-hwu0.toon))
+
+### Closed
+
+- Closed: Pin pm-changelog 2026.8.30 before the next release ([pm-ts-starter-uciv](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-uciv.toon))
 
 ## 2026.8.29 - 2026-08-29
 
 ### Fixed
 
 - A failed provenance publish silently falls back to an unattested one ([pm-ts-starter-d3ry](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-d3ry.toon))
-- Rebase PR 73 after publish-attestation merge ([pm-ts-starter-8tfm](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-8tfm.toon))
-- Address PR 78 publish-attestation review findings ([pm-ts-starter-hb7v](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-hb7v.toon))
 - The publish-attestation gate misses a publish routed through an unquoted shell variable ([pm-ts-starter-1ey8](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-1ey8.toon))
+
+### Closed
+
+- Closed: Rebase PR 73 after publish-attestation merge ([pm-ts-starter-8tfm](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-8tfm.toon))
+- Closed: Address PR 78 publish-attestation review findings ([pm-ts-starter-hb7v](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-hb7v.toon))
 
 ## 2026.8.28 - 2026-08-28
 
@@ -111,13 +123,13 @@
 
 - changelog scripts read the pm workspace with default budgets instead of canonical complete reads ([pm-ts-starter-gw39](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-gw39.toon))
 
-### Security
-
-- The identity gate deadlocks the one remediation its own failure message prescribes ([pm-ts-starter-kaek](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-kaek.toon))
-
 ### Other
 
 - Drop inert pm manifest key and guard the closed manifest vocabulary ([pm-ts-starter-48t1](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-48t1.toon))
+
+### Closed
+
+- Closed: The identity gate deadlocks the one remediation its own failure message prescribes ([pm-ts-starter-kaek](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-kaek.toon))
 
 ## 2026.8.17 - 2026-08-17
 
@@ -152,9 +164,9 @@
 
 ## 2026.8.6 - 2026-08-06
 
-### Fixed
+### Closed
 
-- Scope the json renderer to the commands this extension owns so it stops colliding with sibling extensions ([pm-ts-starter-tezw](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-tezw.toon))
+- Closed: Scope the json renderer to the commands this extension owns so it stops colliding with sibling extensions ([pm-ts-starter-tezw](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-tezw.toon))
 
 ## 2026.8.5 - 2026-08-05
 
@@ -186,9 +198,9 @@
 
 ## 2026.7.28-1 - 2026-07-28
 
-### Fixed
+### Closed
 
-- Stop the output_format demo override from claiming and reprinting the host envelope ([pm-ts-starter-84ai](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-84ai.toon))
+- Closed: Stop the output_format demo override from claiming and reprinting the host envelope ([pm-ts-starter-84ai](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-84ai.toon))
 
 ## 2026.7.28 - 2026-07-28
 
@@ -209,33 +221,33 @@
 
 ## 2026.7.26 - 2026-07-26
 
-### Fixed
-
-- Reference extension claimed to be fully typed but used any, hiding three wrong SDK contracts ([pm-ts-starter-v5gs](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-v5gs.toon))
-
 ### Other
 
 - Enable governance duplicate-detection advisory mode and adopt pm-cli 2026.7.25 ([pm-ts-starter-4u91](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-4u91.toon))
 
+### Closed
+
+- Closed: Reference extension claimed to be fully typed but used any, hiding three wrong SDK contracts ([pm-ts-starter-v5gs](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-v5gs.toon))
+
 ## 2026.7.25 - 2026-07-25
-
-### Fixed
-
-- pm item reads are capped at Node's 1 MiB spawnSync default, so a mature tracker fails with no diagnosis ([pm-ts-starter-bftc](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-bftc.toon))
 
 ### Other
 
 - Adopt --respect-item-release in changelog scripts and bump pm-changelog to 2026.7.24 ([pm-ts-starter-rgr8](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-rgr8.toon))
 
+### Closed
+
+- Closed: pm item reads are capped at Node's 1 MiB spawnSync default, so a mature tracker fails with no diagnosis ([pm-ts-starter-bftc](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-bftc.toon))
+
 ## 2026.7.23 - 2026-07-23
-
-### Fixed
-
-- Recommend pm merge reconcile (2026.7.22) over raw history-repair in Multi-agent merge safety docs ([pm-ts-starter-quha](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-quha.toon))
 
 ### Other
 
 - Adopt pm field-aware merge driver for multi-agent branch-merge safety ([pm-ts-starter-vevn](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-vevn.toon))
+
+### Closed
+
+- Closed: Recommend pm merge reconcile (2026.7.22) over raw history-repair in Multi-agent merge safety docs ([pm-ts-starter-quha](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-quha.toon))
 
 ## 2026.7.19 - 2026-07-19
 
