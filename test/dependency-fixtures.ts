@@ -1,6 +1,6 @@
 /** Installed dependency fixtures shared by corpus and property oracles. */
 import {createHash} from "node:crypto";
-import {mkdirSync, writeFileSync, readdirSync, readFileSync, lstatSync} from "node:fs";
+import {mkdirSync, writeFileSync, readdirSync, readFileSync, readlinkSync, lstatSync} from "node:fs";
 import {join} from "node:path";
 import type {SdkContractOptions} from "../sdk-contracts.ts";
 
@@ -25,11 +25,14 @@ export function dependencyBound(project: string): SdkContractOptions["current"] 
 /** Detect writes even when a compiler rewrites identical bytes or restores the file inventory. */
 export function filesystemSnapshot(root: string): string {
   const digest = createHash("sha256");
-  for (const name of [".", ...readdirSync(root, {recursive: true}).map(String).sort()]) {
+  const visit = (name: string): void => {
     const file = join(root, name), info = lstatSync(file, {bigint: true});
     digest.update(name).update([info.mode, info.size, info.mtimeNs, info.ctimeNs].join(":"));
     if (info.isFile()) digest.update(readFileSync(file));
-  }
+    if (info.isSymbolicLink()) digest.update(readlinkSync(file));
+    if (info.isDirectory()) for (const child of readdirSync(file).sort()) visit(join(name, child));
+  };
+  visit(".");
   return digest.digest("hex");
 }
 

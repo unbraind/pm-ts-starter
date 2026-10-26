@@ -15,10 +15,8 @@ export declare const COMPILER_OPTION_POLICY: ReadonlyMap<string, CompilerOptionP
 export declare function compilerOptionNames(help: string): string[];
 /** Refuse every newly introduced option rather than silently assigning a default class. */
 export declare function classifiedCompilerOptions(help: string): ReadonlyMap<string, CompilerOptionPolicy>;
-/** Pass through every original option without introducing or changing any value. */
-export declare function enforcedCompilerOptions(original: Record<string, unknown>): Record<string, unknown>;
 /** Identify explicit paths that would emit outside the disposable project copy. */
-export declare function escapingCompilerOutputs(policy: ReadonlyMap<string, CompilerOptionPolicy>, original: Record<string, unknown>, project: string): string[];
+export declare function escapingCompilerOutputs(policy: ReadonlyMap<string, CompilerOptionPolicy>, original: Record<string, unknown>, project: string, config?: string): string[];
 /** Identify enabled checking bypasses and command modes without changing their values. */
 export declare function refusedCompilerOptions(policy: ReadonlyMap<string, CompilerOptionPolicy>, original: Record<string, unknown>): string[];
 //# sourceMappingURL=sdk-compiler-policy.d.ts.map

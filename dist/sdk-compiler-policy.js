@@ -1,5 +1,5 @@
 /** Exhaustive, reasoned policy for the exact compiler invoked by the SDK oracle. */
-import { isAbsolute, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 /** Expand reviewed groups into independently addressable policy rows. */
 function entries(category, reason, safe, names) {
     return names.split(" ").map(name => [name, { category, reason, safe }]);
@@ -7,7 +7,7 @@ function entries(category, reason, safe, names) {
 /** The only option policy: adding a compiler option requires an explicit reviewed row. */
 export const COMPILER_OPTION_ROWS = [
     ...entries("output", "Refuse absolute or escaping output/cache destinations; pass the original config through unchanged.", "confine", "outDir outFile declarationDir tsBuildInfoFile generateCpuProfile generateTrace pprofDir"),
-    ...entries("output", "Preserve emission and diagnostic controls, including project membership and incremental checking semantics.", "preserve", "assumeChangesOnlyAffectDirectDependencies incremental composite declaration declarationMap emitDeclarationOnly sourceMap inlineSourceMap inlineSources noEmit noEmitOnError traceResolution explainFiles diagnostics extendedDiagnostics listFiles listEmittedFiles"),
+    ...entries("output", "Inspect consumer values unchanged; delegation adds explicit noEmit and stable diagnostic presentation.", "preserve", "assumeChangesOnlyAffectDirectDependencies incremental composite declaration declarationMap emitDeclarationOnly sourceMap inlineSourceMap inlineSources noEmit noEmitOnError traceResolution explainFiles diagnostics extendedDiagnostics listFiles listEmittedFiles"),
     ...entries("output", "Refuse active command modes rather than rewriting values or starting unbounded compiler processes.", "command", "watch build init clean force dry verbose builders stopBuildOnErrors all help ignoreConfig listFilesOnly quiet showConfig version"),
     ...entries("checking", "Refuse active checking bypasses with a typed remedy; never silently change compiler diagnostics.", "refuse", "noCheck noResolve skipLibCheck skipDefaultLibCheck"),
     ...entries("neutral", "Preserve consumer checking strength and defaults; these select which diagnostics TypeScript reports.", "preserve", "allowJs checkJs strict noImplicitAny noImplicitThis strictNullChecks strictFunctionTypes strictBindCallApply strictPropertyInitialization strictBuiltinIteratorReturn useUnknownInCatchVariables noUncheckedSideEffectImports forceConsistentCasingInFileNames"),
@@ -16,7 +16,7 @@ export const COMPILER_OPTION_ROWS = [
     ...entries("neutral", "Only adds supplementary control-flow or unused-code diagnostics; disabling it does not suppress SDK binding or declaration diagnostics.", "preserve", "allowUnreachableCode allowUnusedLabels alwaysStrict noFallthroughCasesInSwitch noImplicitOverride noImplicitReturns noUnusedLocals noUnusedParameters"),
     ...entries("neutral", "Only controls emitted representation; the compiler may emit with unchanged values into disposable storage.", "preserve", "mapRoot sourceRoot rewriteRelativeImportExtensions downlevelIteration emitBOM importHelpers newLine noEmitHelpers preserveConstEnums removeComments stripInternal emitDecoratorMetadata"),
     ...entries("neutral", "Only affects language-service or watch behavior; neither service nor watch mode is invoked.", "preserve", "disableReferencedProjectLoad disableSolutionSearching disableSourceOfProjectReferenceRedirect disableSizeLimit plugins watchInterval watchFile watchDirectory fallbackPolling synchronousWatchDirectory excludeDirectories excludeFiles preserveWatchOutput maxNodeModuleJsDepth"),
-    ...entries("neutral", "Preserve performance and diagnostic presentation values; only inspection passes select a bounded command mode.", "preserve", "checkers locale project singleThreaded noErrorTruncation pretty deduplicatePackages stableTypeOrdering"),
+    ...entries("neutral", "Inspect original performance and presentation values; typechecking selects stable pretty-false output.", "preserve", "checkers locale project singleThreaded noErrorTruncation pretty deduplicatePackages stableTypeOrdering"),
 ];
 /** Index the reviewed rows after retaining the array for duplicate-classification checks. */
 export const COMPILER_OPTION_POLICY = new Map(COMPILER_OPTION_ROWS);
@@ -36,22 +36,19 @@ export function classifiedCompilerOptions(help) {
         return [name, policy];
     }));
 }
-/** Pass through every original option without introducing or changing any value. */
-export function enforcedCompilerOptions(original) {
-    return original;
-}
 /** Identify explicit paths that would emit outside the disposable project copy. */
-export function escapingCompilerOutputs(policy, original, project) {
+export function escapingCompilerOutputs(policy, original, project, config = join(project, "tsconfig.json")) {
+    const context = dirname(config);
     const outputs = { ...original };
     // Native incremental placement can escape even with a contained outDir.
     if ((original.incremental === true || original.composite === true) && original.tsBuildInfoFile === undefined && original.outFile === undefined && typeof original.outDir === "string" && typeof original.rootDir === "string") {
-        outputs.tsBuildInfoFile = relative(project, resolve(project, original.outDir, relative(resolve(project, original.rootDir), resolve(project, "tsconfig.tsbuildinfo"))));
+        outputs.tsBuildInfoFile = relative(context, resolve(context, original.outDir, relative(resolve(context, original.rootDir), resolve(context, basename(config).replace(/\.json$/, "") + ".tsbuildinfo"))));
     }
     return [...policy].filter(([name, row]) => {
         const value = outputs[name];
         if (row.safe !== "confine" || typeof value !== "string")
             return false;
-        const path = relative(project, resolve(project, value));
+        const path = relative(project, resolve(context, value));
         return isAbsolute(value) || path === ".." || path.startsWith("../") || path.startsWith("..\\");
     }).map(([name]) => name);
 }

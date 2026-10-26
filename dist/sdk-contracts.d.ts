@@ -29,7 +29,7 @@ export interface SdkContractOptions {
     /** Optional progress observer, also useful when checking overlapping callers. */
     onProgress?: (phase: SdkContractPhase) => void;
 }
-/** A compact row; diagnostics retain codes rather than potentially private source text. */
+/** One compiler verdict with complete diagnostics and a compact code sample. */
 export interface SdkContractRow {
     /** Which declared endpoint was checked. */
     target: "minimum" | "current";
@@ -39,25 +39,29 @@ export interface SdkContractRow {
     example: string;
     /** True only when the consumer compiler reports no errors. */
     ok: boolean;
-    /** Full diagnostic count, including diagnostics omitted from the sample. */
+    /** Actual tsc exit code, including native builder error statuses. */
+    exit_code: number;
+    /** Full number of diagnostics returned by the compiler. */
     diagnostic_count: number;
     /** At most three compiler diagnostic codes. */
     codes: string[];
-    /** At most three diagnostics with project-relative locations; no raw messages. */
+    /** Compiler diagnostics with project-relative locations and original messages. */
     diagnostics: SdkContractDiagnostic[];
 }
-/** A compiler error without source text or machine-specific paths. */
+/** One diagnostic parsed from the consumer compiler executable. */
 export interface SdkContractDiagnostic {
     /** TypeScript diagnostic code. */
     code: string;
     /** Project-relative source file, or a safe external/configuration marker. */
     file: string;
+    /** Compiler message with the disposable project prefix normalized. */
+    message: string;
     /** One-based source line; zero for configuration errors. */
     line: number;
     /** One-based source column; zero for configuration errors. */
     column: number;
 }
-/** Native TOON/JSON-compatible matrix with no machine paths, source text or tracker content. */
+/** Native TOON/JSON-compatible matrix containing compiler results for each bound. */
 export interface SdkContractMatrix {
     /** Artifact schema version. */
     version: 1;

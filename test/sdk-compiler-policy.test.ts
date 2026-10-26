@@ -3,8 +3,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import test from "node:test";
-import { optionValue } from "./compiler-option-fixtures.ts";
-import { classifiedCompilerOptions, escapingCompilerOutputs, compilerOptionNames, COMPILER_OPTION_POLICY, COMPILER_OPTION_ROWS, enforcedCompilerOptions, refusedCompilerOptions } from "../sdk-compiler-policy.ts";
+import { classifiedCompilerOptions, escapingCompilerOutputs, compilerOptionNames, COMPILER_OPTION_POLICY, COMPILER_OPTION_ROWS, refusedCompilerOptions } from "../sdk-compiler-policy.ts";
 
 const help = spawnSync(process.execPath, [resolve("node_modules/typescript/bin/tsc"), "--help", "--all", "--locale", "en"], { encoding: "utf8" });
 
@@ -30,7 +29,6 @@ test("incomplete and future option tables fail closed; original config gets no o
   assert.throws(() => classifiedCompilerOptions(help.stdout + "\n--future-unchecked-compiler-option\ntype: boolean\n"), /Classify every option/);
   assert.equal(compilerOptionNames(help.stdout + "\n--help, -?\n").length, classifiedCompilerOptions(help.stdout).size);
   const policy = classifiedCompilerOptions(help.stdout);
-  assert.deepEqual(enforcedCompilerOptions({}), {});
   assert.deepEqual(refusedCompilerOptions(policy, {}), []);
   assert.deepEqual(refusedCompilerOptions(policy, {noCheck: true, noResolve: true, watch: true, skipLibCheck: false}), ["watch", "noResolve", "noCheck"]);
 
@@ -47,23 +45,4 @@ test("output paths are refused only when absolute or escaping the project root",
   assert.deepEqual(escapingCompilerOutputs(policy, {outDir: "./dist", tsBuildInfoFile: "cache/build.tsbuildinfo", paths: {unused: ["../other"]}}, project), []);
   assert.deepEqual(escapingCompilerOutputs(policy, {outDir: "../dist", tsBuildInfoFile: resolve(project, "cache/build.tsbuildinfo"), declarationDir: 7}, project), ["tsBuildInfoFile", "outDir"]);
   assert.deepEqual(escapingCompilerOutputs(policy, {outDir: "..", declarationDir: "nested/../../dist"}, project), ["declarationDir", "outDir"]);
-});
-
-test("full option-table equality property passes the original config through unchanged", t => {
-  const policy = classifiedCompilerOptions(help.stdout);
-  let checked = 0;
-  for (const [name, row] of policy) {
-    const original = {[name]: optionValue(help.stdout, name)};
-    const effective: Record<string, unknown> = {...original, ...enforcedCompilerOptions(original)};
-    for (const key of new Set([...policy.keys(), ...Object.keys(effective)])) {
-      assert.deepEqual(effective[key], original[key], `${name}: ${key}`);
-    }
-    assert.deepEqual(refusedCompilerOptions(policy, original), (row.safe === "refuse" || row.safe === "command") && original[name] === true ? [name] : []);
-    checked++;
-  }
-  for (const original of [{incremental: true}, {composite: true}, {noEmit: true}, {noEmit: false}, {lib: ["es2022"], strict: false}]) {
-    const effective: Record<string, unknown> = {...original, ...enforcedCompilerOptions(original)};
-    for (const [key, value] of Object.entries(original)) assert.deepEqual(effective[key], value);
-  }
-  t.diagnostic(`Option equality: ${checked}/${policy.size} generated nondefault configurations preserve every original value.`);
 });

@@ -248,8 +248,8 @@ pm ts-starter sdk-contracts \
 Omit `--json` for native compact TOON. The result has `ok`, `checks`, `failed`,
 `rows` and `remedy`; a drift matrix exits nonzero while retaining the matrix.
 Each row identifies the endpoint, verified version and example, with the full
-error count and at most three TypeScript codes and locations. Raw source text and machine
-paths never appear in these diagnostics. `invalid_input`, `sdk_unavailable`,
+error count, up to three sample codes, and compiler diagnostic locations/messages.
+Disposable project prefixes are normalized in those messages. `invalid_input`, `sdk_unavailable`,
 `compiler_unavailable` and `isolation_refused` are typed refusals with retry guidance.
 
 Pass `--consumer ./consumer` to check a self-contained consumer project. Its sources,
@@ -262,16 +262,16 @@ package manager, re-resolves manifests or lockfiles, executes lifecycle scripts,
 or derives an installation name from package metadata. Lockfiles can describe a
 different installation from the one actually being checked, so the installed tree
 is authoritative. Internal links are rebased into the copy; external link targets
-are copied rather than shared. Compiler libraries and native companions retain
+remain symlinks to their installed read-only targets. Compiler libraries and native companions retain
 their original bytes, including files excluded by npm pack rules. Only the SDK
 package at the selected bound is replaced in each cloned project. Its canonical
 identity is captured before compilation, preserving internal module-root and SDK
 scope links while still refusing declarations from another SDK root.
 The original tsconfig, in-project extends targets, project references, sources and
 existing build artifacts retain their relative layout and bytes. Compilation runs
-`tsc --project tsconfig.json` with no option overrides, generated config, injected
-outDir, or output relocation. Native emits and build-info stay in the project
-copy. Absolute or project-escaping output/cache paths receive `isolation_refused`
+`tsc --project tsconfig.json --noEmit --pretty false --locale en`; reference-only
+solutions use build mode. No config is generated, and no output directory is
+injected or relocated. Source emission is disabled; incremental metadata stays in the copy. Absolute or project-escaping output/cache paths receive `isolation_refused`
 with a remedy to use contained relative destinations.
 Project mode cannot be combined with `--examples` or `--compiler`. Include the
 project's installed dependencies and compiler in its node_modules before running
@@ -279,10 +279,8 @@ the checker. Neither project nor inline provisioning needs npm or network access
 Copying never modifies caller files or shares writable hard links with them.
 
 
-The round-9 interface changes are an unmerged candidate. The pinned TypeScript 7
-API redirects project references differently from project `tsc`, so the unchanged
-differential contract remains blocked; see the [compatibility evidence](docs/sdk-contract-api-compatibility.md)
-and [complete subprocess inventory](docs/sdk-contract-process-inventory.md).
+See [compiler delegation](docs/sdk-contract-api-compatibility.md) and the
+[subprocess inventory](docs/sdk-contract-process-inventory.md).
 
 The default inline examples exercise typed authoring composition and certified
 complete tracker reads. Use `--examples docs/examples/sdk-contracts.json` for a
@@ -295,71 +293,51 @@ self-contained consumer project with relative imports; inline imports that resol
 outside the copy receive a named post-compilation isolation refusal.
 The checker compiles consumer source without executing it.
 
-The verdict is the consumer compiler's diagnostics. Every error is drift,
-including errors in external declarations and ambient dependencies. There is no
-custom module or exports resolver, SDK declaration rebinding, `paths` injection,
-or diagnostic code allowlist.
-TypeScript alone selects import/require conditions, versioned `types@` conditions
-and typesVersions. Each row retains the full diagnostic count, at most three
-codes, and corresponding project-relative file/line/column locations. External
-locations use a safe marker; source text and raw compiler messages stay private.
-Every checker subprocess gets an explicit environment: `HOME`, `USERPROFILE`,
-XDG directories, npm cache and temporary directories are inside its sandbox.
-All inherited `npm_config_*` variables (in either casing), `NODE_PATH`,
-`NODE_OPTIONS`, `NODE_V8_COVERAGE` and `TS*` variables are removed; child coverage
-is disabled. The copy's `.npmrc` retains only `registry`, scoped registries,
-host-scoped auth keys, `strict-ssl`, `ca` and `cafile`; the original is unchanged.
-No installer child exists. Native compiler packages and their libraries are copied
-from the consumer's toolchain without relying on a real-home cache.
+The checker delegates to the consumer's real installed `tsc` executable. Each SDK
+bound runs project typechecking with `--noEmit --pretty false --locale en` against
+the unchanged tsconfig. Reference-only solution configurations use `--build
+--noEmit --pretty false`; ordinary projects retain project compilation so missing
+referenced declarations remain TS6305. TypeScript owns reference handling, fatal
+error short-circuiting, global diagnostics, module resolution and diagnostic order.
+The checker imports no compiler or language-service API.
 
+Each row's exit_code is the executable's actual exit status and determines the verdict. Its pretty-false diagnostic
+headers supply file, line, column, TS code and complete multiline message.
+Supplementary trace, list, explain and statistics output is disabled for this channel. Rows retain all diagnostics,
+the full count and up to three sample codes. Disposable project prefixes are
+normalized and external file locations use a marker. Compiler messages are now
+part of the result: the consumer's compiler executable is a trusted input.
+A nonzero exit without recognizable diagnostics is `compiler_unavailable`.
+Every child is bounded to 30 seconds and 8 MiB of output.
 
-A small runner loads the **same copied TypeScript package's API** with the original
-parsed configuration. TypeScript 7 supplies config, program/options/emit-validation,
-syntactic, semantic and declaration diagnostics through its native API; classic
-TypeScript supplies pre-emit and emit diagnostics. Only JSON records containing
-code, category, file and position cross the result boundary. Trace, list, explain,
-statistics and pretty output uses a separate discarded channel. Error records
-populate the displayed slots. The unchanged CLI invocation performs normal emission;
-an API/CLI verdict disagreement fails closed. After compilation, a discovery-only `--listFilesOnly` pass
-checks the compiler's own resolved inputs. Every canonical file must be inside the
-copy, and every SDK declaration must belong to the selected SDK installation.
-An escaping resolved file receives `isolation_refused` naming that file without
-publishing an absolute machine path. Unused aliases and ordinary string literals
-are never interpreted as filesystem references. Missing imports retain native
-compiler diagnostics. Empty or unstructured provenance fails closed, except for
-valid empty solution configurations with project references.
-Each invocation is bounded to 30 seconds and 8 MiB. Compiler failures without
-usable API diagnostics produce `compiler_unavailable`.
+The consumer's configuration and sources are copied byte for byte. Only typecheck
+and presentation flags are added; source emission is disabled. Output/cache paths
+must remain confined, and active checking bypasses receive a typed refusal.
+Reference-only build graphs are inspected before execution and their resolved inputs
+are checked afterward, including cyclic references and child cache destinations.
+The existing option policy inspects the compiler's own help/config output without
+recreating diagnostics. After compilation, the compiler's resolved file list is
+checked against the private project and installed dependency roots. Unrelated
+external inputs and foreign SDK installations still receive an isolation refusal.
 
-The invoked compiler's `--help --all --locale en` table is read once per compiler
-per check, including watch and build declarations. `sdk-compiler-policy.ts` is the
-single reasoned policy for all 137 TypeScript 7.0.2 options. Its classes confine
-output/cache destinations, refuse checking bypasses, or preserve consumer values. Every newly discovered option receives a typed
-`isolation_refused` with guidance to classify it before retrying; the completeness
-test also fails on a new option. Active `noCheck`, `noResolve`, `skipLibCheck`, and
-`skipDefaultLibCheck` receive a typed refusal naming the option and explaining how
-to disable it. They are never silently flipped. Strictness and JavaScript checking
-retain the consumer's semantics. Invalid or command-only configuration settings
-fail closed; the checker invokes project compilation, without build or watch mode.
-Referenced project declarations must already be built when plain project `tsc`
-requires them; the checker does not build project references automatically.
+Installed aliases retain their directory names. Internal links are rebased into
+the copy; external installed package links remain links to their original read-only
+inputs. Canonical dependency roots are visited once, so mutual package links do
+not cause recursive copying or traversal. The selected SDK alone is replaced.
+There is no dependency install, reinstall or package-manager link command.
 
-A full-table property asserts that every original configuration value reaches the
-compiler unchanged. Instrumented real compiler invocations compare complete
-option objects and resolved files. The differential oracle runs plain tsc on a
-second identical copy, with the original config and no output overrides. Cases
-include allowJs TS5055 output collisions, JSON imports and quoted path literals,
-composite membership, incremental caches, declaration maps, declaration-only
-emission, consumer noEmit, explicit libraries and built or missing references.
-Both SDK bounds compare verdicts, diagnostic counts and complete error-code
-multisets for non-forged inputs. A separate generator-known oracle combines
-real TS2322/TS2307 errors with forged messages in module names, literals and
-filenames, including newline and ANSI bytes, under random presentation flags.
-The npm property covers location/execution settings from project configuration
-and both environment casings, comparing consumer, fake HOME and prefix tripwire
-tree hashes with an empty-config verdict. An authenticated scoped-registry fixture
-proves that an already installed private dependency survives without further
-registry requests. Filesystem snapshots protect original inputs and neighboring bounds.
+Every checker subprocess gets private HOME, XDG, cache and temporary directories.
+Inherited npm configuration, Node/TypeScript resolution injection and coverage
+settings are removed. The copied npmrc retains registry connection settings only;
+no installer or lifecycle script executes. Original inputs and linked dependency
+contents remain unchanged, verified by filesystem snapshots.
+
+The differential suite invokes the real executable independently for mutual
+external package links, unbuilt composite references, fatal declaration-only
+options and noLib globals. Consumer-config cases retain inherited options, source
+discovery, explicit libraries, aliases, incremental metadata and declaration settings.
+The npm location/execution property and authenticated scoped dependency fixture
+remain, with no registry requests during checking.
 
 The dependency differential corpus covers 11 installed shapes with passing and
 TS2322 controls: npm and scoped aliases, file copies and links, link dependencies,
