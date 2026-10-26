@@ -34,7 +34,7 @@ function oracle(project: string, build = false): {ok: boolean; exit_code: number
   return {ok: run.status === 0, exit_code: run.status, diagnostics};
 }
 
-for (const shape of ["mutual external symlinks", "unbuilt composite reference", "fatal emitDeclarationOnly", "noLib globals", "multiline type error", "reference-only solution", "reference-only cycle", "missing input", "malformed config", "unicode diagnostic", "missing reference"]) {
+for (const shape of ["mutual external symlinks", "unbuilt composite reference", "fatal emitDeclarationOnly", "noLib globals", "multiline type error", "reference-only solution", "reference-only cycle", "missing input", "malformed config", "unicode diagnostic", "missing reference", "uninstalled compiler companion"]) {
   test(`round 11 real compiler differential: ${shape}`, async t => {
     const root = mkdtempSync(join(tmpdir(), "sdk-delegation-")), project = join(root, "consumer");
     t.after(() => rmSync(root, {recursive: true, force: true}));
@@ -70,32 +70,41 @@ for (const shape of ["mutual external symlinks", "unbuilt composite reference", 
     } else if (shape === "multiline type error") {
       source = 'declare const input: {value: number}; export const output: {value: string} = input;';
       Object.assign(options, {pretty: true, traceResolution: true, explainFiles: true, diagnostics: true, extendedDiagnostics: true, listFiles: true, listEmittedFiles: true});
+    } else if (shape === "uninstalled compiler companion") {
+      options.resolveJsonModule = true;
+      source = 'import metadata from "@typescript/typescript-linux-x64/package.json" with {type: "json"}; export const name = metadata.name;';
     } else if (shape === "unicode diagnostic") source = `import ${JSON.stringify("missing\r\u2028module")};`;
     else options.noLib = true;
     writeFileSync(join(project, "consumer.mts"), source);
     const config = shape === "malformed config" ? "{ invalid" : JSON.stringify({compilerOptions: options, files: (shape.startsWith("reference-only") || shape === "missing reference") ? [] : ["consumer.mts"], references: shape === "missing reference" ? [{path: "missing.json"}] : shape === "unbuilt composite reference" || shape.startsWith("reference-only") ? [{path: "reference"}] : undefined});
     writeFileSync(join(project, "tsconfig.json"), config);
     if (shape === "missing input") rmSync(join(project, "consumer.mts"));
-    const expected = oracle(project, shape.startsWith("reference-only") || shape === "missing reference"), before = filesystemSnapshot(root);
-    const expectedCodes = shape === "mutual external symlinks" ? [] : shape === "unbuilt composite reference" ? ["TS6305"] : shape === "fatal emitDeclarationOnly" ? ["TS5069"] : shape === "multiline type error" ? ["TS2322"] : Array<string>(10).fill("TS2318");
-    if (shape === "malformed config" || shape === "missing input" || shape === "unicode diagnostic" || shape === "missing reference") assert.equal(expected.ok, false);
-    else if (shape.startsWith("reference-only")) assert.ok(expected.diagnostics.some(row => row.code === (shape === "reference-only cycle" ? "TS6202" : "TS2322")));
-    else assert.deepEqual(expected.diagnostics.map(row => row.code), expectedCodes);
-    if (shape === "multiline type error") assert.match(expected.diagnostics[0]!.message, /\n/);
-    const matrix = await checkSdkContracts({consumer: project, minimum: bound, current: bound});
-    for (const row of matrix.rows) {
-      assert.equal(row.ok, expected.ok);
-      assert.equal(row.exit_code, expected.exit_code);
-      assert.equal(row.diagnostic_count, expected.diagnostics.length);
-      assert.deepEqual(row.diagnostics, expected.diagnostics);
+    for (const present of shape === "uninstalled compiler companion" ? [false, true] : [false]) {
+      if (present) {
+        mkdirSync(join(project, "node_modules/@typescript"));
+        symlinkSync(resolve(import.meta.dirname, "../node_modules/@typescript/typescript-linux-x64"), join(project, "node_modules/@typescript/typescript-linux-x64"), "junction");
+      }
+      const expected = oracle(project, shape.startsWith("reference-only") || shape === "missing reference"), before = filesystemSnapshot(root);
+      const expectedCodes = shape === "mutual external symlinks" || present ? [] : shape === "unbuilt composite reference" ? ["TS6305"] : shape === "fatal emitDeclarationOnly" ? ["TS5069"] : shape === "multiline type error" ? ["TS2322"] : shape === "uninstalled compiler companion" ? ["TS2307"] : Array<string>(10).fill("TS2318");
+      if (shape === "malformed config" || shape === "missing input" || shape === "unicode diagnostic" || shape === "missing reference") assert.equal(expected.ok, false);
+      else if (shape.startsWith("reference-only")) assert.ok(expected.diagnostics.some(row => row.code === (shape === "reference-only cycle" ? "TS6202" : "TS2322")));
+      else assert.deepEqual(expected.diagnostics.map(row => row.code), expectedCodes);
+      if (shape === "multiline type error") assert.match(expected.diagnostics[0]!.message, /\n/);
+      const matrix = await checkSdkContracts({consumer: project, minimum: bound, current: bound});
+      for (const row of matrix.rows) {
+        assert.equal(row.ok, expected.ok);
+        assert.equal(row.exit_code, expected.exit_code);
+        assert.equal(row.diagnostic_count, expected.diagnostics.length);
+        assert.deepEqual(row.diagnostics, expected.diagnostics);
+      }
+      assert.equal(readFileSync(join(project, "tsconfig.json"), "utf8"), config);
+      assert.equal(filesystemSnapshot(root), before, "compiler reads linked dependencies without modifying original inputs");
     }
-    assert.equal(readFileSync(join(project, "tsconfig.json"), "utf8"), config);
-    assert.equal(filesystemSnapshot(root), before, "compiler reads linked dependencies without modifying original inputs");
   });
 }
 
 
-for (const shape of ["modules", "scope", "broken scope", "internal scope", "process home", "bin only", "config link", "default cache", "directory cache", "outfile cache", "build cache", "external cache", "dangling cache", "cyclic cache", "internal cache", "external reference", "linked reference"]) {
+for (const shape of ["modules", "scope", "broken scope", "internal scope", "process home", "inline linked compiler", "bin only", "config link", "default cache", "directory cache", "outfile cache", "build cache", "external cache", "dangling cache", "cyclic cache", "internal cache", "external reference", "linked reference"]) {
   test(`write boundary retains original inputs: ${shape}`, async t => {
     const root = mkdtempSync(join(tmpdir(), "sdk-write-boundary-")), project = join(root, "consumer"), shared = join(root, "shared");
     t.after(() => rmSync(root, {recursive: true, force: true}));
@@ -123,6 +132,9 @@ for (const shape of ["modules", "scope", "broken scope", "internal scope", "proc
       symlinkSync(shared, join(project, ".sdk-process"), "junction");
       writeFileSync(join(shared, "npmrc"), "registry=https://registry.npmjs.org/\nignore-scripts=false\n");
       symlinkSync(join(shared, "npmrc"), join(project, ".npmrc"));
+    } else if (shape === "inline linked compiler") {
+      symlinkSync(resolve(import.meta.dirname, "../node_modules/@types"), join(modules, "@types"), "junction");
+      symlinkSync(resolve(import.meta.dirname, "../node_modules/undici-types"), join(modules, "undici-types"), "junction");
     } else if (shape === "bin only") {
       rmSync(join(modules, "typescript")); mkdirSync(join(modules, ".bin"));
       symlinkSync(compiler, join(modules, ".bin/tsc"));
@@ -161,7 +173,9 @@ for (const shape of ["modules", "scope", "broken scope", "internal scope", "proc
       symlinkSync(join(shared, "config.json"), join(project, "tsconfig.json"));
     }
     const before = filesystemSnapshot(root);
-    const check = checkSdkContracts({consumer: project, minimum: bound, current: bound});
+    const check = shape === "inline linked compiler"
+      ? checkSdkContracts({compiler: join(modules, "typescript/bin/tsc"), minimum: bound, current: bound, examples: [{id: "minimal", source: "export const value = 1;"}]})
+      : checkSdkContracts({consumer: project, minimum: bound, current: bound});
     if (["default cache", "directory cache", "outfile cache", "build cache", "external cache", "dangling cache", "cyclic cache", "external reference", "linked reference"].includes(shape)) {
       await assert.rejects(check, error => error instanceof SdkContractRefusal && error.code === "isolation_refused");
     } else {

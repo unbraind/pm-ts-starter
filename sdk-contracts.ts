@@ -184,9 +184,8 @@ function registryConfiguration(project: string): void {
   rmSync(file, {force: true});
   writeFileSync(file, allowed.join("\n") + "\n");
 }
-/** Materialize existing entries by installed directory name; never ask a package manager to resolve them again. */
-function materializeDependencies(project: string, modules: string, names: string[]): void {
-  if (!existsSync(modules)) return;
+/** Provision only generated inline projects from installed compiler and ambient artifacts. */
+function materializeInlineDependencies(project: string, modules: string, names: string[]): void {
   const destination = join(project, "node_modules");
   privateDirectory(project, destination);
   for (const name of names) if (existsSync(join(modules, name))) {
@@ -382,7 +381,7 @@ function inlineConsumer(project: string, compiler: string): string {
   const modules = parts.length > 1 ? join(parts.slice(0, -1).join("/node_modules/"), "node_modules") : dirname(dirname(dirname(resolveSdkContractCompiler())));
   const ambient = existsSync(join(modules, "@types")) ? readdirSync(join(modules, "@types")).map(name => "@types/" + name) : [];
   const native = existsSync(join(modules, "@typescript")) ? readdirSync(join(modules, "@typescript")).map(name => "@typescript/" + name) : [];
-  materializeDependencies(project, modules, ["typescript", "undici-types", ...ambient, ...native]);
+  materializeInlineDependencies(project, modules, ["typescript", "undici-types", ...ambient, ...native]);
   return installedCompiler(project, entry);
 }
 /** Locate a compiler only when the caller did not supply one; omit-dev installs get a remedy. */
@@ -409,7 +408,7 @@ export async function checkSdkContracts(options: SdkContractOptions): Promise<Sd
     if (options.consumer === undefined) preparedCompiler = inlineConsumer(template, compiler);
     else {
       copyConsumer(resolve(options.consumer), template);
-      materializeDependencies(template, resolve(options.consumer, "node_modules"), []);
+      privateDirectory(template, join(template, "node_modules"));
       const bin = join(template, "node_modules/.bin/tsc");
       preparedCompiler = existsSync(bin) ? bin : join(template, "node_modules/typescript/bin/tsc");
     }

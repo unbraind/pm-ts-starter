@@ -11,7 +11,8 @@ Generated dist repeats the shipped source.
 | tsc typecheck | Same executable and unchanged config; noEmit and pretty-false presentation. Reference-only solutions use build. | Exit status is the verdict. Pretty-false headers supply file, line, column, TS code and message. No API diagnostics or semantic-phase emulation. |
 | tsc resolved-file inspection | Same executable after compilation; canonical installed package roots tracked with a visited set. | Resolved inputs must belong to the copied project or installed linked dependencies; SDK declarations must belong to the selected bound. |
 
-Copies preserve installed names and symlinks. External installed package links
+Consumer copies preserve exactly their installed names and symlinks; compiler-only
+companion packages are provisioned only for generated inline consumers. External installed package links
 remain read-only inputs rather than recursively copied trees. Mutual links are
 visited once per real path. Writable node_modules/scope containers are detached
 before SDK replacement; compiler cache destinations are checked through their real
