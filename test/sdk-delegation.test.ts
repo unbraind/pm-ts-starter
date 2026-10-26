@@ -95,7 +95,7 @@ for (const shape of ["mutual external symlinks", "unbuilt composite reference", 
 }
 
 
-for (const shape of ["modules", "scope", "broken scope", "internal scope", "process home", "bin only", "config link", "external cache", "dangling cache", "cyclic cache", "internal cache", "external reference", "linked reference"]) {
+for (const shape of ["modules", "scope", "broken scope", "internal scope", "process home", "bin only", "config link", "default cache", "directory cache", "outfile cache", "build cache", "external cache", "dangling cache", "cyclic cache", "internal cache", "external reference", "linked reference"]) {
   test(`write boundary retains original inputs: ${shape}`, async t => {
     const root = mkdtempSync(join(tmpdir(), "sdk-write-boundary-")), project = join(root, "consumer"), shared = join(root, "shared");
     t.after(() => rmSync(root, {recursive: true, force: true}));
@@ -130,7 +130,21 @@ for (const shape of ["modules", "scope", "broken scope", "internal scope", "proc
       Object.assign(options, {incremental: true, tsBuildInfoFile: "cache/state.tsbuildinfo"});
       const target = shape === "internal cache" ? join(project, "local-cache") : shared;
       if (shape === "internal cache") mkdirSync(target);
-      if (shape === "dangling cache") {
+      if (shape === "default cache") {
+        delete options.tsBuildInfoFile; symlinkSync(join(shared, "state.tsbuildinfo"), join(project, "tsconfig.tsbuildinfo"));
+      } else if (["directory cache", "outfile cache"].includes(shape)) {
+        delete options.tsBuildInfoFile;
+        if (shape === "directory cache") { options.outDir = "dist"; mkdirSync(join(project, "dist")); }
+        else { options.outFile = "bundle.js"; options.module = "System"; }
+        symlinkSync(join(shared, "state.tsbuildinfo"), join(project, shape === "directory cache" ? "dist/tsconfig.tsbuildinfo" : "bundle.tsbuildinfo"));
+      } else if (shape === "build cache") {
+        delete options.incremental; delete options.tsBuildInfoFile;
+        mkdirSync(join(project, "reference"));
+        writeFileSync(join(project, "reference/index.ts"), "export const value = 1;");
+        writeFileSync(join(project, "reference/tsconfig.json"), JSON.stringify({compilerOptions: {types: []}, files: ["index.ts"]}));
+        symlinkSync(join(shared, "state.tsbuildinfo"), join(project, "reference/tsconfig.tsbuildinfo"));
+        config = {compilerOptions: options, files: [], references: [{path: "reference"}]};
+      } else if (shape === "dangling cache") {
         mkdirSync(join(project, "cache")); symlinkSync(join(shared, "missing"), join(project, "cache/state.tsbuildinfo"));
       } else if (shape === "cyclic cache") {
         mkdirSync(join(project, "cache")); symlinkSync("other", join(project, "cache/state.tsbuildinfo")); symlinkSync("state.tsbuildinfo", join(project, "cache/other"));
@@ -148,7 +162,7 @@ for (const shape of ["modules", "scope", "broken scope", "internal scope", "proc
     }
     const before = filesystemSnapshot(root);
     const check = checkSdkContracts({consumer: project, minimum: bound, current: bound});
-    if (["external cache", "dangling cache", "cyclic cache", "external reference", "linked reference"].includes(shape)) {
+    if (["default cache", "directory cache", "outfile cache", "build cache", "external cache", "dangling cache", "cyclic cache", "external reference", "linked reference"].includes(shape)) {
       await assert.rejects(check, error => error instanceof SdkContractRefusal && error.code === "isolation_refused");
     } else {
       const matrix = await check;

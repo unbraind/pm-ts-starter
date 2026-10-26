@@ -265,7 +265,7 @@ function dependencyRoots(project, context, compiler) {
     return visited;
 }
 /** Inspect effective output paths and checking bypasses without altering configuration. */
-function isolatedConfig(project, compiler, policy, file) {
+function isolatedConfig(project, compiler, policy, file, build = false) {
     let config;
     try {
         const inspected = runCompiler(project, compiler, ["--project", file, "--showConfig"]);
@@ -287,10 +287,11 @@ function isolatedConfig(project, compiler, policy, file) {
     const refused = refusedCompilerOptions(policy, options);
     if (refused.length)
         throw new SdkContractRefusal("isolation_refused", `Disable checking bypasses or command modes (${refused.join(", ")}) in the consumer configuration before retrying; the checker preserves option values.`);
-    const escaping = escapingCompilerOutputs(policy, options, project, file);
+    const empty = !config.files?.length && !!config.references?.length;
+    const escaping = escapingCompilerOutputs(policy, build || empty ? { ...options, incremental: true } : options, project, file);
     if (escaping.length)
         throw new SdkContractRefusal("isolation_refused", `Use project-relative output/cache paths contained in the project root (${escaping.join(", ")}); absolute and escaping destinations cannot be isolated without changing compiler behavior.`);
-    return { empty: !config.files?.length && !!config.references?.length, references: (config.references ?? []).map(reference => resolve(dirname(file), reference.path)) };
+    return { empty, references: (config.references ?? []).map(reference => resolve(dirname(file), reference.path)) };
 }
 /** Check actual compiler-resolved inputs; installed external packages stay linked and read-only. */
 function verifyCompilation(project, compiler, installed, empty, config) {
@@ -333,7 +334,7 @@ function compileConsumer(project, compiler, installed, policy) {
         if (!existsSync(file) || seen.has(realpathSync(file)))
             return;
         seen.add(realpathSync(file));
-        const settings = isolatedConfig(project, compiler, policy, file);
+        const settings = isolatedConfig(project, compiler, policy, file, true);
         projects.set(file, settings);
         for (const reference of settings.references)
             visit(reference);

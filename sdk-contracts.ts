@@ -299,7 +299,7 @@ function dependencyRoots(project: string, context: string, compiler: string): Se
   return visited;
 }
 /** Inspect effective output paths and checking bypasses without altering configuration. */
-function isolatedConfig(project: string, compiler: string, policy: ReadonlyMap<string, CompilerOptionPolicy>, file: string): {empty: boolean; references: string[]} {
+function isolatedConfig(project: string, compiler: string, policy: ReadonlyMap<string, CompilerOptionPolicy>, file: string, build = false): {empty: boolean; references: string[]} {
   let config: { compilerOptions?: Record<string, unknown>; files?: string[]; references?: {path: string}[] };
   try {
     const inspected = runCompiler(project, compiler, ["--project", file, "--showConfig"]);
@@ -314,9 +314,10 @@ function isolatedConfig(project: string, compiler: string, policy: ReadonlyMap<s
   const options = config.compilerOptions;
   const refused = refusedCompilerOptions(policy, options);
   if (refused.length) throw new SdkContractRefusal("isolation_refused", `Disable checking bypasses or command modes (${refused.join(", ")}) in the consumer configuration before retrying; the checker preserves option values.`);
-  const escaping = escapingCompilerOutputs(policy, options, project, file);
+  const empty = !config.files?.length && !!config.references?.length;
+  const escaping = escapingCompilerOutputs(policy, build || empty ? {...options, incremental: true} : options, project, file);
   if (escaping.length) throw new SdkContractRefusal("isolation_refused", `Use project-relative output/cache paths contained in the project root (${escaping.join(", ")}); absolute and escaping destinations cannot be isolated without changing compiler behavior.`);
-  return {empty: !config.files?.length && !!config.references?.length, references: (config.references ?? []).map(reference => resolve(dirname(file), reference.path))};
+  return {empty, references: (config.references ?? []).map(reference => resolve(dirname(file), reference.path))};
 }
 /** Check actual compiler-resolved inputs; installed external packages stay linked and read-only. */
 function verifyCompilation(project: string, compiler: string, installed: string, empty: boolean, config: string): void {
@@ -356,7 +357,7 @@ function compileConsumer(project: string, compiler: string, installed: string, p
     if (!inside(project, file) || (existsSync(file) && !inside(project, realpathSync(file)))) isolationRefusal();
     if (!existsSync(file) || seen.has(realpathSync(file))) return;
     seen.add(realpathSync(file));
-    const settings = isolatedConfig(project, compiler, policy, file);
+    const settings = isolatedConfig(project, compiler, policy, file, true);
     projects.set(file, settings);
     for (const reference of settings.references) visit(reference);
   };

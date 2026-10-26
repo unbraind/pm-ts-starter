@@ -63,9 +63,13 @@ function containedWrite(project: string, target: string): boolean {
 export function escapingCompilerOutputs(policy: ReadonlyMap<string, CompilerOptionPolicy>, original: Record<string, unknown>, project: string, config = join(project, "tsconfig.json")): string[] {
   const context = dirname(config);
   const outputs = { ...original };
-  // Native incremental placement can escape even with a contained outDir.
-  if ((original.incremental === true || original.composite === true) && original.tsBuildInfoFile === undefined && original.outFile === undefined && typeof original.outDir === "string" && typeof original.rootDir === "string") {
-    outputs.tsBuildInfoFile = relative(context, resolve(context, original.outDir, relative(resolve(context, original.rootDir), resolve(context, basename(config).replace(/\.json$/, "") + ".tsbuildinfo"))));
+  // noEmit and build mode can still write the compiler's default incremental cache.
+  if ((original.incremental === true || original.composite === true) && original.tsBuildInfoFile === undefined) {
+    const cache = basename(config).replace(/\.json$/, "") + ".tsbuildinfo";
+    const output = typeof original.outFile === "string" ? original.outFile.replace(/\.[^/.\\]+$/, "") + ".tsbuildinfo"
+      : typeof original.outDir === "string" ? resolve(context, original.outDir, typeof original.rootDir === "string"
+        ? relative(resolve(context, original.rootDir), resolve(context, cache)) : cache) : resolve(context, cache);
+    outputs.tsBuildInfoFile = relative(context, resolve(context, output));
   }
   return [...policy].filter(([name, row]) => {
     const value = outputs[name];
