@@ -264,7 +264,9 @@ different installation from the one actually being checked, so the installed tre
 is authoritative. Internal links are rebased into the copy; external link targets
 are copied rather than shared. Compiler libraries and native companions retain
 their original bytes, including files excluded by npm pack rules. Only the SDK
-package at the selected bound is replaced in each cloned project.
+package at the selected bound is replaced in each cloned project. Its canonical
+identity is captured before compilation, preserving internal module-root and SDK
+scope links while still refusing declarations from another SDK root.
 The original tsconfig, in-project extends targets, project references, sources and
 existing build artifacts retain their relative layout and bytes. Compilation runs
 `tsc --project tsconfig.json` with no option overrides, generated config, injected

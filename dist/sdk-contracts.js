@@ -404,6 +404,7 @@ export async function checkSdkContracts(options) {
             rmSync(installed, { recursive: true, force: true });
             copyConsumer(targets[target].root, installed);
             targetRoot({ root: installed, version: targets[target].version });
+            const installedRoot = realpathSync(installed);
             options.onProgress?.("linked");
             for (const example of examples) {
                 if (options.consumer === undefined)
@@ -420,7 +421,7 @@ export async function checkSdkContracts(options) {
                     }
                     policies.set(compilerKey, policy);
                 }
-                const diagnostics = compileConsumer(project, entry, installed, policy);
+                const diagnostics = compileConsumer(project, entry, installedRoot, policy);
                 targetRoot({ root: installed, version: targets[target].version });
                 rows.push({ target, sdk: targets[target].version, example: example.id, ok: diagnostics.length === 0, diagnostic_count: diagnostics.length,
                     codes: diagnostics.slice(0, 3).map(diagnostic => diagnostic.code), diagnostics: diagnostics.slice(0, 3) });

@@ -3,14 +3,16 @@ title: Compile packed contracts against each exact selected SDK bound
 description: "Follow-up to PR 153: packed declarations resolved SDK imports from a current-only consumer installation, leaving the minimum bound untested. Isolate each runtime and bound, verify the installed resolution, and regress a current-only public SDK API."
 type: Issue
 pm_format_version: 2
-status: blocked
+status: in_progress
 priority: 1
 tags[1]: "gh:unbraind/pm-ts-starter#154"
 created_at: "2026-10-24T13:07:42.652Z"
-updated_at: "2026-10-26T12:53:48.047Z"
+updated_at: "2026-10-26T13:49:25.303Z"
+assignee: codex-agent
+claim_principal: codex-agent
 author: codex-agent
 acceptance_criteria: Exact manifest minimum and explicit current SDK resolve inside separate packed npm and Bun consumers; a newer-only public API passes current and fails minimum; reverting only consumer provisioning fails the regression.
-comments[98]{created_at,author,text}:
+comments[101]{created_at,author,text}:
   "2026-10-24T13:07:46.558Z",codex-agent,"Scope: correct the packed-consumer compatibility gate added by PR 153. Use separate npm and Bun consumer installations per bound, select the minimum from manifest.json and current release 2026.10.24, and prove the actual resolver result from each consumer. Add a real newer-only SDK API use through emitted declarations, retaining the fixed compiler examples and no-git checks. Repository dependency pins remain unchanged; full npm and Bun release gates will run locally and in CI."
   "2026-10-24T13:07:47.361Z",codex-agent,"Implementation: each compiler project maps the selected SDK public type exports through TypeScript paths, including imports reached through absolute external declarations. Unexported SDK subpaths resolve to an empty declaration rather than falling through to a foreign installation. Packed acceptance now installs npm and Bun consumers separately for each exact bound and verifies package metadata and SDK entry resolution at runtime. Regression uses real acquireLockLease, absent in the manifest minimum and present in 2026.10.24. Typecheck, test typecheck, lint, docstring gate and zero-duplication gate passed."
   "2026-10-24T13:07:47.949Z",codex-agent,"Fail-on-revert proof: restored only checkSdkContracts to its origin/main implementation, leaving the new regression and helper intact. node --test --test-name-pattern='absolute declaration imports report newer-only SDK APIs as minimum drift' test/sdk-contracts.test.ts failed 1/1: expected matrix.ok=false, got true, because the minimum inherited acquireLockLease from the external consumer's current SDK. Restored the fixed function immediately. Before revert the complete targeted suite passed 8/8 with 100% sdk-contracts.ts lines, branches and functions. Running the registered targeted suite again after restoration. Local strict tracker health passes after provisioning the same pm-github version as CI; an existing provenance advisory remains untouched."
@@ -109,6 +111,9 @@ comments[98]{created_at,author,text}:
   "2026-10-26T12:34:40.311Z",codex-agent,"Round-10 dependency-shape differential passed: 11 installed shapes, 22 independent unmodified plain-tsc oracles, 44 checker-bound comparisons with identical verdicts and TS2322 negative-control codes. Includes npm alias alias-fixture/actual-fixture, scoped alias, file copy/link, link dependency, workspace relative sibling imports, peer, bundled nested dependencies with a conflicting hoisted copy, metadata/directory mismatch, nested alias and hidden store. Original source/metadata/link timestamps and byte snapshots remain unchanged. Identity/privacy audit passed 4/4 and the added diff has no absolute home/temp paths, private addresses or unexpected email literals. The 200-graph test and full release gates are still running."
   "2026-10-26T12:53:34.241Z",codex-agent,"Round-10 targeted command completed: node --test --test-reporter=spec --test-name-pattern=\"round 10\" test/sdk-contracts.test.ts passed 3/3, zero failures/skips/cancellations. Property seeds 15410-15413 generated 200 independent graphs and 1554 edges; 200 independent plain-tsc passes agree with all 400 checker rows and original tree snapshots remain unchanged. The corpus additionally passed 11 shapes, 22 oracles and 44 bound comparisons. Dedicated alias case passed; reverting artifact reinstalls produced TS2307 at both bounds as recorded. Test worker cleanup now completes before reporting success, with progress every ten cases. Build, test typecheck, lint, docstrings, 0% duplication, changelog check and privacy audit 4/4 pass. Full local npm gate is still running; exact-head npm/Bun CI results will be linked in PR 154 and its checks page. No round-9 API-parity assertions were weakened."
   "2026-10-26T12:53:43.590Z",codex-agent,"Implementation complete for the dependency-materialization review finding. The item retains its documented round-9 native TypeScript API/project-tsc parity blocker; full release readiness is not certified. Source changes are ready for review, with final gate receipts tracked at https://github.com/unbraind/pm-ts-starter/pull/154/checks . Releasing the coding claim while exact-head CI verification continues; do not close or merge."
+  "2026-10-26T13:28:30.363Z",codex-agent,"Final self-review identified a necessary companion to preserving internal links: the selected SDK identity must be canonicalized once immediately after copying, before progress callbacks or compilation. Comparing compiler-realpathed files against a lexical installed SDK path can falsely refuse a consumer whose node_modules root or SDK scope directory is an internal link. Add direct differential regressions for both shapes; capture the canonical bound before compilation without changing or relaxing post-compile ownership checks. The first pushed candidate is 062e906; final CI will follow the corrected head."
+  "2026-10-26T13:41:22.380Z",codex-agent,"Canonical SDK-root correction verified: node --test --test-reporter=spec --test-name-pattern=\"round 10 internal module|post-compile isolation\" test/sdk-contracts.test.ts passed 2/2, zero failures/skips/cancellations. Two new positive differential layouts (internal node_modules root link and internal SDK scope link) add 2 plain-tsc oracles and 4 bound comparisons. Existing external-input, missing-input, unused-path and foreign-SDK ownership controls remain intact. Before the correction, the new linked-root regression failed 0/1 against unchanged checkSdkContracts from 062e906 with isolation_refused although plain tsc passed. The fix captures realpath once immediately after selected SDK copying, before callbacks/compilation, preserving immutable post-compile ownership rather than recomputing it after compiler execution. Build, source/test typecheck, lint and 0% duplication pass. Earlier local full gates are superseded and were stopped; they are not passing release evidence. CI must run on the new final head."
+  "2026-10-26T13:49:25.273Z",codex-agent,"Main advanced during verification with release 2026.10.26 metadata only (package/lock root version and manifest version); compiler and SDK pins are unchanged. Commit the verified canonical-identity correction, merge main, regenerate the changelog, and start a new exact-head CI run. No shared PM item or history was changed by this main commit. The existing native API reference-parity blocker remains; superseded local gates are canceled rather than claimed as passing."
 files[20]{path,scope}:
   .github/workflows/ci.yml,project
   dist/index.d.ts.map,project
@@ -130,7 +135,7 @@ files[20]{path,scope}:
   test/dependency-property-worker.ts,project
   test/sdk-compiler-policy.test.ts,project
   test/sdk-contracts.test.ts,project
-tests[30]:
+tests[31]:
   - command: node --test --experimental-test-coverage --test-coverage-include=sdk-contracts.ts test/sdk-contracts.test.ts
     scope: project
     timeout_seconds: 3600
@@ -371,6 +376,13 @@ tests[30]:
     provenance:
       author: codex-agent
       created_at: "2026-10-26T12:18:31.149Z"
+      source_kind: local_mutation
+      source_ref: fix/min-sdk-drift-check
+  - command: "node --test --test-name-pattern=\"round 10 internal module\" test/sdk-contracts.test.ts"
+    scope: project
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-26T13:41:06.165Z"
       source_kind: local_mutation
       source_ref: fix/min-sdk-drift-check
 docs[3]{path,scope}:

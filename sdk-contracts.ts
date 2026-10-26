@@ -422,6 +422,7 @@ export async function checkSdkContracts(options: SdkContractOptions): Promise<Sd
       rmSync(installed, { recursive: true, force: true });
       copyConsumer(targets[target].root, installed);
       targetRoot({ root: installed, version: targets[target].version });
+      const installedRoot = realpathSync(installed);
       options.onProgress?.("linked");
       for (const example of examples) {
         if (options.consumer === undefined) writeFileSync(join(project, "consumer.ts"), example.source);
@@ -433,7 +434,7 @@ export async function checkSdkContracts(options: SdkContractOptions): Promise<Sd
           catch { throw new SdkContractRefusal("isolation_refused", "Classify every option in this compiler's complete help-all table in the SDK compiler policy before retrying; provide a supported compiler with English help output."); }
           policies.set(compilerKey, policy);
         }
-        const diagnostics = compileConsumer(project, entry, installed, policy);
+        const diagnostics = compileConsumer(project, entry, installedRoot, policy);
         targetRoot({ root: installed, version: targets[target].version });
         rows.push({ target, sdk: targets[target].version, example: example.id, ok: diagnostics.length === 0, diagnostic_count: diagnostics.length,
           codes: diagnostics.slice(0, 3).map(diagnostic => diagnostic.code), diagnostics: diagnostics.slice(0, 3) });

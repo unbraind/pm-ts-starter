@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
-import { chmodSync, cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, lstatSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, lstatSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
@@ -1642,4 +1642,23 @@ test("round 10 review alias-fixture resolves by installed name rather than actua
   assert.deepEqual(expected, {ok: true, codes: []});
   const matrix = await checkSdkContracts({consumer: project, minimum: bound, current: bound});
   assertPlainRows(matrix, expected);
+});
+
+
+test("round 10 internal module and SDK scope links retain canonical selected SDK identity", async t => {
+  for (const shape of ["module-root", "sdk-scope"]) {
+    const project = noEmitConsumer(t);
+    if (shape === "module-root") {
+      renameSync(join(project, "node_modules"), join(project, "installed-modules"));
+      symlinkSync(join(project, "installed-modules"), join(project, "node_modules"), "junction");
+    } else {
+      const scope = join(project, "packages/sdk-scope");
+      mkdirSync(scope, {recursive:true});
+      symlinkSync(scope, join(project, "node_modules/@unbrained"), "junction");
+    }
+    const bound = dependencyBound(project);
+    dependencyEntry(join(project, "node_modules"), "alias-fixture", "actual-fixture");
+    writeFileSync(join(project, "consumer.mts"), 'import {value} from "alias-fixture"; import {sdk} from "@unbrained/pm-cli"; export const use: "selected" = value; export {sdk};');
+    assert.equal((await dependencyOracle(project, bound, t)).ok, true, shape);
+  }
 });
