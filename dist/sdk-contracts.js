@@ -245,33 +245,76 @@ function runCompiler(project, compiler, args, discardOutput = false) {
 }
 /** Keep the compiler output channel limited to diagnostics; these flags do not change checking. */
 const diagnosticPresentation = ["pretty", "traceResolution", "explainFiles", "diagnostics", "extendedDiagnostics", "listFiles", "listEmittedFiles"].flatMap(name => ["--" + name, "false"]);
-/** Read compiler source paths through its JSON trace, never its ambiguous line-oriented file list. */
-function compilerFiles(project, compiler, empty, config, writers, failed = false) {
-    const trace = mkdtempSync(join(dirname(project), "resolved-files-"));
-    // Resolution-only mode emits a textual list; discard it in the OS, before any parent-side transport.
-    const result = runCompiler(project, compiler, ["--project", config, "--listFilesOnly", "--noEmit", ...writers, "--tsBuildInfoFile", join(trace, "state.tsbuildinfo"), "--generateTrace", trace, ...diagnosticPresentation, "--locale", "en"], true);
-    const report = join(trace, "trace.json");
-    if (!existsSync(report) && failed && result.status !== 0)
-        return [];
-    let events;
+/** Ask the matching consumer API only for source names; never request diagnostics or emit files. */
+function apiCompilerFiles(project, compiler, config, directory) {
+    let api;
     try {
-        events = JSON.parse(readFileSync(report, "utf8"));
+        const required = createRequire(join(project, "package.json"));
+        const metadata = JSON.parse(readFileSync(required.resolve("typescript/package.json"), "utf8"));
+        if (typeof metadata.main !== "string")
+            return undefined;
+        api = required.resolve("typescript");
+    }
+    catch {
+        return undefined;
+    }
+    const shown = runCompiler(project, compiler, ["--project", config, "--showConfig"]);
+    if (shown.status !== 0)
+        return [];
+    const snapshot = join(directory, "config.json"), entry = join(directory, "sources.cts");
+    writeFileSync(snapshot, shown.stdout);
+    writeFileSync(entry, `const ts=require(${JSON.stringify(api)}),fs=require('node:fs'),path=require('node:path');
+if(typeof ts.createProgram!=='function'){process.stdout.write('null');}else{
+ts.sys.write=()=>{};ts.sys.writeFile=()=>{throw new Error('Source inspection cannot emit compiler output');};
+const parsed=ts.parseJsonConfigFileContent(JSON.parse(fs.readFileSync(process.argv[2],'utf8')),ts.sys,path.dirname(process.argv[3]),undefined,process.argv[3]);
+const options={...parsed.options,noEmit:true,generateTrace:undefined,generateCpuProfile:undefined,pprofDir:undefined,tsBuildInfoFile:undefined};
+const program=ts.createProgram({rootNames:parsed.fileNames,options,projectReferences:parsed.projectReferences});
+process.stdout.write(JSON.stringify({version:ts.version,files:program.getSourceFiles().map(file=>file.fileName)}));}`);
+    const result = runCompiler(project, entry, [snapshot, config]);
+    if (result.status !== 0)
+        throw new SdkContractRefusal("isolation_refused", `Source inventory module ${JSON.stringify(pathLabel(api))} did not finish successfully; provide a working matching compiler API.`);
+    let report;
+    try {
+        report = JSON.parse(result.stdout);
     }
     catch {
         isolationRefusal();
     }
-    if (!Array.isArray(events))
-        isolationRefusal();
+    if (report === null)
+        return undefined;
+    const version = runCompiler(project, compiler, ["--version"]);
+    if (!Array.isArray(report.files) || typeof report.version !== "string" || version.status !== 0 || version.stdout.trim() !== "Version " + report.version)
+        throw new SdkContractRefusal("isolation_refused", `Source inventory module ${JSON.stringify(pathLabel(api))} must expose JSON file names and match the consumer executable version.`);
+    return report.files;
+}
+/** Read complete JSON path strings from the consumer API or its native trace; never parse file-list text. */
+function compilerFiles(project, compiler, empty, config, writers, failed = false) {
+    const trace = mkdtempSync(join(dirname(project), "resolved-files-"));
+    let paths = apiCompilerFiles(project, compiler, config, trace);
+    if (paths === undefined) {
+        // Native resolution-only mode prints a file list; discard both text streams directly in the OS.
+        const result = runCompiler(project, compiler, ["--project", config, "--listFilesOnly", "--noEmit", ...writers, "--tsBuildInfoFile", join(trace, "state.tsbuildinfo"), "--generateTrace", trace, ...diagnosticPresentation, "--locale", "en"], true);
+        const report = join(trace, "trace.json");
+        if (!existsSync(report) && failed && result.status !== 0)
+            return [];
+        let events;
+        try {
+            events = JSON.parse(readFileSync(report, "utf8"));
+        }
+        catch {
+            isolationRefusal();
+        }
+        if (!Array.isArray(events))
+            isolationRefusal();
+        paths = events.filter(event => event?.name === "createSourceFile").map(event => event.args?.path);
+    }
     const files = new Set();
-    for (const event of events) {
-        if (event?.name !== "createSourceFile")
-            continue;
-        const path = event.args?.path;
+    for (const path of paths) {
         if (typeof path !== "string" || !isAbsolute(path) || (existsSync(path) && !statSync(path).isFile()))
             throw new SdkContractRefusal("isolation_refused", `Compiler source path ${JSON.stringify(pathLabel(path))} cannot be represented as an absolute file; provide a complete JSON compiler trace.`);
         files.add(path);
     }
-    if (!files.size && !empty && result.status === 0)
+    if (!files.size && !empty && !failed)
         isolationRefusal();
     return [...files];
 }

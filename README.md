@@ -298,7 +298,7 @@ the unchanged tsconfig. Reference-only solution configurations use `--build
 --force --noEmit --pretty false`; ordinary projects retain project compilation so missing
 referenced declarations remain TS6305. TypeScript owns reference handling, fatal
 error short-circuiting, global diagnostics, module resolution and diagnostic order.
-The checker imports no compiler or language-service API.
+Verdicts and diagnostics come from the executable. Source inspection uses the matching consumer program API only for file names when available; it never collects API diagnostics or creates a language service.
 
 Each row's exit_code is the executable's actual exit status and determines the verdict. Its pretty-false diagnostic
 headers supply line, column, TS code and complete multiline message. File locations are matched against complete JSON source paths, including embedded CR/LF, rather than split from output lines.
@@ -329,8 +329,11 @@ Reference-only build graphs are inspected before execution and their resolved in
 are checked afterward, including cyclic references and child cache destinations.
 Writer capability detection uses the compiler's own help/config output without
 classifying checking options or recreating diagnostics. After compilation, a separate
-real-compiler invocation writes a fresh JSON trace in checker-owned storage. Its
-source paths are checked against the private project and installed dependency roots.
+resolution-only native invocation writes a fresh JSON trace in checker-owned storage,
+with its textual output discarded directly in the OS. JavaScript compilers expose
+source names through getSourceFiles in a confined child, using fresh showConfig JSON
+and a matching executable/API version. No emit or diagnostic method is called.
+Complete JSON source paths are checked against the private project and installed dependency roots.
 Paths never come from listFiles text or whitespace-delimited output. Both sides
 are canonicalized through realpath using the same function; missing declaration
 paths retain their nearest real ancestor so native TS6305 remains observable.

@@ -75,7 +75,7 @@ for (const version of ["5.9.3", "6.0.3"]) for (const mode of ["reference build",
     writeFileSync(join(project, caches[1]!), "unused cache"); writeFileSync(join(project, caches[2]!), "dependency cache");
     writeFileSync(join(project, "node_modules/.bin/package.json"), '{"type":"commonjs"}');
     writeFileSync(join(project, "node_modules/.bin/tsc"), `const fs=require('node:fs'),cp=require('node:child_process');
-const args=process.argv.slice(2); if(!args.some(a=>['--help','--showConfig','--generateTrace'].includes(a))) fs.appendFileSync('.cache-proof.jsonl',JSON.stringify({args,caches:${JSON.stringify(caches)}.map(p=>fs.existsSync(p))})+'\\n');
+const args=process.argv.slice(2); if(!args.some(a=>['--help','--showConfig','--generateTrace','--version'].includes(a))) fs.appendFileSync('.cache-proof.jsonl',JSON.stringify({args,caches:${JSON.stringify(caches)}.map(p=>fs.existsSync(p))})+'\\n');
 const run=cp.spawnSync(process.execPath,[${JSON.stringify(entry)},...args],{stdio:'inherit'});process.exit(run.status??1);`);
     const cold = join(root, "cold"); cpSync(project, cold, {recursive: true});
     for (const cache of caches) rmSync(join(cold, cache));
