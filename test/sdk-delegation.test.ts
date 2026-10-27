@@ -104,7 +104,7 @@ for (const shape of ["mutual external symlinks", "unbuilt composite reference", 
 }
 
 
-for (const shape of ["modules", "scope", "broken scope", "internal scope", "process home", "inline linked compiler", "bin only", "config link", "default cache", "directory cache", "outfile cache", "build cache", "external cache", "dangling cache", "cyclic cache", "internal cache", "external reference", "linked reference"]) {
+for (const shape of ["modules", "scope", "broken scope", "internal scope", "process home", "inline linked compiler", "bin only", "config link", "default cache", "directory cache", "outfile cache", "build cache", "absolute build cache", "dependency build cache", "external cache", "dangling cache", "cyclic cache", "internal cache", "external reference", "linked reference"]) {
   test(`write boundary retains original inputs: ${shape}`, async t => {
     const root = mkdtempSync(join(tmpdir(), "sdk-write-boundary-")), project = join(root, "consumer"), shared = join(root, "shared");
     t.after(() => rmSync(root, {recursive: true, force: true}));
@@ -123,6 +123,11 @@ for (const shape of ["modules", "scope", "broken scope", "internal scope", "proc
       const external = join(shared, "installed"); renameSync(original, external); symlinkSync(external, original, "junction");
       writeFileSync(join(external, "fixture-file"), "retain non-package entries");
       symlinkSync(join(shared, "absent"), join(external, "broken"));
+      if (shape === "modules") {
+        const metadata = join(bound.root, "package.json"), linked = join(shared, "sdk-package.json");
+        writeFileSync(linked, readFileSync(metadata)); rmSync(metadata);
+        symlinkSync(linked, metadata);
+      }
     } else if (shape === "broken scope" || shape === "internal scope") {
       rmSync(scope, {recursive: true});
       const destination = shape === "internal scope" ? join(project, "local-scope") : join(shared, "missing");
@@ -149,12 +154,17 @@ for (const shape of ["modules", "scope", "broken scope", "internal scope", "proc
         if (shape === "directory cache") { options.outDir = "dist"; mkdirSync(join(project, "dist")); }
         else { options.outFile = "bundle.js"; options.module = "System"; }
         symlinkSync(join(shared, "state.tsbuildinfo"), join(project, shape === "directory cache" ? "dist/tsconfig.tsbuildinfo" : "bundle.tsbuildinfo"));
-      } else if (shape === "build cache") {
+      } else if (["build cache", "absolute build cache", "dependency build cache"].includes(shape)) {
         delete options.incremental; delete options.tsBuildInfoFile;
         mkdirSync(join(project, "reference"));
         writeFileSync(join(project, "reference/index.ts"), "export const value = 1;");
-        writeFileSync(join(project, "reference/tsconfig.json"), JSON.stringify({compilerOptions: {types: []}, files: ["index.ts"]}));
-        symlinkSync(join(shared, "state.tsbuildinfo"), join(project, "reference/tsconfig.tsbuildinfo"));
+        writeFileSync(join(project, "reference/tsconfig.json"), JSON.stringify({compilerOptions: {types: [],
+          ...shape === "build cache" ? {} : {tsBuildInfoFile: shape === "absolute build cache" ? join(shared, "state.tsbuildinfo") : "../node_modules/cache/state.tsbuildinfo"}}, files: ["index.ts"]}));
+        if (shape === "build cache") symlinkSync(join(shared, "state.tsbuildinfo"), join(project, "reference/tsconfig.tsbuildinfo"));
+        else {
+          writeFileSync(join(shared, "state.tsbuildinfo"), "retain external cache bytes");
+          if (shape === "dependency build cache") symlinkSync(shared, join(modules, "cache"), "junction");
+        }
         config = {compilerOptions: options, files: [], references: [{path: "reference"}]};
       } else if (shape === "dangling cache") {
         mkdirSync(join(project, "cache")); symlinkSync(join(shared, "missing"), join(project, "cache/state.tsbuildinfo"));
@@ -176,7 +186,7 @@ for (const shape of ["modules", "scope", "broken scope", "internal scope", "proc
     const check = shape === "inline linked compiler"
       ? checkSdkContracts({compiler: join(modules, "typescript/bin/tsc"), minimum: bound, current: bound, examples: [{id: "minimal", source: "export const value = 1;"}]})
       : checkSdkContracts({consumer: project, minimum: bound, current: bound});
-    if (["default cache", "directory cache", "outfile cache", "build cache", "external cache", "dangling cache", "cyclic cache", "external reference", "linked reference", "process home", "config link"].includes(shape)) {
+    if (["default cache", "directory cache", "outfile cache", "build cache", "absolute build cache", "dependency build cache", "external cache", "dangling cache", "cyclic cache", "external reference", "linked reference", "process home", "config link"].includes(shape)) {
       await assert.rejects(check, error => error instanceof SdkContractRefusal && error.code === "isolation_refused");
     } else {
       const matrix = await check;
