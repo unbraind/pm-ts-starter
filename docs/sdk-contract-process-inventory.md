@@ -10,11 +10,17 @@ Installed names and symlinks remain authoritative; only the selected SDK is repl
 External installed links remain read-only inputs and canonical dependency roots are
 visited once. Non-dependency links escaping the copy are refused. SDK ownership
 comes from resolver package identities and canonical paths, never metadata ancestry.
+The existing copy walk inventories nested local manifest locations without reading
+names. Loaded files crossing an unidentified local package boundary are refused as
+unsupported_project_shape; compiler-identified dependencies and referenced project
+roots remain supported. The inventory never assigns SDK ownership.
 Compiler inputs and caches are preserved. There is no emit, incremental builder,
 installation, reinstallation, package-manager linking or lifecycle-script subprocess.
-The solution builder API is used only to obtain structured reference build order;
-its build/emit methods are never called. Each bound uses independent storage.
-API-incompatible compilers receive compiler_unavailable without a binary fallback.
+The solution builder API supplies the complete reference build order, including
+children of source-bearing projects; its build/emit methods are never called.
+Import and type-reference identities come from Program resolution caches, preserving
+each usage mode. Each bound uses independent storage. API-incompatible compilers
+receive compiler_unavailable or compiler_api_unavailable without a binary fallback.
 
 ## Other shipped runtime and repository tooling
 

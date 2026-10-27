@@ -683,7 +683,7 @@ test("post-compile isolation refuses resolved external inputs and preserves nati
   await assert.rejects(checkSdkContracts({minimum: target, current: target, consumer: project}), error => {
     assert.ok(error instanceof SdkContractRefusal);
     assert.match(error.remedy, /vendor\/alternate-sdk\/import\.d\.ts/);
-    return error.code === "isolation_refused";
+    return error.code === "unsupported_project_shape";
   });
 });
 

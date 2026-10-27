@@ -33,5 +33,5 @@ test("API-incompatible native consumers receive a typed compiler refusal", async
   writeFileSync(join(root, "consumer.ts"), "export const value = 1;");
   writeFileSync(join(root, "tsconfig.json"), JSON.stringify({compilerOptions: {types: [], noEmit: true}, files: ["consumer.ts"]}));
   const bound = dependencyBound(root);
-  await assert.rejects(checkSdkContracts({consumer: root, minimum: bound, current: bound}), error => error instanceof SdkContractRefusal && error.code === "compiler_unavailable" && error.remedy.includes("resolveModuleName"));
+  await assert.rejects(checkSdkContracts({consumer: root, minimum: bound, current: bound}), error => error instanceof SdkContractRefusal && error.code === "compiler_unavailable" && ["createProgram", "getPreEmitDiagnostics", "getParsedCommandLineOfConfigFile"].every(name => error.remedy.includes(name)));
 });

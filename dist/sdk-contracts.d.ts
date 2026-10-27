@@ -79,7 +79,7 @@ export interface SdkContractMatrix {
 /** Actionable input/tooling refusals, distinct from a valid matrix with API drift. */
 export declare class SdkContractRefusal extends Error {
     /** Stable refusal discriminator. */
-    readonly code: "invalid_input" | "sdk_unavailable" | "compiler_unavailable" | "isolation_refused";
+    readonly code: "invalid_input" | "sdk_unavailable" | "compiler_unavailable" | "compiler_api_unavailable" | "unsupported_project_shape" | "isolation_refused";
     /** Safe retry guidance without raw tool output or machine paths. */
     readonly remedy: string;
     /** Construct a typed boundary failure with a safe operator remedy. */

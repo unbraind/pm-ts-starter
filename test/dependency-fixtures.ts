@@ -68,14 +68,16 @@ after(() => { if (compilerTool) rmSync(compilerTool, {recursive: true, force: tr
 
 /** Return the actual API diagnostics, without invoking or parsing the command-line compiler. */
 export function directApiDiagnostics(project: string): SdkContractDiagnostic[] {
-  const script = `const ts=require(require.resolve('typescript',{paths:[process.argv[1]]})),path=require('node:path');
-ts.sys.write=()=>{};const root=process.argv[1],diagnostics=[],seen=new Set();
+  const script = `const ts=require(require.resolve('typescript',{paths:[process.argv[1]]})),path=require('node:path'),fs=require('node:fs');
+ts.sys.write=()=>{};const root=fs.realpathSync(process.argv[1]),diagnostics=[],seen=new Set();
+/** Render the public location contract after canonicalizing the native diagnostic file. */
+const location=file=>{const name=path.relative(root,fs.realpathSync(file));return path.isAbsolute(name)||name==='..'||name.startsWith('..'+path.sep)?'<external>':name.split(path.sep).join('/');};
 function check(file){if(seen.has(file))return;seen.add(file);const errors=[],config=ts.getParsedCommandLineOfConfigFile(file,{noEmit:true},{...ts.sys,onUnRecoverableConfigFileDiagnostic:d=>errors.push(d)});
 if(!config){diagnostics.push(...errors);return;}
-diagnostics.push(...ts.getPreEmitDiagnostics(ts.createProgram({rootNames:config.fileNames,options:config.options,projectReferences:config.projectReferences,configFileParsingDiagnostics:config.errors})));
-if(config.fileNames.length===0&&config.projectReferences?.length){const order=ts.createSolutionBuilder(ts.createSolutionBuilderHost(ts.sys),[file],{force:true,noEmit:true}).getBuildOrder();if(Array.isArray(order)){for(const reference of config.projectReferences)check(ts.resolveProjectReferencePath(reference));}else diagnostics.push(...order.circularDiagnostics);}}
-check(path.join(root,'tsconfig.json'));
-process.stdout.write(JSON.stringify(diagnostics.filter(d=>d.category===ts.DiagnosticCategory.Error).map(d=>{const pos=d.file&&d.start!==undefined?d.file.getLineAndCharacterOfPosition(d.start):undefined;return {code:'TS'+d.code,file:d.file?path.relative(root,d.file.fileName).split(path.sep).join('/'):'<config>',message:ts.flattenDiagnosticMessageText(d.messageText,'\\n').replaceAll(root,'.'),line:pos?pos.line+1:0,column:pos?pos.character+1:0};})));`;
+diagnostics.push(...ts.getPreEmitDiagnostics(ts.createProgram({rootNames:config.fileNames,options:config.options,projectReferences:config.projectReferences,configFileParsingDiagnostics:config.errors})));}
+const order=ts.createSolutionBuilder(ts.createSolutionBuilderHost(ts.sys),[path.join(root,'tsconfig.json')],{force:true,noEmit:true}).getBuildOrder();
+if(Array.isArray(order))order.forEach(check);else diagnostics.push(...order.circularDiagnostics);
+process.stdout.write(JSON.stringify(diagnostics.filter(d=>d.category===ts.DiagnosticCategory.Error).map(d=>{const pos=d.file&&d.start!==undefined?d.file.getLineAndCharacterOfPosition(d.start):undefined;return {code:'TS'+d.code,file:d.file?location(d.file.fileName):'<config>',message:ts.flattenDiagnosticMessageText(d.messageText,'\\n').replaceAll(root,'.'),line:pos?pos.line+1:0,column:pos?pos.character+1:0};})));`;
   const run = spawnSync(process.execPath, ["-e", script, project], {encoding: "utf8", timeout: 30000});
   assert.equal(run.status, 0, run.stderr);
   return JSON.parse(run.stdout) as SdkContractDiagnostic[];
@@ -90,10 +92,11 @@ export function testDirectory(t: TestContext, prefix: string): string {
 }
 
 /** Give API regressions a real compiler link, isolated consumer and independently named SDK. */
-export function apiConsumer(t: TestContext): {root: string; project: string; bound: ReturnType<typeof dependencyBound>} {
+export function apiConsumer(t: TestContext, version?: string): {root: string; project: string; bound: ReturnType<typeof dependencyBound>} {
   const root = testDirectory(t, "sdk-api-review-"), project = join(root, "consumer");
   mkdirSync(join(project, "node_modules"), {recursive: true});
-  symlinkSync(dirname(dirname(testCompiler())), join(project, "node_modules/typescript"), "junction");
+  if (version) installTestCompiler(join(root, "tool"), version);
+  symlinkSync(version ? join(root, "tool/node_modules/typescript") : dirname(dirname(testCompiler())), join(project, "node_modules/typescript"), "junction");
   writeFileSync(join(project, "package.json"), '{"type":"module"}');
   writeFileSync(join(project, "consumer.ts"), "export const value: string = 1;");
   writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions: {types: [], lib: ["ES5"], module: "NodeNext"}, files: ["consumer.ts"]}));
@@ -112,8 +115,13 @@ export function linkForeignSdk(root: string, project: string, bound: ReturnType<
 
 /** Prove an ordinary compiler accepts the foreign API while bound isolation rejects its identity. */
 export async function assertForeignSdk(root: string, project: string, bound: ReturnType<typeof dependencyBound>): Promise<void> {
+  await assertResolvedRefusal(root, project, bound, "isolation_refused", "index.d.ts");
+}
+
+/** Require a clean direct oracle, a named typed refusal and byte-identical original inputs. */
+export async function assertResolvedRefusal(root: string, project: string, bound: ReturnType<typeof dependencyBound>, code: SdkContractRefusal["code"], file: string): Promise<void> {
   assert.deepEqual(directApiDiagnostics(project), []);
   const before = filesystemSnapshot(root);
-  await assert.rejects(checkSdkContracts({consumer: project, minimum: bound, current: bound}), error => error instanceof SdkContractRefusal && error.code === "isolation_refused" && error.remedy.includes("index.d.ts"));
+  await assert.rejects(checkSdkContracts({consumer: project, minimum: bound, current: bound}), error => error instanceof SdkContractRefusal && error.code === code && error.remedy.includes(file));
   assert.equal(filesystemSnapshot(root), before);
 }

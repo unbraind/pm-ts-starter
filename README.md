@@ -250,7 +250,7 @@ Omit `--json` for native compact TOON. The result has `ok`, `checks`, `failed`,
 Each row identifies the endpoint, verified version and example, with the full
 error count, up to three sample codes, and compiler diagnostic locations/messages.
 Disposable project prefixes are normalized in those messages. `invalid_input`, `sdk_unavailable`,
-`compiler_unavailable` and `isolation_refused` are typed refusals with retry guidance.
+`compiler_unavailable`, `compiler_api_unavailable`, `unsupported_project_shape` and `isolation_refused` are typed refusals with retry guidance.
 
 Pass `--consumer ./consumer` to check a self-contained consumer project. Its sources,
 package metadata, dependencies and tsconfig are copied into an exclusive directory
@@ -287,8 +287,9 @@ The checker loads the consumer's own `typescript` JavaScript API in a confined
 child. `getParsedCommandLineOfConfigFile` follows the complete extends chain;
 `createProgram` and `getPreEmitDiagnostics` supply structured diagnostics. The
 original compiler-options object retains TypeScript's configuration metadata.
-Reference-only solutions check their referenced projects without emitting; the
-solution API supplies circular-reference diagnostics. No language service,
+The solution API supplies the full build order and circular-reference diagnostics.
+Every project is checked, including children of projects that contain sources.
+TypeScript's logical config paths retain their relative origins through symlinks. No language service,
 compiler-output parser, formatted diagnostic matcher or diagnostic-phase emulation
 is used. Compiler options pass through without a classification allowlist.
 
@@ -300,12 +301,19 @@ Results use an exclusive checker-owned JSON file; compiler stdout is discarded. 
 spaces or quotes remain opaque strings. Each child is bounded to 30 seconds and
 8 MiB of JSON. The compiler module is a trusted executable input.
 
-SDK ownership comes from `resolveModuleName(...).resolvedModule`: packageId,
-isExternalLibraryImport and the canonical resolved file. Installed entry names
-and source imports are resolved by TypeScript, including aliases. Selected SDK
+SDK ownership comes from the Program's own cached `resolvedModule` answers: packageId,
+isExternalLibraryImport and the canonical resolved file. Import nodes retain their
+individual usage mode, including require imports in ESM files and explicit
+resolution-mode type imports. No preprocessing or second resolution is performed. Selected SDK
 files must resolve to the verified bound's root and version. Unknown or foreign
 SDK identity receives a named `isolation_refused`; nearest package.json names
 never determine ownership. Both sides of path comparisons use realpath.
+Relative imports across nested local package boundaries can lack a compiler package
+identity. The copy inventories manifest locations without reading package names;
+an actually loaded source in such a package receives `unsupported_project_shape`
+unless the Program identifies the package or the solution explicitly includes its
+project config. Install/import the package by name or reference its project config.
+Unused metadata and ordinary local declarations remain supported.
 
 Every bound creates a fresh, non-incremental Program. The checker never calls
 emit or an incremental builder and never reads compiler state to skip checking.
@@ -316,8 +324,9 @@ paths that name source files or linked dependency outputs.
 
 Stock TypeScript 5.9.3 and 6.0.3 are tested without wrapping or filtering their
 compiler options. A consumer must expose createProgram, getPreEmitDiagnostics,
-getParsedCommandLineOfConfigFile and resolveModuleName. API-incompatible versions
-receive `compiler_unavailable` with capability guidance. The repository's pinned
+getParsedCommandLineOfConfigFile and the Program's usage-mode resolution APIs.
+Missing compiler APIs receive `compiler_unavailable`; missing Program resolution
+capabilities receive `compiler_api_unavailable` naming the source file. The repository's pinned
 TypeScript 7.0.2 still builds the package, but its native API does not expose this
 resolver contract; use an installed API-compatible consumer compiler for checking.
 The checker never substitutes a different compiler behind the consumer's back.
@@ -339,6 +348,8 @@ The differential suite compares complete structured diagnostics against an
 independent direct consumer API program. It covers inherited invalid options at
 every level of one-to-three-level extends chains, unnamed nested package metadata,
 linked foreign SDKs, diagnostic-like filenames and generated filesystem layouts.
+Reference graphs of depth 1–3 and every error location, plus 81 file-kind/import-syntax/
+conditional-export combinations per compiler, also compare verdicts with real `tsc --build`.
 Mutual dependency links, unbuilt references, fatal options, global diagnostics,
 warm/cold caches and file/directory writer targets retain dedicated controls.
 Consumer configuration and original filesystem snapshots remain unchanged.
