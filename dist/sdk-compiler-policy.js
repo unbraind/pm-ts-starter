@@ -37,16 +37,16 @@ function writableTree(project, target) {
     return !existsSync(target) || visit(target);
 }
 /** Redirect supported active writers into a fresh directory that contains no input links. */
-export function compilerWriterArguments(supported, options, project, build) {
+export function compilerWriterArguments(supported, options, output, build) {
     const names = ["generateTrace", "generateCpuProfile", "pprofDir"].filter(name => typeof options[name] === "string" && supported.has(name));
-    if (!build && (options.incremental === true || options.composite === true) && supported.has("tsBuildInfoFile"))
+    if (!build && supported.has("tsBuildInfoFile"))
         names.push("tsBuildInfoFile");
-    const directory = names.length ? mkdtempSync(join(project, ".sdk-output-")) : "";
+    const directory = names.length ? mkdtempSync(join(output, "writers-")) : "";
     const args = names.flatMap(name => ["--" + name, join(directory, name === "generateCpuProfile" ? "compiler.cpuprofile" : name === "tsBuildInfoFile" ? "compiler.tsbuildinfo" : name)]);
     return { args, neutralized: new Set(names) };
 }
 /** Refuse unneutralized writers that can reach outside the copy or linked dependencies. */
-export function escapingCompilerOutputs(original, project, config = join(project, "tsconfig.json"), neutralized = new Set(), build = false) {
+export function escapingCompilerOutputs(original, project, config = join(project, "tsconfig.json"), neutralized = new Set(), build = false, inputs = new Set()) {
     const context = dirname(config), outputs = { ...original };
     const incremental = build || original.incremental === true || original.composite === true;
     if (incremental && original.tsBuildInfoFile === undefined) {
@@ -62,7 +62,7 @@ export function escapingCompilerOutputs(original, project, config = join(project
         if (neutralized.has(name) || typeof value !== "string")
             return false;
         const target = resolve(context, value);
-        return isAbsolute(value) || relative(project, target).split(/[\\/]/).includes("node_modules") || !writableTree(project, target);
+        return isAbsolute(value) || relative(project, target).split(/[\\/]/).includes("node_modules") || !writableTree(project, target) || (name === "tsBuildInfoFile" && existsSync(target) && (statSync(target).isDirectory() || inputs.has(realpathSync(target))));
     });
 }
 //# sourceMappingURL=sdk-compiler-policy.js.map

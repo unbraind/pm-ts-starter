@@ -186,7 +186,7 @@ for (const shape of ["modules", "scope", "broken scope", "internal scope", "proc
     const check = shape === "inline linked compiler"
       ? checkSdkContracts({compiler: join(modules, "typescript/bin/tsc"), minimum: bound, current: bound, examples: [{id: "minimal", source: "export const value = 1;"}]})
       : checkSdkContracts({consumer: project, minimum: bound, current: bound});
-    if (["absolute build cache", "dependency build cache", "external cache", "cyclic cache", "external reference", "linked reference", "process home", "config link"].includes(shape)) {
+    if (["default cache", "directory cache", "outfile cache", "build cache", "dangling cache", "absolute build cache", "dependency build cache", "external cache", "cyclic cache", "external reference", "linked reference", "process home", "config link"].includes(shape)) {
       await assert.rejects(check, error => error instanceof SdkContractRefusal && error.code === "isolation_refused");
     } else {
       const matrix = await check;

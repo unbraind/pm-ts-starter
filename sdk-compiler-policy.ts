@@ -33,15 +33,15 @@ function writableTree(project: string, target: string): boolean {
   return !existsSync(target) || visit(target);
 }
 /** Redirect supported active writers into a fresh directory that contains no input links. */
-export function compilerWriterArguments(supported: ReadonlySet<string>, options: Record<string, unknown>, project: string, build: boolean): {args: string[]; neutralized: ReadonlySet<string>} {
+export function compilerWriterArguments(supported: ReadonlySet<string>, options: Record<string, unknown>, output: string, build: boolean): {args: string[]; neutralized: ReadonlySet<string>} {
   const names = ["generateTrace", "generateCpuProfile", "pprofDir"].filter(name => typeof options[name] === "string" && supported.has(name));
-  if (!build && (options.incremental === true || options.composite === true) && supported.has("tsBuildInfoFile")) names.push("tsBuildInfoFile");
-  const directory = names.length ? mkdtempSync(join(project, ".sdk-output-")) : "";
+  if (!build && supported.has("tsBuildInfoFile")) names.push("tsBuildInfoFile");
+  const directory = names.length ? mkdtempSync(join(output, "writers-")) : "";
   const args = names.flatMap(name => ["--" + name, join(directory, name === "generateCpuProfile" ? "compiler.cpuprofile" : name === "tsBuildInfoFile" ? "compiler.tsbuildinfo" : name)]);
   return {args, neutralized: new Set(names)};
 }
 /** Refuse unneutralized writers that can reach outside the copy or linked dependencies. */
-export function escapingCompilerOutputs(original: Record<string, unknown>, project: string, config = join(project, "tsconfig.json"), neutralized: ReadonlySet<string> = new Set(), build = false): string[] {
+export function escapingCompilerOutputs(original: Record<string, unknown>, project: string, config = join(project, "tsconfig.json"), neutralized: ReadonlySet<string> = new Set(), build = false, inputs: ReadonlySet<string> = new Set()): string[] {
   const context = dirname(config), outputs = {...original};
   const incremental = build || original.incremental === true || original.composite === true;
   if (incremental && original.tsBuildInfoFile === undefined) {
@@ -56,6 +56,6 @@ export function escapingCompilerOutputs(original: Record<string, unknown>, proje
     const value = outputs[name];
     if (neutralized.has(name) || typeof value !== "string") return false;
     const target = resolve(context, value);
-    return isAbsolute(value) || relative(project, target).split(/[\\/]/).includes("node_modules") || !writableTree(project, target);
+    return isAbsolute(value) || relative(project, target).split(/[\\/]/).includes("node_modules") || !writableTree(project, target) || (name === "tsBuildInfoFile" && existsSync(target) && (statSync(target).isDirectory() || inputs.has(realpathSync(target))));
   });
 }

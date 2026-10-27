@@ -271,8 +271,7 @@ The original tsconfig, in-project extends targets, project references, sources a
 existing build artifacts retain their relative layout and bytes. Compilation runs
 `tsc --project tsconfig.json --noEmit --pretty false --locale en`; reference-only
 solutions use build mode. No config is generated, and no output directory is
-injected or relocated. Source emission is disabled; incremental metadata stays in the copy. Absolute or project-escaping output/cache paths receive `isolation_refused`
-with a remedy to use contained relative destinations.
+injected or relocated. Source emission is disabled. Project-mode metadata and active profiles use checker-owned storage outside the copied project. Unneutralized build writers must remain confined and cannot overwrite compiler inputs.
 Project mode cannot be combined with `--examples` or `--compiler`. Include the
 project's installed dependencies and compiler in its node_modules before running
 the checker. Neither project nor inline provisioning needs npm or network access.
@@ -311,15 +310,18 @@ A nonzero exit without recognizable diagnostics is `compiler_unavailable`.
 Every child is bounded to 30 seconds and 8 MiB of output.
 
 The consumer's configuration and sources are copied byte for byte. Typecheck and presentation flags disable source emission and keep diagnostic output
-parseable. Copied `*.tsbuildinfo` files are omitted and custom `tsBuildInfoFile`
-targets inside the disposable project are removed before each bound compiles.
+parseable. Every copied source, configuration, cache file and directory is preserved.
+Project mode overrides `tsBuildInfoFile` on the CLI to fresh checker-owned storage
+outside the copied project; configured destinations are never deleted.
 Reference-only builds use `--force`; ordinary projects disable incremental checking.
 Composite project roots retain project mode and receive fresh private metadata,
 because disabling incremental checking causes TS6379 and forcing their referenced
 graph with noEmit causes TS6310. Generated caches never pass to another bound.
-Supported active trace/profile writers and composite project caches
-are redirected to freshly allocated paths inside the copy. Unneutralized writers,
-including referenced build caches, must remain confined. If configuration inspection
+Supported active trace/profile writers also use checker-owned storage outside the copy.
+Stock TypeScript rejects `--tsBuildInfoFile` in build mode (TS5094), so native builds
+retain confined metadata destinations and refuse paths that overwrite resolved compiler
+inputs or project configurations. No config overlay is generated. Unneutralized writers
+must remain confined. If configuration inspection
 fails, ordinary compilation conservatively redirects all supported writers; an
 uninspectable reference build is refused before it can write. Checking options, including
 new options, pass to the real compiler without an option allowlist.

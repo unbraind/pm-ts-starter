@@ -4,7 +4,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { chmodSync, cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, lstatSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createRequire } from "node:module";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import test, { after, type TestContext } from "node:test";
 import { Worker } from "node:worker_threads";
 import {dependencyEntry, dependencyBound, filesystemSnapshot, boundaryRandom} from "./dependency-fixtures.ts";
@@ -715,7 +715,12 @@ const result = spawnSync(process.execPath,[require('node:path').join(process.cwd
   const records = readFileSync(receipt, "utf8").trim().split("\n").map(line => JSON.parse(line) as {entry: string; cwd: string; args: string[]});
   const compilations = records.filter(row => !row.args.includes("--help") && !row.args.includes("--showConfig") && !row.args.includes("--listFilesOnly"));
   assert.equal(compilations.length, 4);
-  assert.ok(compilations.every(row => JSON.stringify(row.args) === JSON.stringify(["--project", "tsconfig.json", "--incremental", "false", "--noEmit", ...plainPresentation, "--locale", "en"])), "compiler delegation adds cache-free typecheck and presentation flags");
+  for (const row of compilations) {
+    const index = row.args.indexOf("--tsBuildInfoFile"), cache = row.args[index + 1]!;
+    assert.equal(index, 5);
+    assert.ok(isAbsolute(cache) && relative(row.cwd, cache).split(sep)[0] === "..", "metadata storage is outside the copied project");
+    assert.deepEqual(row.args, ["--project", "tsconfig.json", "--incremental", "false", "--noEmit", "--tsBuildInfoFile", cache, ...plainPresentation, "--locale", "en"]);
+  }
   assert.ok(records.every(row => [join(root, "wrapper.mjs"), join(root, "wrapper.cjs")].includes(row.entry) && row.cwd !== root));
   assert.equal(records.filter(row => row.args.includes("--help")).length, 2, "query each wrapper once across both targets");
 });

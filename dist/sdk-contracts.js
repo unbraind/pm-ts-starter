@@ -71,8 +71,6 @@ function copyConsumer(source, destination, dependency = false) {
         filter: (file, copied) => {
             if (relative(source, file) === ".git")
                 return false;
-            if (/\.tsbuildinfo$/i.test(file) && !(existsSync(file) && statSync(file).isDirectory()))
-                return false;
             if (!lstatSync(file).isSymbolicLink())
                 return true;
             const dependencyPath = dependency || relative(source, file).split(/[/\\]/).includes("node_modules") || installed.some(root => inside(root, file));
@@ -326,7 +324,7 @@ function compilerDiagnostics(project, output) {
     return diagnostics.map(row => ({ ...row, message: row.message.trimEnd() }));
 }
 /** Delegate verdict, fatal-error ordering, global diagnostics and references to the actual tsc. */
-function compileConsumer(project, compiler, installed, supported) {
+function compileConsumer(project, compiler, installed, supported, output) {
     const config = join(project, "tsconfig.json"), root = isolatedConfig(project, compiler, config);
     const projects = new Map([[config, root]]), seen = new Set([realpathSync(config)]);
     // Build can write incremental metadata: inspect its self-contained reference graph first.
@@ -355,21 +353,13 @@ function compileConsumer(project, compiler, installed, supported) {
         for (const name of ["generateTrace", "generateCpuProfile", "pprofDir"])
             if (typeof settings.options?.[name] === "string")
                 writing[name] = settings.options[name];
-    const writers = compilerWriterArguments(supported, writing, project, build);
+    const writers = compilerWriterArguments(supported, writing, output, build);
+    // Native build mode rejects CLI metadata overrides (TS5094); protect every actual input.
+    const inputs = new Set(build ? [...seen, ...[...projects].flatMap(([file, settings]) => compilerFiles(project, compiler, settings.empty, file, writers.args))] : []);
     for (const [file, settings] of projects) {
-        const escaping = escapingCompilerOutputs(settings.options ?? unknownWriters, project, file, writers.neutralized, build);
+        const escaping = escapingCompilerOutputs(settings.options ?? unknownWriters, project, file, writers.neutralized, build, inputs);
         if (escaping.length)
-            throw new SdkContractRefusal("isolation_refused", `Confine compiler writers (${escaping.join(", ")}) to the disposable project; linked dependency destinations cannot be written.`);
-        // Delete custom cache names only through private parents; never mutate linked inputs.
-        if (typeof settings.options?.tsBuildInfoFile === "string") {
-            const cache = resolve(dirname(file), settings.options.tsBuildInfoFile);
-            const parent = dirname(cache);
-            if (inside(project, cache) && existsSync(parent) && inside(project, realpathSync(parent))) {
-                if ((existsSync(cache) && seen.has(realpathSync(cache))) || lstatSync(cache, { throwIfNoEntry: false })?.isDirectory())
-                    throw new SdkContractRefusal("isolation_refused", "Use a separate regular file for tsBuildInfoFile; compiler state cannot replace project configuration or directories.");
-                rmSync(cache, { force: true });
-            }
-        }
+            throw new SdkContractRefusal("isolation_refused", `Confine compiler writers (${escaping.join(", ")}) to the disposable project; linked dependencies and compiler inputs cannot be overwritten.`);
     }
     const args = [build ? "--build" : "--project", "tsconfig.json", ...build ? ["--force"] : root.options?.composite === true ? [] : ["--incremental", "false"], "--noEmit", ...writers.args, ...diagnosticPresentation, ...build ? [] : ["--locale", "en"]];
     const result = runCompiler(project, compiler, args);
@@ -449,7 +439,7 @@ export async function checkSdkContracts(options) {
                     supported = supportedWriterOptions(runCompiler(project, entry, ["--help", "--all", "--locale", "en"]).stdout);
                     writers.set(compilerKey, supported);
                 }
-                const { ok, exit_code, diagnostics } = compileConsumer(project, entry, installedRoot, supported);
+                const { ok, exit_code, diagnostics } = compileConsumer(project, entry, installedRoot, supported, mkdtempSync(join(scratch, "compiler-output-")));
                 targetRoot({ root: installed, version: targets[target].version });
                 rows.push({ target, sdk: targets[target].version, example: example.id, ok, exit_code, diagnostic_count: diagnostics.length,
                     codes: diagnostics.slice(0, 3).map(diagnostic => diagnostic.code), diagnostics });
