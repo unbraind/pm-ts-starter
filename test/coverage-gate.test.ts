@@ -18,9 +18,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import test, { type TestContext } from "node:test";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { runCoverageGate, runScriptEntry } from "../scripts/coverage-gate.ts";
+import coverageJson from "../scripts/coverage-json-reporter.ts";
 
 /**
  * The parent package's `node_modules/.bin`, prepended to `PATH` in fixtures so
@@ -130,7 +131,7 @@ function writeTest(dir: string, sourceName: string, testName: string): void {
   writeFileSync(join(dir, "test", `${testName}.test.ts`), [
     'import assert from "node:assert/strict";',
     'import test from "node:test";',
-    `import { value } from "../${sourceName}.ts";`,
+    `import { value } from ${JSON.stringify(pathToFileURL(join(dir, `${sourceName}.ts`)).href)};`,
     'test("value is 42", () => { assert.strictEqual(value, 42); });',
     "",
   ].join("\n"));
@@ -547,12 +548,12 @@ test("coverage gate reports a runner startup failure when the binary is missing"
 });
 
 // ---------------------------------------------------------------------------
-// No coverage report — the test runner exits 0 but writes no lcov file
+// No coverage report — the test runner exits 0 but writes no JSON file
 // ---------------------------------------------------------------------------
 
 test("coverage gate reports a missing coverage report when the runner exits 0 but writes nothing", async (t) => {
   const dir = createGateFixture(t, "cg-no-report-");
-  const fakeNode = writeNodeCommand(dir, "fake-node", "process.exit(0);\n");
+  const fakeNode = writeNodeCommand(dir, "fake-node", 'process.exit(0);\n');
 
   const { code, stderr } = await runGateWithRunner(dir, fakeNode);
   assert.strictEqual(code, 1);
@@ -638,24 +639,51 @@ test("coverage gate returns 1 when the test runner is killed by a signal", async
 });
 
 // ---------------------------------------------------------------------------
-// Absolute SF: path in lcov report (line 399 true branch)
+// Absolute file paths in native JSON coverage
 // ---------------------------------------------------------------------------
 
-test("coverage gate normalises absolute SF: paths in the lcov report", async (t) => {
-  const dir = createGateFixture(t, "cg-abs-lcov-", { gate: { thresholds: ZERO_THRESHOLDS } });
+test("coverage gate normalises absolute file paths in the JSON report", async (t) => {
+  const dir = createGateFixture(t, "cg-abs-json-", { gate: { thresholds: ZERO_THRESHOLDS } });
 
-  // Fake "node" that writes an lcov file with an absolute SF: path, then
+  // Fake "node" that writes an JSON file with an absolute file path, then
   // exits 0. The gate must normalise the absolute path to a repo-relative
   // one so the presence check matches the walked source set.
-  const fakeNode = writeNodeCommand(dir, "fake-node", [
-    'import { writeFileSync } from "node:fs";',
-    'import { join } from "node:path";',
-    'const prefix = "--test-reporter-destination=";',
-    'const destination = process.argv.find((argument) => argument.startsWith(prefix) && argument !== `${prefix}stdout`);',
-    'if (destination) writeFileSync(destination.slice(prefix.length), `SF:${join(process.cwd(), "src.ts")}\\nend_of_record\\n`);',
-    "",
-  ].join("\n"));
+  const fakeNode = coverageRunner(dir, `[{summary:{files:[{path:join(process.cwd(),"src.ts")}]}}]`);
   const { code, stdout, stderr } = await runGateWithRunner(dir, fakeNode);
-  assert.strictEqual(code, 0, `gate should pass with absolute SF: paths; stderr: ${stderr}`);
+  assert.strictEqual(code, 0, `gate should pass with absolute file paths; stderr: ${stderr}`);
   assert.match(stdout, /thresholds met/);
+});
+
+test("coverage JSON preserves unusual source names without trimming or line splitting", async t => {
+  for (const sourceName of ["line\nfeed", "carriage\rreturn", "tab\tname", " spaced ", "--leading", "single'quote", 'double"quote', "é漢字"]) {
+    const dir = createGateFixture(t, "cg-paths-", {sourceName});
+    const result = await runGate(dir);
+    assert.equal(result.code, 0, `${JSON.stringify(sourceName)}: ${result.stderr}`);
+  }
+});
+
+test("coverage JSON refuses malformed records and unresolved source paths", async t => {
+  for (const shape of ["malformed", "missing"]) {
+    const dir = createGateFixture(t, "cg-json-records-", {gate: {thresholds: ZERO_THRESHOLDS}});
+    const fakeNode = coverageRunner(dir, shape === "malformed" ? "{}" : `[{summary:{files:[{path:join(process.cwd(),'removed.ts')}]}}]`);
+    const result = await runGateWithRunner(dir, fakeNode);
+    assert.equal(result.code, 1, result.stderr);
+    assert.match(result.stderr, /JSON file paths could not be resolved/);
+  }
+});
+
+/** Simulate a runner's structured coverage artifact through the actual argument-array destination. */
+function coverageRunner(dir: string, expression: string): string {
+  return writeNodeCommand(dir, "fake-node", `import {writeFileSync} from 'node:fs'; import {join} from 'node:path';
+const prefix='--test-reporter-destination=';
+const destination=process.argv.find(arg=>arg.startsWith(prefix)&&arg!==prefix+'stdout');
+writeFileSync(destination.slice(prefix.length),JSON.stringify(${expression}));`);
+}
+
+test("coverage JSON reporter escapes paths and excludes unrelated events", async () => {
+  const path = "space \r\n\t-é漢字.ts";
+  async function* events() { yield {type: "test:pass", data: "ignored"}; yield {type: "test:coverage", data: {summary: {files: [{path}]}}}; }
+  const output: string[] = [];
+  for await (const chunk of coverageJson(events())) output.push(chunk);
+  assert.deepEqual(JSON.parse(output.join("")), [{summary: {files: [{path}]}}]);
 });

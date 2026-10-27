@@ -5,33 +5,20 @@ import {mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, w
 import {tmpdir} from "node:os";
 import {join, relative, resolve} from "node:path";
 import test from "node:test";
-import {checkSdkContracts, SdkContractRefusal, type SdkContractDiagnostic} from "../sdk-contracts.ts";
+import {checkSdkContracts, SdkContractRefusal} from "../sdk-contracts.ts";
 import {dependencyBound, dependencyEntry, filesystemSnapshot} from "./dependency-fixtures.ts";
 
 const compiler = resolve(import.meta.dirname, "../node_modules/typescript/bin/tsc");
 
-/** Independently decode tsc headers; compare complete locations and messages, not only codes. */
-function oracle(project: string, build = false): {ok: boolean; exit_code: number; diagnostics: SdkContractDiagnostic[]} {
+/** Retain complete native output; reconstruct checker records without parsing file paths from text. */
+function oracle(project: string, build = false): {ok: boolean; exit_code: number; codes: string[]; output: string} {
   const display = ["pretty", "diagnostics", "extendedDiagnostics", "traceResolution", "explainFiles", "listFiles", "listEmittedFiles"].flatMap(flag => [`--${flag}`, String(false)]);
   const args = [build ? "--build" : "--project", "tsconfig.json", "--noEmit", ...display, ...build ? [] : ["--locale", "en"]];
   const run = spawnSync(process.execPath, [compiler, ...args], {cwd: project, encoding: "utf8"});
   assert.equal(run.error, undefined);
   assert.equal(run.signal, null);
   assert.ok(run.status !== null);
-  const diagnostics: SdkContractDiagnostic[] = [];
-  for (const block of run.stdout.trimEnd().split(/(?=^(?:[^\n]*\(\d+,\d+\): )?error TS\d+:)/m)) {
-    const [line = "", ...continuations] = block.trimEnd().split(/\r?\n/);
-    const split = line.indexOf(": error TS");
-    const global = line.startsWith("error TS");
-    if (!global && split < 0) continue;
-    const header = global ? "" : line.slice(0, split);
-    const position = /^(.*)\((\d+),(\d+)\)$/.exec(header);
-    const text = global ? line : line.slice(split + 2), separator = text.indexOf(": ");
-    const code = text.slice(6, separator), message = text.slice(separator + 2);
-    diagnostics.push({code, file: position ? relative(project, resolve(project, position[1]!)).replaceAll("\\", "/") : "<config>",
-      line: Number(position?.[2] ?? 0), column: Number(position?.[3] ?? 0), message: [message, ...continuations].join("\n").replaceAll(project, ".")});
-  }
-  return {ok: run.status === 0, exit_code: run.status, diagnostics};
+  return {ok: run.status === 0, exit_code: run.status, codes: [...run.stdout.matchAll(/error (TS\d+):/g)].map(match => match[1]!), output: run.stdout.replaceAll(project, ".").trimEnd()};
 }
 
 for (const shape of ["mutual external symlinks", "unbuilt composite reference", "fatal emitDeclarationOnly", "noLib globals", "multiline type error", "reference-only solution", "reference-only cycle", "missing input", "malformed config", "unicode diagnostic", "missing reference", "uninstalled compiler companion"]) {
@@ -87,15 +74,15 @@ for (const shape of ["mutual external symlinks", "unbuilt composite reference", 
       const expected = oracle(project, shape.startsWith("reference-only") || shape === "missing reference"), before = filesystemSnapshot(root);
       const expectedCodes = shape === "mutual external symlinks" || present ? [] : shape === "unbuilt composite reference" ? ["TS6305"] : shape === "fatal emitDeclarationOnly" ? ["TS5069"] : shape === "multiline type error" ? ["TS2322"] : shape === "uninstalled compiler companion" ? ["TS2307"] : Array<string>(10).fill("TS2318");
       if (shape === "malformed config" || shape === "missing input" || shape === "unicode diagnostic" || shape === "missing reference") assert.equal(expected.ok, false);
-      else if (shape.startsWith("reference-only")) assert.ok(expected.diagnostics.some(row => row.code === (shape === "reference-only cycle" ? "TS6202" : "TS2322")));
-      else assert.deepEqual(expected.diagnostics.map(row => row.code), expectedCodes);
-      if (shape === "multiline type error") assert.match(expected.diagnostics[0]!.message, /\n/);
+      else if (shape.startsWith("reference-only")) assert.ok(expected.codes.includes(shape === "reference-only cycle" ? "TS6202" : "TS2322"));
+      else assert.deepEqual(expected.codes, expectedCodes);
+      if (shape === "multiline type error") assert.match(expected.output, /\n  /);
       const matrix = await checkSdkContracts({consumer: project, minimum: bound, current: bound});
       for (const row of matrix.rows) {
         assert.equal(row.ok, expected.ok);
         assert.equal(row.exit_code, expected.exit_code);
-        assert.equal(row.diagnostic_count, expected.diagnostics.length);
-        assert.deepEqual(row.diagnostics, expected.diagnostics);
+        assert.equal(row.diagnostic_count, expected.codes.length);
+        assert.equal(row.diagnostics.map(diagnostic => `${diagnostic.file === "<config>" ? "" : `${diagnostic.file}(${diagnostic.line},${diagnostic.column}): `}error ${diagnostic.code}: ${diagnostic.message}`).join("\n"), expected.output);
       }
       assert.equal(readFileSync(join(project, "tsconfig.json"), "utf8"), config);
       assert.equal(filesystemSnapshot(root), before, "compiler reads linked dependencies without modifying original inputs");

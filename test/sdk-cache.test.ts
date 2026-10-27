@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {spawnSync} from "node:child_process";
 import {cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
+import {fileURLToPath} from "node:url";
 import {join, relative, sep} from "node:path";
 import test, {after} from "node:test";
 import {checkSdkContracts, type SdkContractMatrix} from "../sdk-contracts.ts";
@@ -74,7 +75,7 @@ for (const version of ["5.9.3", "6.0.3"]) for (const mode of ["reference build",
     writeFileSync(join(project, caches[1]!), "unused cache"); writeFileSync(join(project, caches[2]!), "dependency cache");
     writeFileSync(join(project, "node_modules/.bin/package.json"), '{"type":"commonjs"}');
     writeFileSync(join(project, "node_modules/.bin/tsc"), `const fs=require('node:fs'),cp=require('node:child_process');
-const args=process.argv.slice(2); if(!args.some(a=>['--help','--showConfig','--listFilesOnly'].includes(a))) fs.appendFileSync('.cache-proof.jsonl',JSON.stringify({args,caches:${JSON.stringify(caches)}.map(p=>fs.existsSync(p))})+'\\n');
+const args=process.argv.slice(2); if(!args.some(a=>['--help','--showConfig','--generateTrace'].includes(a))) fs.appendFileSync('.cache-proof.jsonl',JSON.stringify({args,caches:${JSON.stringify(caches)}.map(p=>fs.existsSync(p))})+'\\n');
 const run=cp.spawnSync(process.execPath,[${JSON.stringify(entry)},...args],{stdio:'inherit'});process.exit(run.status??1);`);
     const cold = join(root, "cold"); cpSync(project, cold, {recursive: true});
     for (const cache of caches) rmSync(join(cold, cache));
@@ -138,7 +139,7 @@ for (const version of ["5.9.3", "6.0.3"]) for (const composite of [false, true])
       const args = [entry, "--project", "tsconfig.json", "--noEmit", "--pretty", "false", "--locale", "en", ...composite ? ["--tsBuildInfoFile", join(root, name + ".tsbuildinfo")] : ["--incremental", "false"]];
       const result = spawnSync(process.execPath, args, {cwd: oracle, encoding: "utf8", timeout: 30000});
       assert.equal(result.error, undefined); assert.equal(result.signal, null);
-      expected.push({ok: result.status === 0, output: result.stdout.trim()});
+      expected.push({ok: result.status === 0, output: result.stdout.trimEnd()});
     }
     assert.deepEqual(expected.map(row => row.ok), [false, true]);
     assert.match(expected[0]!.output, /consumer\.ts\(1,\d+\): error TS2322:/);
@@ -170,7 +171,7 @@ for (const version of ["5.9.3", "6.0.3"]) for (const composite of [false, true])
 for (const target of ["source", "configuration", "directory", "cross-project", "imported JSON"]) test(`native build refuses metadata over ${target}`, async t => {
   const root = mkdtempSync(join(tmpdir(), "sdk-build-input-")), project = join(root, "consumer");
   t.after(() => rmSync(root, {recursive: true, force: true}));
-  const bound = dependencyBound(project), tool = new URL("../node_modules/typescript", import.meta.url).pathname;
+  const bound = dependencyBound(project), tool = fileURLToPath(new URL("../node_modules/typescript", import.meta.url));
   symlinkSync(tool, join(project, "node_modules/typescript"), "junction");
   mkdirSync(join(project, "reference")); mkdirSync(join(project, "reference/cache-directory"));
   writeFileSync(join(project, "package.json"), '{"type":"module"}');

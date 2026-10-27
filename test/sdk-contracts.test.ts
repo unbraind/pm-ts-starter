@@ -2,8 +2,9 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { chmodSync, cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, lstatSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { devNull, tmpdir } from "node:os";
 import { createRequire } from "node:module";
+import { pathToFileURL } from "node:url";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import test, { after, type TestContext } from "node:test";
 import { Worker } from "node:worker_threads";
@@ -23,7 +24,7 @@ const currentVersion = "2026.10.24";
 
 /** Keep ignore-scripts installs independent of package-manager wrapper allowlist settings. */
 function installationEnv(): NodeJS.ProcessEnv {
-  return Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toLowerCase() !== "npm_config_allow_scripts"));
+  return {...Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toLowerCase() !== "npm_config_allow_scripts")), NPM_CONFIG_USERCONFIG: devNull, npm_config_userconfig: devNull};
 }
 
 /** Reuse independently installed registry endpoints across the integration cases. */
@@ -191,8 +192,8 @@ test("each overlapping caller boundary preserves peer success and foreign state 
   await checkSdkContracts({ minimum: target, current: target, examples: [SDK_CONSUMER_EXAMPLES[0]!], onProgress(phase) {
     phases.push(phase);
     writeFileSync(join(tracker, "foreign-peer.json"), JSON.stringify({ phase, owner: "peer", success: true }));
-    const peer = spawnSync(process.execPath, ["--input-type=module", "-e", `import {checkSdkContracts} from ${JSON.stringify(join(repo, "sdk-contracts.ts"))};
-import {PmClient} from ${JSON.stringify(join(sdk, "dist/sdk/index.js"))};
+    const peer = spawnSync(process.execPath, ["--input-type=module", "-e", `import {checkSdkContracts} from ${JSON.stringify(pathToFileURL(join(repo, "sdk-contracts.ts")).href)};
+import {PmClient} from ${JSON.stringify(pathToFileURL(join(sdk, "dist/sdk/index.js")).href)};
 await new PmClient({pmRoot: ${JSON.stringify(tracker)}, noExtensions: true, author: 'peer'}).update(${JSON.stringify(peerItem.item.id)}, {description: ${JSON.stringify(phase + "-" + phases.length)}});
 const result = await checkSdkContracts(${JSON.stringify({ minimum: target, current: target, compiler, examples: [SDK_CONSUMER_EXAMPLES[0]] })});
 if (!result.ok) process.exit(1);`], { encoding: "utf8", env: { ...process.env, GIT_CEILING_DIRECTORIES: root, PATH: "" } });
@@ -241,11 +242,16 @@ test("registered command supports both flag forms, typed refusals and nonzero dr
   } finally { process.exitCode = saved; }
 });
 
+/** Get the exact npm archive filename through JSON, including whitespace and control characters. */
+function packedFixture(source: string, destination: string): string {
+  const archive = spawnSync("npm", ["pack", "--ignore-scripts", "--json", "--pack-destination", destination], {cwd: source, encoding: "utf8", timeout: 30000, env: installationEnv()});
+  assert.equal(archive.status, 0, archive.stderr);
+  return join(destination, (JSON.parse(archive.stdout) as {filename: string}[])[0]!.filename);
+}
+
 test("packed npm and Bun consumers resolve each exact SDK bound and compile emitted contracts without git", async t => {
   const root = scratch(t), endpoints = publishedSdks();
-  const pack = spawnSync("npm", ["pack", "--ignore-scripts", "--json", "--pack-destination", root], { cwd: repo, encoding: "utf8", timeout: 30000, env: installationEnv() });
-  assert.equal(pack.status, 0, pack.stderr);
-  const tarball = join(root, (JSON.parse(pack.stdout) as { filename: string }[])[0]!.filename);
+  const tarball = packedFixture(repo, root);
   const noGit = join(root, "no-git"); mkdirSync(noGit);
   for (const runtime of ["npm", "bun"]) for (const bound of ["minimum", "current"] as const) {
     const version = bound === "minimum" ? minimumVersion : currentVersion;
@@ -273,7 +279,7 @@ const resolved = require.resolve('@unbrained/pm-cli/package.json');
 const sdkVersion = JSON.parse(readFileSync(resolved, 'utf8')).version;
 const sdkEntry = require.resolve('@unbrained/pm-cli/sdk');
 console.log(JSON.stringify({sdkVersion, resolved, sdkEntry, matrix: await checkSdkContracts(${JSON.stringify(options)})}));`);
-    const executable = runtime === "npm" ? process.execPath : spawnSync("bun", ["-e", "console.log(process.execPath)"], { encoding: "utf8" }).stdout.trim();
+    const executable = runtime === "npm" ? process.execPath : JSON.parse(spawnSync("bun", ["-e", "process.stdout.write(JSON.stringify(process.execPath))"], { encoding: "utf8" }).stdout) as string;
     const run = spawnSync(executable, [entry], { cwd: project, encoding: "utf8", timeout: 120000, env: { ...process.env, GIT_CEILING_DIRECTORIES: root } });
     assert.equal(run.status, 0, `${runtime} ${bound}: ${run.error?.message ?? run.stderr}`);
     const receipt = JSON.parse(run.stdout) as { sdkVersion: string; resolved: string; sdkEntry: string; matrix: { ok: boolean; checks: number; rows: { sdk: string; target: string }[] } };
@@ -324,7 +330,8 @@ function installedConsumer(runtime: "npm" | "bun", bound: "minimum" | "current")
   const packages = [`@unbrained/pm-cli@${version}`, "typescript@7.0.2", "@types/node@26.6.5"];
   const result = spawnSync(runtime, runtime === "npm" ? ["install", "--ignore-scripts", "--no-audit", "--no-fund", ...packages]
     : ["add", "--ignore-scripts", ...packages], { cwd: root, encoding: "utf8", timeout: 120000, env: installationEnv() });
-  assert.equal(result.status, 0, result.stderr);
+  assert.ifError(result.error);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
   const verify = spawnSync(runtime === "npm" ? process.execPath : "bun", ["--input-type=module", "-e", `
 import {createRequire} from 'node:module'; import {readFileSync} from 'node:fs';
 const require = createRequire(process.cwd() + '/package.json');
@@ -352,9 +359,9 @@ function instrumentOracle(project: string, receipt: string, t: TestContext): voi
   unlinkSync(join(bin, "tsc"));
   t.after(() => writeFileSync(join(bin, "tsc"), readFileSync(join(bin, "plain-tsc"))));
   writeFileSync(join(bin, "tsc"), `import {spawnSync} from 'node:child_process';
-import {appendFileSync,readFileSync,cpSync,mkdtempSync,rmSync} from 'node:fs'; import {join} from 'node:path'; import {tmpdir} from 'node:os'; import {createRequire} from 'node:module';
-const plain = new URL('./plain-tsc', import.meta.url).pathname;
-if (process.argv.includes('--help') || process.argv.includes('--showConfig') || process.argv.includes('--listFilesOnly')) {
+import {fileURLToPath as requireUrl} from 'node:url'; import {appendFileSync,readFileSync,cpSync,mkdtempSync,rmSync} from 'node:fs'; import {join} from 'node:path'; import {tmpdir} from 'node:os'; import {createRequire} from 'node:module';
+const plain = requireUrl(new URL('./plain-tsc', import.meta.url));
+if (process.argv.includes('--help') || process.argv.includes('--showConfig') || process.argv.includes('--generateTrace')) {
   const probe = spawnSync(process.execPath, [plain,...process.argv.slice(2)], {stdio:'inherit'}); process.exit(probe.status ?? 1);
 }
 const baseline = mkdtempSync(join(process.cwd(),'..','sdk-plain-matrix-'));
@@ -497,7 +504,7 @@ test("project inputs refuse ambiguous options and missing compilers; diagnostics
   const stub = join(root, "diagnostics.cjs");
   const output = `error TS5099: private configuration text\n${join(root, "secret.ts")}(2,3): error TS9999: private source text\nconsumer.ts(4,5): error TS2322: private source text\n`;
   writeFileSync(stub, `const {spawnSync} = require("node:child_process");
-if (process.argv.includes("--help") || process.argv.includes("--showConfig") || process.argv.includes("--listFilesOnly")) { const result = spawnSync(process.execPath, [require('node:path').join(process.cwd(),'node_modules/typescript/bin/tsc'), ...process.argv.slice(2)], {stdio:"inherit"}); process.exit(result.status ?? 1); }
+if (process.argv.includes("--help") || process.argv.includes("--showConfig") || process.argv.includes("--generateTrace")) { const result = spawnSync(process.execPath, [require('node:path').join(process.cwd(),'node_modules/typescript/bin/tsc'), ...process.argv.slice(2)], {stdio:"inherit"}); process.exit(result.status ?? 1); }
 process.stdout.write(${JSON.stringify(output)}); process.exit(1);`);
   const matrix = await checkSdkContracts({ minimum: target, current: target, compiler: stub, examples: [SDK_CONSUMER_EXAMPLES[0]!] });
   assert.equal(matrix.failed, 2);
@@ -713,7 +720,7 @@ const result = spawnSync(process.execPath,[require('node:path').join(process.cwd
     });
   } finally { for (const [index, key] of keys.entries()) { if (saved[index] === undefined) delete process.env[key]; else process.env[key] = saved[index]; } }
   const records = readFileSync(receipt, "utf8").trim().split("\n").map(line => JSON.parse(line) as {entry: string; cwd: string; args: string[]});
-  const compilations = records.filter(row => !row.args.includes("--help") && !row.args.includes("--showConfig") && !row.args.includes("--listFilesOnly"));
+  const compilations = records.filter(row => !row.args.includes("--help") && !row.args.includes("--showConfig") && !row.args.includes("--generateTrace"));
   assert.equal(compilations.length, 4);
   for (const row of compilations) {
     const index = row.args.indexOf("--tsBuildInfoFile"), cache = row.args[index + 1]!;
@@ -770,19 +777,20 @@ test("post-compile isolation refuses resolved external inputs and preserves nati
   });
 });
 
-test("hermetic provenance fails closed on empty, forged and post-compilation external file lists", async t => {
+test("hermetic provenance fails closed on empty, forged and post-compilation external JSON inventories", async t => {
   const root = scratch(t), entry = join(root, "compiler.cjs"), external = join(root, "external.d.ts");
   writeFileSync(external, "export declare const value: number;");
   for (const mode of ["empty", "forged", "missing", "indented", "post", "config", "diagnostics"]) {
     writeFileSync(entry, `const {spawnSync}=require('node:child_process'); const {existsSync,writeFileSync}=require('node:fs');
 const marker = require('node:path').join(process.cwd(),'checked');
 if (['config','config-path'].includes(${JSON.stringify(mode)}) && process.argv.includes('--showConfig')) {process.stdout.write(${JSON.stringify(mode === 'config-path' ? JSON.stringify({compilerOptions: {paths: {unused: [7]}}, files: ['consumer.ts']}) : '{}')}); process.exit(0);}
-if (${JSON.stringify(mode)} === 'diagnostics' && !process.argv.includes('--help') && !process.argv.includes('--showConfig') && !process.argv.includes('--listFilesOnly')) {process.stdout.write('noise error TS9999:'); process.exit(1);}
-if (process.argv.includes('--listFilesOnly') && (!['post','config','diagnostics'].includes(${JSON.stringify(mode)}) || existsSync(marker))) {
-  process.stdout.write(${mode === "indented" ? `require("node:path").join(process.cwd(),"consumer.ts") + ${JSON.stringify(`\n  ${external}\n`)}` : JSON.stringify(mode === "empty" ? "" : mode === "forged" ? `unstructured ${external}\n` : mode === "missing" ? `${external}.missing\n` : `${external}\n`)}); process.exit(0);
+if (${JSON.stringify(mode)} === 'diagnostics' && !process.argv.includes('--help') && !process.argv.includes('--showConfig') && !process.argv.includes('--generateTrace')) {process.stdout.write('noise error TS9999:'); process.exit(1);}
+if (process.argv.includes('--generateTrace') && (!['post','config','diagnostics'].includes(${JSON.stringify(mode)}) || existsSync(marker))) {
+  const trace=process.argv[process.argv.indexOf('--generateTrace')+1];
+  require('node:fs').writeFileSync(require('node:path').join(trace,'trace.json'), ${JSON.stringify(mode === "forged" ? "unstructured trace" : JSON.stringify(mode === "empty" ? [] : [{name: "createSourceFile", args: {path: mode === "missing" ? external + ".missing" : mode === "indented" ? "  " + external : external}}]))}); process.exit(0);
 }
 const result=spawnSync(process.execPath,[require('node:path').join(process.cwd(),'node_modules/typescript/bin/tsc'),...process.argv.slice(2)],{stdio:'inherit'});
-if (!process.argv.includes('--help') && !process.argv.includes('--showConfig') && !process.argv.includes('--listFilesOnly')) writeFileSync(marker,'compiled'); process.exit(result.status ?? 1);`);
+if (!process.argv.includes('--help') && !process.argv.includes('--showConfig') && !process.argv.includes('--generateTrace')) writeFileSync(marker,'compiled'); process.exit(result.status ?? 1);`);
     await assert.rejects(checkSdkContracts({ minimum: target, current: target, compiler: entry, examples: [SDK_CONSUMER_EXAMPLES[0]!] }), refuses(mode === "diagnostics" ? "compiler_unavailable" : "isolation_refused"));
   }
 });
@@ -1224,9 +1232,9 @@ test("round 9 registry allowlist preserves scoped private registry credentials a
   cpSync(dirname(dirname(compiler)), join(project, "node_modules/typescript"), {recursive: true});
   cpSync(join(repo, "node_modules/@typescript"), join(project, "node_modules/@typescript"), {recursive: true});
   writeFileSync(join(bin, "plain-tsc"), readFileSync(join(bin, "tsc")));
-  writeFileSync(join(bin, "tsc"), `import {readFileSync,writeFileSync} from 'node:fs'; import {spawnSync} from 'node:child_process';
+  writeFileSync(join(bin, "tsc"), `import {readFileSync,writeFileSync} from 'node:fs'; import {fileURLToPath} from 'node:url'; import {spawnSync} from 'node:child_process';
 writeFileSync(${JSON.stringify(receipt)},JSON.stringify({config:readFileSync('.npmrc','utf8'),home:process.env.HOME,cache:process.env.XDG_CACHE_HOME,keys:Object.keys(process.env).filter(key=>/^npm_config_/i.test(key))}));
-const result=spawnSync(process.execPath,[new URL('./plain-tsc',import.meta.url).pathname,...process.argv.slice(2)],{stdio:'inherit'});process.exit(result.status??1);`);
+const result=spawnSync(process.execPath,[fileURLToPath(new URL('./plain-tsc',import.meta.url)),...process.argv.slice(2)],{stdio:'inherit'});process.exit(result.status??1);`);
   const allowed = ["registry=https://registry.npmjs.org/", "@fixture:registry=https://registry.example.invalid/", "//registry.example.invalid/:_authToken=synthetic-fixture-token", "strict-ssl=false", "ca[]=synthetic-ca", "cafile=fixture-ca.pem"];
   // A CA file is meaningful only for TLS connections; these local artifact installs use the normal registry.
   writeFileSync(join(project, "fixture-ca.pem"), "synthetic-ca");
@@ -1245,9 +1253,7 @@ test("round 9 scoped registry must-allow preserves a real authenticated private 
   mkdirSync(artifact);
   writeFileSync(join(artifact, "package.json"), JSON.stringify({name: "@fixture/private", version: "1.0.0", types: "index.d.ts"}));
   writeFileSync(join(artifact, "index.d.ts"), "export declare const value: number;");
-  const pack = spawnSync("npm", ["pack", artifact, "--ignore-scripts", "--pack-destination", root], {encoding: "utf8", env: installationEnv()});
-  assert.equal(pack.status, 0, pack.stderr);
-  const tarball = join(root, pack.stdout.trim().split("\n").at(-1)!);
+  const tarball = packedFixture(artifact, root);
   const server = spawn(process.execPath, ["--input-type=module", "-e", `import {createServer} from 'node:http'; import {readFileSync,appendFileSync} from 'node:fs';
 const tarball=readFileSync(${JSON.stringify(tarball)});
 const server=createServer((req,res)=>{

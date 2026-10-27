@@ -82,21 +82,22 @@ function commandText(run: SpawnSyncReturns<string>): string {
  * empty lookup fails closed; it is not treated as an absent optional tool.
  *
  * @param env - Environment that may override the lookup with `BUN_EXE`.
- * @param lookup - Injected search, defaulting to a bounded `which bun`.
+ * @param lookup - Injected search, defaulting to a bounded Bun invocation with JSON output.
  * @returns The Bun executable path.
  */
 function requireBunExecutable(
   env: NodeJS.ProcessEnv,
   lookup: (env: NodeJS.ProcessEnv) => ToolLookup = lookupBun,
 ): string {
-  const override = env.BUN_EXE?.trim();
+  const override = env.BUN_EXE;
   if (override) return override;
   const found = lookup(env);
   if ((found.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT") {
     throw new Error("Timed out while locating Bun. Refusing to skip consumer checks.");
   }
-  const path = found.stdout?.trim();
-  if (found.status !== 0 || found.error || !path) throw new Error("Bun is required for generated consumer checks. Install Bun or set BUN_EXE.");
+  let path: unknown;
+  try { path = JSON.parse(found.stdout ?? "null"); } catch { path = undefined; }
+  if (found.status !== 0 || found.error || typeof path !== "string" || !path) throw new Error("Bun is required for generated consumer checks. Install Bun or set BUN_EXE.");
   return path;
 }
 
@@ -104,10 +105,10 @@ function requireBunExecutable(
  * Find Bun on PATH with a short ceiling.
  *
  * @param env - Environment whose PATH is searched.
- * @returns The lookup result, including a null stdout when `which` fails.
+ * @returns The lookup result, including a null stdout when Bun cannot start.
  */
 function lookupBun(env: NodeJS.ProcessEnv): ToolLookup {
-  return runBoundedCommand("which", ["bun"], { env, timeoutMs: 10_000 });
+  return runBoundedCommand("bun", ["-e", "process.stdout.write(JSON.stringify(process.execPath))"], { env, timeoutMs: 10_000 });
 }
 
 test("a leading option is a flag, not the generated CLI tracker path", () => {
@@ -144,13 +145,13 @@ test("generated project commands stop at their ceiling and keep failed exits", (
 test("Bun lookup failures stay prerequisites instead of skipped coverage", () => {
   assert.equal(requireBunExecutable({ BUN_EXE: "  /opt/bun  " }, () => {
     throw new Error("override must not search");
-  }), "/opt/bun");
+  }), "  /opt/bun  ");
   assert.throws(() => requireBunExecutable({}, () => ({ status: 1, stdout: null })), /Bun is required for generated consumer checks/);
   assert.throws(() => requireBunExecutable({}, () => ({ status: 1, stdout: "  " })), /Bun is required for generated consumer checks/);
   assert.throws(() => requireBunExecutable({}, () => ({ status: 1, stdout: "/invalid/bun" })), /Bun is required for generated consumer checks/);
   assert.throws(() => requireBunExecutable({}, () => ({ status: 0, stdout: "/invalid/bun", error: new Error("lookup failed") })), /Bun is required for generated consumer checks/);
-  assert.equal(requireBunExecutable({}, () => ({ status: 0, stdout: "/usr/bin/bun\n" })), "/usr/bin/bun");
-  const timedOut = Object.assign(new Error("spawnSync which ETIMEDOUT"), { code: "ETIMEDOUT" });
+  assert.equal(requireBunExecutable({}, () => ({ status: 0, stdout: JSON.stringify("/usr/bin/bun\n") })), "/usr/bin/bun\n");
+  const timedOut = Object.assign(new Error("spawnSync bun ETIMEDOUT"), { code: "ETIMEDOUT" });
   assert.throws(() => requireBunExecutable({}, () => ({ status: null, stdout: "", error: timedOut })), /Timed out while locating Bun/);
 });
 

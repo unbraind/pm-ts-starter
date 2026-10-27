@@ -1,6 +1,6 @@
 # Compiler delegation
 
-The consumer's installed `tsc` supplies the verdict, exit status and diagnostics. The checker parses pretty-false headers into file, line, column, code and multiline message, normalizing the private project prefix. It has no compiler program, language service, native API or diagnostic-phase emulation.
+The consumer's installed `tsc` supplies the verdict, exit status and diagnostics. The checker matches pretty-false locations against complete paths from the compiler’s JSON trace, retaining line, column, code and multiline message and normalizing the private project prefix. Embedded CR/LF and whitespace never delimit source paths. Both isolation operands use the same realpath normalization, including missing declarations through their nearest existing ancestor; unrepresentable entries receive named typed refusals. It has no compiler program, language service, native API or diagnostic-phase emulation.
 
 Ordinary projects run `tsc --project tsconfig.json --incremental false --noEmit --pretty false --locale en`. Reference-only solutions use `tsc --build tsconfig.json --force --noEmit --pretty false`. TypeScript owns fatal-error ordering, global diagnostics and project references, including TS6305 for missing referenced declarations.
 

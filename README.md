@@ -301,7 +301,7 @@ error short-circuiting, global diagnostics, module resolution and diagnostic ord
 The checker imports no compiler or language-service API.
 
 Each row's exit_code is the executable's actual exit status and determines the verdict. Its pretty-false diagnostic
-headers supply file, line, column, TS code and complete multiline message.
+headers supply line, column, TS code and complete multiline message. File locations are matched against complete JSON source paths, including embedded CR/LF, rather than split from output lines.
 Supplementary trace, list, explain and statistics output is disabled for this channel. Rows retain all diagnostics,
 the full count and up to three sample codes. Disposable project prefixes are
 normalized and external file locations use a marker. Compiler messages are now
@@ -328,8 +328,13 @@ new options, pass to the real compiler without an option allowlist.
 Reference-only build graphs are inspected before execution and their resolved inputs
 are checked afterward, including cyclic references and child cache destinations.
 Writer capability detection uses the compiler's own help/config output without
-classifying checking options or recreating diagnostics. After compilation, the compiler's resolved file list is
-checked against the private project and installed dependency roots. Unrelated
+classifying checking options or recreating diagnostics. After compilation, a separate
+real-compiler invocation writes a fresh JSON trace in checker-owned storage. Its
+source paths are checked against the private project and installed dependency roots.
+Paths never come from listFiles text or whitespace-delimited output. Both sides
+are canonicalized through realpath using the same function; missing declaration
+paths retain their nearest real ancestor so native TS6305 remains observable.
+Malformed or unrepresentable paths receive a typed refusal naming the escaped path. Unrelated
 external inputs and foreign SDK installations still receive an isolation refusal.
 
 Installed aliases retain their directory names. Internal links are rebased into

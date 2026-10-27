@@ -3,14 +3,16 @@ title: Compile packed contracts against each exact selected SDK bound
 description: "Follow-up to PR 153: packed declarations resolved SDK imports from a current-only consumer installation, leaving the minimum bound untested. Isolate each runtime and bound, verify the installed resolution, and regress a current-only public SDK API."
 type: Issue
 pm_format_version: 2
-status: blocked
+status: in_progress
 priority: 1
 tags[1]: "gh:unbraind/pm-ts-starter#154"
 created_at: "2026-10-24T13:07:42.652Z"
-updated_at: "2026-10-27T12:06:30.602Z"
+updated_at: "2026-10-27T14:02:33.702Z"
+assignee: codex-agent
+claim_principal: codex-agent
 author: codex-agent
 acceptance_criteria: Exact manifest minimum and explicit current SDK resolve inside separate packed npm and Bun consumers; a newer-only public API passes current and fails minimum; reverting only consumer provisioning fails the regression.
-comments[141]{created_at,author,text}:
+comments[148]{created_at,author,text}:
   "2026-10-24T13:07:46.558Z",codex-agent,"Scope: correct the packed-consumer compatibility gate added by PR 153. Use separate npm and Bun consumer installations per bound, select the minimum from manifest.json and current release 2026.10.24, and prove the actual resolver result from each consumer. Add a real newer-only SDK API use through emitted declarations, retaining the fixed compiler examples and no-git checks. Repository dependency pins remain unchanged; full npm and Bun release gates will run locally and in CI."
   "2026-10-24T13:07:47.361Z",codex-agent,"Implementation: each compiler project maps the selected SDK public type exports through TypeScript paths, including imports reached through absolute external declarations. Unexported SDK subpaths resolve to an empty declaration rather than falling through to a foreign installation. Packed acceptance now installs npm and Bun consumers separately for each exact bound and verifies package metadata and SDK entry resolution at runtime. Regression uses real acquireLockLease, absent in the manifest minimum and present in 2026.10.24. Typecheck, test typecheck, lint, docstring gate and zero-duplication gate passed."
   "2026-10-24T13:07:47.949Z",codex-agent,"Fail-on-revert proof: restored only checkSdkContracts to its origin/main implementation, leaving the new regression and helper intact. node --test --test-name-pattern='absolute declaration imports report newer-only SDK APIs as minimum drift' test/sdk-contracts.test.ts failed 1/1: expected matrix.ok=false, got true, because the minimum inherited acquireLockLease from the external consumer's current SDK. Restored the fixed function immediately. Before revert the complete targeted suite passed 8/8 with 100% sdk-contracts.ts lines, branches and functions. Running the registered targeted suite again after restoration. Local strict tracker health passes after provisioning the same pm-github version as CI; an existing provenance advisory remains untouched."
@@ -152,7 +154,14 @@ comments[141]{created_at,author,text}:
   "2026-10-27T10:58:25.677Z",codex-agent,"All four exact-head release gates at 924d40e passed 521/521 each on Node 22 and 26 under npm and Bun, with 100 percent lines/branches/functions, zero failures/skips/cancellations, both Bun graph installs and CodeQL passing. Final synchronization found main release commit f3c6c79, which only advances package/manifest version to 2026.10.27 with matching lockfile root version. Merged it as instructed; checker runtime and all dependency versions remain unchanged. This item is still absent from main; no history was merged or rewritten. Reclaimed the item to validate release metadata, regenerate changelog and publish final merged-head gates. The completed green receipt remains evidence for the identical checker implementation, not a substitute for final-head validation."
   "2026-10-27T11:01:48.194Z",codex-agent,"Release-version synchronization is verified: comparing to green head 924d40e shows identical runtime/test sources, generated output and dependency graph; package, manifest and lockfile differ only in project release version 2026.10.27. Typecheck, build, test typecheck, compatibility floor 5/5 and release-publish attestation checks pass. The existing function-only 0/2 false-green revert proof, 33/33 cache/input suite and all preserved suites remain applicable to identical checker code. Keep this item blocked for independent verification and release the claim. Regenerate/check changelog and its release date after this final tracker write, then run complete npm/Bun release gates on the release-synchronized head. The completed 924d40e CI receipt is 521/521 for all four runs with 100 percent lines/branches/functions; final-head receipts will be published in the PR body through the existing live-checks reference. Test persistence is disabled; explicit --match identifies the boundary command, and the existing provenance advisory is unchanged."
   "2026-10-27T12:06:05.365Z",codex-agent,"Final CI handoff under the 30-minute waiting rule: source, tests, generated output and dependency graph remain unchanged from green implementation head 924d40e. Release-synchronized head 2d1d9ed has been queued for more than 30 minutes at https://github.com/unbraind/pm-ts-starter/actions/runs/40493485509 (Node 22 and Node 26 npm/Bun release gates); CodeQL https://github.com/unbraind/pm-ts-starter/actions/runs/40493485701 is also queued. Neither is counted as passing. Stop waiting as instructed and leave acceptance blocked for the orchestrator pipeline. This final tracker-only handoff does not change compiler behavior; its pushed head and checks will be recorded in the PR body and the existing live checks reference. Earlier completed receipt remains four 521/521 release runs, 100 percent lines/branches/functions, both Bun graph installs and CodeQL passing. Focused source/cache/delegation regressions and the function-only 0/2 false-green revert proof remain recorded. No local test runners remain; release the claim and do not merge. Existing PM provenance advisory and disabled test-result persistence are unchanged."
-files[24]{path,scope}:
+  "2026-10-27T12:23:09.330Z",codex-agent,"Reopened for the path-transport finding. Branch and remote agree, worktree is clean, and main f3c6c79 is already merged. Audit found the resolved-file newline parser plus tracked-file and LCOV path parsing, and two test helpers that trimmed or split executable/archive paths. Replace path-bearing text channels with compiler JSON traces, JSON coverage records and git NUL records; preserve real tsc verdict/diagnostic semantics and existing hermeticity tests. Generate adversarial directory names including CR/LF, tabs, spaces, leading dashes, quotes and Unicode, compare with plain-name isolation, and prove the changed-function revert. Focused tests precede unchanged npm/Bun gates, maximum two workers."
+  "2026-10-27T12:39:21.797Z",codex-agent,"Focused results: exact newline SDK-directory reproduction passes; pinned 7.0.2 generated-name property passes all 33 plain/generated names (66 clean installed-dependency rows and 33 foreign-SDK refusals), original snapshots unchanged. JSON trace retains missing declaration attempts through canonical existing ancestors; restored TS6305, fatal-option TS5069 and ten noLib TS2318 controls pass 3/3 against complete native output. File locations now match full JSON inventory paths without splitting diagnostic lines. Coverage presence uses V8 JSON URLs; tracked workflows use git NUL records. Audit also replaces raw Bun executable and npm archive stdout parsing, fixes encoded file URL conversion, and escapes generated runtime imports. Stock 5.9.3/6.0.3 and malformed-path controls follow before the function-only revert proof."
+  "2026-10-27T12:42:34.932Z",codex-agent,"Behavioral revert proof: reverted ONLY compilerFiles to d676494, keeping all new tests, canonical checks and JSON diagnostic matching. Ran node --test --test-concurrency=1 --test-reporter=spec --test-name-pattern=\"path transport property on stock TypeScript pinned|newline SDK directory review reproduction\" test/sdk-path-transport.test.ts: 0/2 pass, both fail with Missing expected rejection because newline SDK paths disappear from the old file-list parser and falsely produce a passing matrix. The property first verifies a plain-name refusal and a passing ordinary dependency. Restored the complete fixed source byte-for-byte in finally. Independent selected-minimum tsc reports TS2305, while plain tsc against the external current-only SDK succeeds. No inputs or configuration were changed by the checker."
+  "2026-10-27T13:04:26.646Z",codex-agent,"Stock 5.9.3 and 6.0.3 each pass all nine plain/generated-name cases (18 clean dependency rows and nine foreign-SDK refusals per compiler); combined with pinned 7.0.2 this is 51 cases, 102 clean rows and 51 refusals with unchanged original snapshots. Seven malformed/unrepresentable JSON inventory controls pass. A diagnostic pathname containing a forged TS9999 exposed the independent test oracle itself still extracting codes from raw text; replaced that oracle with whole native-output equality, retaining the stronger assertion that only the real TS2322 appears in checker diagnostics. Native coverage events now use a small JSON reporter rather than enabling V8 coverage in every subprocess; required source coverage includes the reporter and thresholds remain unchanged. Bun JSON lookup, reporter encoding and nine NUL-delimited tracked workflow names pass 3/3; an actual newline-source coverage fixture passes at 100 percent."
+  "2026-10-27T13:13:33.213Z",codex-agent,"Final focused path assertions pass across six selected tests: pinned property, stock 5.9.3 property, stock 6.0.3 property, newline review reproduction, nine diagnostic pathname variants (including a forged TS9999 header), and malformed inventory controls. The corrected diagnostic oracle compares whole compiler output; checker diagnostics contain only the real TS2322. PM-run newline regression passes 1/1. PM-run coverage/release-verifier suites pass 52/52, zero failures/skips/cancellations, including native JSON coverage, unusual source filenames, malformed reports and nine git NUL workflow names. Lint, production/test typecheck, docstrings (65 declarations) and zero duplication pass; reporter coverage is added to the required source set. One overlapping focused run was explicitly stopped to keep nested test workers within the limit and will be rerun alone; cancellation is not approval. Test-result persistence remains disabled, so comments retain measured receipts."
+  "2026-10-27T13:46:04.510Z",codex-agent,"The final inventory refusal corpus now covers twelve malformed/unrepresentable shapes, including null/missing fields, relative paths, directories, unresolved links, missing files after a clean compile and diagnostic path suffix ambiguity; all pass. Refusal labels preserve escaped path data without absolute scratch prefixes. Native missing external declaration control passes with matching TS6053, and the unbuilt composite reference still matches TS6305 after the final canonical-path guard. A broader original integration test cannot reach compilation: fresh npm consumer provisioning times out (ETIMEDOUT), including public-cache/offline probes; no checker failure is inferred from setup timeouts. Public test provisioning now explicitly disables user config and reports spawn errors. Keep existing assertions and time limits; run unchanged npm/Bun release gates in CI, and treat queued or failed gates as missing verification. No dependency pin or host configuration changed."
+  "2026-10-27T14:02:33.645Z",codex-agent,"Retained compiler-wrapper controls found a genuine inspection regression: five wrapper forms completed their primary compile but exceeded the unchanged 30-second bound during full semantic JSON tracing. The hermetic JSON provenance control still passed all seven shapes. Corrected inspection to resolution-only --listFilesOnly with its stdout/stderr attached directly to the OS null device; the parent never transports or parses the line-oriented list, and paths come exclusively from the compiler JSON trace. This preserves one semantic typecheck per bound and avoids generating the full type graph twice. Native compiler verdicts, configuration and limits remain unchanged. Rerun final path corpus and wrapper controls before handoff; do not count the failed wrapper run as passing."
+files[31]{path,scope}:
   .github/workflows/ci.yml,project
   dist/index.d.ts.map,project
   dist/index.js,project
@@ -168,16 +177,23 @@ files[24]{path,scope}:
   index.ts,project
   package.json,project
   scripts/coverage-gate.ts,project
+  scripts/coverage-json-reporter.ts,project
+  scripts/verify-release-changelog-date.ts,project
   sdk-compiler-policy.ts,project
   sdk-contracts.ts,project
+  test/backend.test.ts,project
+  test/coverage-gate.test.ts,project
   test/dependency-fixtures.ts,project
   test/dependency-property-worker.ts,project
+  test/rehearsal.test.ts,project
   test/sdk-cache.test.ts,project
   test/sdk-compiler-policy.test.ts,project
   test/sdk-contracts.test.ts,project
   test/sdk-delegation.test.ts,project
+  test/sdk-path-transport.test.ts,project
   test/sdk-writer-boundary.test.ts,project
-tests[42]:
+  test/verify-release-changelog-date.test.ts,project
+tests[45]:
   - command: node --test --experimental-test-coverage --test-coverage-include=sdk-contracts.ts test/sdk-contracts.test.ts
     scope: project
     timeout_seconds: 3600
@@ -510,6 +526,30 @@ tests[42]:
     provenance:
       author: codex-agent
       created_at: "2026-10-27T07:48:18.529Z"
+      source_kind: local_mutation
+      source_ref: fix/min-sdk-drift-check
+  - command: node --test --test-concurrency=1 --test-reporter=spec test/sdk-path-transport.test.ts
+    scope: project
+    timeout_seconds: 1800
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-27T12:48:23.375Z"
+      source_kind: local_mutation
+      source_ref: fix/min-sdk-drift-check
+  - command: "node --test --test-concurrency=1 --test-reporter=spec --test-name-pattern=\"newline SDK directory review reproduction\" test/sdk-path-transport.test.ts"
+    scope: project
+    timeout_seconds: 180
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-27T12:48:23.375Z"
+      source_kind: local_mutation
+      source_ref: fix/min-sdk-drift-check
+  - command: node --test --test-concurrency=1 --test-reporter=spec test/coverage-gate.test.ts test/verify-release-changelog-date.test.ts
+    scope: project
+    timeout_seconds: 1200
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-27T12:48:23.375Z"
       source_kind: local_mutation
       source_ref: fix/min-sdk-drift-check
 docs[10]{path,scope}:

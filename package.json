@@ -117,6 +117,7 @@
     "sources": [
       ".",
       "scripts/coverage-gate.ts",
+      "scripts/coverage-json-reporter.ts",
       "scripts/prepare-merge-driver.ts",
       "scripts/docstring-gate.ts",
       "scripts/main-invocation.ts"
