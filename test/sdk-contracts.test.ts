@@ -715,7 +715,7 @@ const result = spawnSync(process.execPath,[require('node:path').join(process.cwd
   const records = readFileSync(receipt, "utf8").trim().split("\n").map(line => JSON.parse(line) as {entry: string; cwd: string; args: string[]});
   const compilations = records.filter(row => !row.args.includes("--help") && !row.args.includes("--showConfig") && !row.args.includes("--listFilesOnly"));
   assert.equal(compilations.length, 4);
-  assert.ok(compilations.every(row => JSON.stringify(row.args) === JSON.stringify(["--project", "tsconfig.json", "--noEmit", ...plainPresentation, "--locale", "en"])), "compiler delegation only adds typecheck and presentation flags");
+  assert.ok(compilations.every(row => JSON.stringify(row.args) === JSON.stringify(["--project", "tsconfig.json", "--incremental", "false", "--noEmit", ...plainPresentation, "--locale", "en"])), "compiler delegation adds cache-free typecheck and presentation flags");
   assert.ok(records.every(row => [join(root, "wrapper.mjs"), join(root, "wrapper.cjs")].includes(row.entry) && row.cwd !== root));
   assert.equal(records.filter(row => row.args.includes("--help")).length, 2, "query each wrapper once across both targets");
 });

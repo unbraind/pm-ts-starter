@@ -6,7 +6,7 @@ import {tmpdir} from "node:os";
 import {dirname, join, resolve} from "node:path";
 import test, {type TestContext} from "node:test";
 import {checkSdkContracts, SdkContractRefusal} from "../sdk-contracts.ts";
-import {dependencyBound, filesystemSnapshot} from "./dependency-fixtures.ts";
+import {dependencyBound, filesystemSnapshot, installTestCompiler} from "./dependency-fixtures.ts";
 
 const pinnedCompiler = resolve(import.meta.dirname, "../node_modules/typescript/bin/tsc");
 /** Allocate a non-git consumer and independently provision its exact stock compiler. */
@@ -15,12 +15,7 @@ function consumer(t: TestContext, version?: string): {root: string; project: str
   t.after(() => rmSync(root, {recursive: true, force: true}));
   const project = join(root, "consumer");
   mkdirSync(join(project, "node_modules"), {recursive: true});
-  if (version) {
-    const installed = spawnSync("npm", ["install", "--prefix", project, "--ignore-scripts", "--no-audit", "--no-fund", "--no-package-lock", `typescript@${version}`], {
-      encoding: "utf8", timeout: 120000, env: {...Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toLowerCase() !== "npm_config_allow_scripts")), NPM_CONFIG_USERCONFIG: "/dev/null", npm_config_userconfig: "/dev/null"},
-    });
-    assert.equal(installed.status, 0, installed.stderr);
-  } else symlinkSync(dirname(dirname(pinnedCompiler)), join(project, "node_modules/typescript"), "junction");
+  if (version) installTestCompiler(project, version); else symlinkSync(dirname(dirname(pinnedCompiler)), join(project, "node_modules/typescript"), "junction");
   writeFileSync(join(project, "package.json"), JSON.stringify({type: "module"}));
   writeFileSync(join(project, "consumer.mts"), "export const value = 1;");
   return {root, project, bound: dependencyBound(project)};

@@ -71,6 +71,8 @@ function copyConsumer(source, destination, dependency = false) {
         filter: (file, copied) => {
             if (relative(source, file) === ".git")
                 return false;
+            if (/\.tsbuildinfo$/i.test(file) && !(existsSync(file) && statSync(file).isDirectory()))
+                return false;
             if (!lstatSync(file).isSymbolicLink())
                 return true;
             const dependencyPath = dependency || relative(source, file).split(/[/\\]/).includes("node_modules") || installed.some(root => inside(root, file));
@@ -227,7 +229,7 @@ function runCompiler(project, compiler, args) {
 const diagnosticPresentation = ["pretty", "traceResolution", "explainFiles", "diagnostics", "extendedDiagnostics", "listFiles", "listEmittedFiles"].flatMap(name => ["--" + name, "false"]);
 /** Read resolved paths from the real compiler, including fatal-error projects with no file list. */
 function compilerFiles(project, compiler, empty, config, writers) {
-    const result = runCompiler(project, compiler, ["--project", config, "--listFilesOnly", "--noEmit", ...writers, ...diagnosticPresentation, "--locale", "en"]);
+    const result = runCompiler(project, compiler, ["--project", config, "--listFilesOnly", "--noEmit", "--incremental", "false", ...writers, ...diagnosticPresentation, "--locale", "en"]);
     const files = result.stdout.split(/\r?\n/).map(file => existsSync(resolve(project, file)) ? file : file.trim()).filter(file => file && existsSync(resolve(project, file)) && statSync(resolve(project, file)).isFile()).map(file => realpathSync(resolve(project, file)));
     if (!files.length && !empty && result.status === 0)
         isolationRefusal();
@@ -340,26 +342,36 @@ function compileConsumer(project, compiler, installed, supported) {
         for (const reference of settings.references)
             visit(reference);
     };
-    if (root.empty)
+    const build = root.empty;
+    if (build)
         for (const reference of root.references)
             visit(reference);
-    const empty = root.empty;
     // Failed inspection can still precede writes: conservatively redirect every known writer.
     const unknownWriters = { incremental: true, ...Object.fromEntries(["generateTrace", "generateCpuProfile", "pprofDir"].filter(name => supported.has(name)).map(name => [name, ""])) };
-    if (empty && [...projects.values()].some(settings => !settings.options))
+    if (build && [...projects.values()].some(settings => !settings.options))
         isolationRefusal();
     const writing = { ...root.options ?? unknownWriters };
     for (const settings of projects.values())
         for (const name of ["generateTrace", "generateCpuProfile", "pprofDir"])
             if (typeof settings.options?.[name] === "string")
                 writing[name] = settings.options[name];
-    const writers = compilerWriterArguments(supported, writing, project, empty);
+    const writers = compilerWriterArguments(supported, writing, project, build);
     for (const [file, settings] of projects) {
-        const escaping = escapingCompilerOutputs(settings.options ?? unknownWriters, project, file, writers.neutralized, empty);
+        const escaping = escapingCompilerOutputs(settings.options ?? unknownWriters, project, file, writers.neutralized, build);
         if (escaping.length)
             throw new SdkContractRefusal("isolation_refused", `Confine compiler writers (${escaping.join(", ")}) to the disposable project; linked dependency destinations cannot be written.`);
+        // Delete custom cache names only through private parents; never mutate linked inputs.
+        if (typeof settings.options?.tsBuildInfoFile === "string") {
+            const cache = resolve(dirname(file), settings.options.tsBuildInfoFile);
+            const parent = dirname(cache);
+            if (inside(project, cache) && existsSync(parent) && inside(project, realpathSync(parent))) {
+                if ((existsSync(cache) && seen.has(realpathSync(cache))) || lstatSync(cache, { throwIfNoEntry: false })?.isDirectory())
+                    throw new SdkContractRefusal("isolation_refused", "Use a separate regular file for tsBuildInfoFile; compiler state cannot replace project configuration or directories.");
+                rmSync(cache, { force: true });
+            }
+        }
     }
-    const args = [empty ? "--build" : "--project", "tsconfig.json", "--noEmit", ...writers.args, ...diagnosticPresentation, ...empty ? [] : ["--locale", "en"]];
+    const args = [build ? "--build" : "--project", "tsconfig.json", ...build ? ["--force"] : root.options?.composite === true ? [] : ["--incremental", "false"], "--noEmit", ...writers.args, ...diagnosticPresentation, ...build ? [] : ["--locale", "en"]];
     const result = runCompiler(project, compiler, args);
     const diagnostics = result.status === 0 ? [] : compilerDiagnostics(project, result.stdout);
     if (result.status !== 0 && !diagnostics.length)

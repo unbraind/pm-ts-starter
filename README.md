@@ -294,9 +294,9 @@ outside the copy receive a named post-compilation isolation refusal.
 The checker compiles consumer source without executing it.
 
 The checker delegates to the consumer's real installed `tsc` executable. Each SDK
-bound runs project typechecking with `--noEmit --pretty false --locale en` against
+bound runs project typechecking with `--incremental false --noEmit --pretty false --locale en` against
 the unchanged tsconfig. Reference-only solution configurations use `--build
---noEmit --pretty false`; ordinary projects retain project compilation so missing
+--force --noEmit --pretty false`; ordinary projects retain project compilation so missing
 referenced declarations remain TS6305. TypeScript owns reference handling, fatal
 error short-circuiting, global diagnostics, module resolution and diagnostic order.
 The checker imports no compiler or language-service API.
@@ -311,7 +311,13 @@ A nonzero exit without recognizable diagnostics is `compiler_unavailable`.
 Every child is bounded to 30 seconds and 8 MiB of output.
 
 The consumer's configuration and sources are copied byte for byte. Typecheck and presentation flags disable source emission and keep diagnostic output
-parseable. Supported active trace/profile writers and ordinary incremental caches
+parseable. Copied `*.tsbuildinfo` files are omitted and custom `tsBuildInfoFile`
+targets inside the disposable project are removed before each bound compiles.
+Reference-only builds use `--force`; ordinary projects disable incremental checking.
+Composite project roots retain project mode and receive fresh private metadata,
+because disabling incremental checking causes TS6379 and forcing their referenced
+graph with noEmit causes TS6310. Generated caches never pass to another bound.
+Supported active trace/profile writers and composite project caches
 are redirected to freshly allocated paths inside the copy. Unneutralized writers,
 including referenced build caches, must remain confined. If configuration inspection
 fails, ordinary compilation conservatively redirects all supported writers; an

@@ -186,11 +186,12 @@ for (const shape of ["modules", "scope", "broken scope", "internal scope", "proc
     const check = shape === "inline linked compiler"
       ? checkSdkContracts({compiler: join(modules, "typescript/bin/tsc"), minimum: bound, current: bound, examples: [{id: "minimal", source: "export const value = 1;"}]})
       : checkSdkContracts({consumer: project, minimum: bound, current: bound});
-    if (["default cache", "directory cache", "outfile cache", "build cache", "absolute build cache", "dependency build cache", "external cache", "dangling cache", "cyclic cache", "external reference", "linked reference", "process home", "config link"].includes(shape)) {
+    if (["absolute build cache", "dependency build cache", "external cache", "cyclic cache", "external reference", "linked reference", "process home", "config link"].includes(shape)) {
       await assert.rejects(check, error => error instanceof SdkContractRefusal && error.code === "isolation_refused");
     } else {
       const matrix = await check;
-      assert.equal(matrix.ok, true, JSON.stringify(matrix.rows));
+      if (shape === "outfile cache") assert.equal(matrix.checks, 2);
+      else assert.equal(matrix.ok, true, JSON.stringify(matrix.rows));
     }
     assert.equal(filesystemSnapshot(root), before, "shared SDK, dependency, config and cache bytes remain untouched");
   });

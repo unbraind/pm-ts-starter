@@ -1,4 +1,6 @@
 /** Installed dependency fixtures shared by corpus and property oracles. */
+import assert from "node:assert/strict";
+import {spawnSync} from "node:child_process";
 import {createHash} from "node:crypto";
 import {mkdirSync, writeFileSync, readdirSync, readFileSync, readlinkSync, lstatSync} from "node:fs";
 import {join} from "node:path";
@@ -39,4 +41,12 @@ export function filesystemSnapshot(root: string): string {
 /** Deterministic generator, independent of compiler diagnostics and npm behavior. */
 export function boundaryRandom(seed: number): () => number {
   return () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return (seed ^ (seed >>> 16)) >>> 0; };
+}
+
+/** Provision an exact unmodified public compiler without lifecycle scripts or user credentials. */
+export function installTestCompiler(directory: string, version: string): void {
+  const result = spawnSync("npm", ["install", "--prefix", directory, "--ignore-scripts", "--no-package-lock", "--no-audit", "--no-fund", `typescript@${version}`], {
+    encoding: "utf8", timeout: 120000, env: {...Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toLowerCase() !== "npm_config_allow_scripts")), NPM_CONFIG_USERCONFIG: "/dev/null", npm_config_userconfig: "/dev/null"},
+  });
+  assert.equal(result.status, 0, result.stderr);
 }

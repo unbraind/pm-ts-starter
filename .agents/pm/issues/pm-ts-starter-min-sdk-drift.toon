@@ -3,14 +3,16 @@ title: Compile packed contracts against each exact selected SDK bound
 description: "Follow-up to PR 153: packed declarations resolved SDK imports from a current-only consumer installation, leaving the minimum bound untested. Isolate each runtime and bound, verify the installed resolution, and regress a current-only public SDK API."
 type: Issue
 pm_format_version: 2
-status: blocked
+status: in_progress
 priority: 1
 tags[1]: "gh:unbraind/pm-ts-starter#154"
 created_at: "2026-10-24T13:07:42.652Z"
-updated_at: "2026-10-27T03:39:47.640Z"
+updated_at: "2026-10-27T05:57:35.925Z"
+assignee: codex-agent
+claim_principal: codex-agent
 author: codex-agent
 acceptance_criteria: Exact manifest minimum and explicit current SDK resolve inside separate packed npm and Bun consumers; a newer-only public API passes current and fails minimum; reverting only consumer provisioning fails the regression.
-comments[124]{created_at,author,text}:
+comments[128]{created_at,author,text}:
   "2026-10-24T13:07:46.558Z",codex-agent,"Scope: correct the packed-consumer compatibility gate added by PR 153. Use separate npm and Bun consumer installations per bound, select the minimum from manifest.json and current release 2026.10.24, and prove the actual resolver result from each consumer. Add a real newer-only SDK API use through emitted declarations, retaining the fixed compiler examples and no-git checks. Repository dependency pins remain unchanged; full npm and Bun release gates will run locally and in CI."
   "2026-10-24T13:07:47.361Z",codex-agent,"Implementation: each compiler project maps the selected SDK public type exports through TypeScript paths, including imports reached through absolute external declarations. Unexported SDK subpaths resolve to an empty declaration rather than falling through to a foreign installation. Packed acceptance now installs npm and Bun consumers separately for each exact bound and verifies package metadata and SDK entry resolution at runtime. Regression uses real acquireLockLease, absent in the manifest minimum and present in 2026.10.24. Typecheck, test typecheck, lint, docstring gate and zero-duplication gate passed."
   "2026-10-24T13:07:47.949Z",codex-agent,"Fail-on-revert proof: restored only checkSdkContracts to its origin/main implementation, leaving the new regression and helper intact. node --test --test-name-pattern='absolute declaration imports report newer-only SDK APIs as minimum drift' test/sdk-contracts.test.ts failed 1/1: expected matrix.ok=false, got true, because the minimum inherited acquireLockLease from the external consumer's current SDK. Restored the fixed function immediately. Before revert the complete targeted suite passed 8/8 with 100% sdk-contracts.ts lines, branches and functions. Running the registered targeted suite again after restoration. Local strict tracker health passes after provisioning the same pm-github version as CI; an existing provenance advisory remains untouched."
@@ -135,7 +137,11 @@ comments[124]{created_at,author,text}:
   "2026-10-27T02:45:56.698Z",codex-agent,"Round-12 review handoff: writer confinement is based on private destinations plus filesystem boundaries, with no compiler-option classification or help filtering. The strengthened PM-run writer suite passed 32/32 with both file and direct directory links, consumer/dependency locations, and clean-matrix assertions for valid writers. The subtree controls passed 2/2 with 100% writer-policy line/branch/function coverage; stock compiler compatibility passed 3/3 across 5.9.3, 6.0.3 and pinned 7.0.2. A broader run passed 15/16 controls and exposed canonical internal node_modules containers being mistaken for non-dependencies. Reusing the cycle-safe realpath dependency graph fixed that regression; the final trace/container/mutual-link selection passed 4/4, including a self-workspace that must not exempt ordinary consumer links. Typecheck, test typecheck, lint, zero duplication, build and docstrings pass. Strict PM health passes with the existing provenance advisory unchanged; committed history remains an exact byte prefix. PM test result persistence is disabled by project policy, so these comments retain the receipts. The existing live PR-checks document is the authority for the forthcoming unchanged npm and Bun release gates on Node 22/26; final CI counts will be reported with the published head. Implementation complete, claim released for independent verification; do not merge."
   "2026-10-27T03:23:54.670Z",codex-agent,"CI receipt for a2c1515: Node 22 and 26 each passed all 486 tests, with zero test failures. Both unchanged npm gates failed solely because sdk-contracts.ts branch coverage was 99.67% (one uncovered branch), while lines/functions and the writer-policy module were 100%. The failed workflow was canceled during Bun to make completed npm logs available; canceled gates are not accepted as verification. Reclaimed this item and started a focused LCOV probe to locate the one missing branch. Both full release gates will run again on the corrected published head."
   "2026-10-27T03:37:49.596Z",codex-agent,"Coverage diagnosis and proof: the new preparation boundary correctly stops the old unsafe-cache symlink fixtures before compilation, so they no longer hit the unneutralized reference-build writer refusal. Added absolute and linked-dependency build-cache controls; both pass, leave external cache bytes unchanged and hit the previously uncovered guard (LCOV count 2). Omitting only that refusal produced 0/2 passes with missing expected rejections; fixed source bytes were restored exactly and the same controls passed 2/2 through pm test. Also retained a positive SDK package.json symlink case so dependency metadata stays linked and read-only. No runtime changes or threshold changes are needed. Earlier focused 68/68 controls passed; the full CI correction adds two tests, with both complete release gates still required on the new head."
-files[23]{path,scope}:
+  "2026-10-27T04:56:47.434Z",codex-agent,"Resume cache-isolation review: retain all completed dependency/configuration/diagnostic and writer guarantees. Add real TypeScript 5.9.3 and 6.0.3 warm-versus-cold current-SDK cache oracles, including default tsbuildinfo and custom cache filenames. The prepared copies will discard compiler state before each bound, force reference builds, and disable ordinary incremental compilation. Original cache/dependency snapshots must remain unchanged. TypeScript reports TS6379 for composite roots with incremental=false; the composite-mode choice has been sent for clarification while the reference-build reproduction proceeds."
+  "2026-10-27T05:44:23.874Z",codex-agent,"Cache isolation result: TypeScript 5.9.3 and 6.0.3 each reproduce the review bug with both default tsbuildinfo and custom cache filenames: the old warm minimum row incorrectly passes while the real cold compiler reports TS2322. The fixed implementation passes all 12 warm/cold controls across reference builds, ordinary projects and composite project roots, plus 32 preserved delegation/write-boundary controls. Compiler-owned cache files are omitted during copying; custom private targets are deleted before checking; builds force rechecking and ordinary projects disable incremental compilation. Composite roots require incremental mode (TS6379 if disabled), and forcing their prebuilt reference graphs with noEmit introduces TS6310. Those roots therefore preserve project mode with freshly allocated private metadata; the regression tests verify identical complete warm/cold matrices and untouched original caches. Cache suffix directories remain inputs, and unsafe configuration/directory targets are refused; external state is preserved. No compiler API or dependency installer is introduced."
+  "2026-10-27T05:48:06.043Z",codex-agent,"Behavioral revert proof: restoring only sdk-contracts.ts from the previous committed head, while retaining the current test fixtures and real compiler oracle, produced 0/4 passes. All four 5.9.3/6.0.3 default/custom reference-build warm minimum rows falsely returned success and no errors instead of cold TS2322. The fixed source was restored byte for byte. Twelve restored warm/cold controls and 32 existing delegation controls have already passed; final PM-run cache and compiler-entry checks are underway. Composite roots retain native project semantics with a fresh private tsBuildInfoFile because the requested incremental=false produces TS6379 and forced noEmit reference builds produce TS6310 on otherwise-valid project graphs. This exception preserves the no-consumer-cache guarantee and complete cold/warm matrices; no consumer checking option is rewritten."
+  "2026-10-27T05:57:35.787Z",codex-agent,"Cache revision verification: the PM-linked serial sdk-cache suite passes 15/15 with zero failures, skips or cancellations. Real TypeScript 5.9.3 and 6.0.3 each cover warm versus cold reference builds, ordinary incremental projects, and composite project roots with prebuilt declarations, using default and custom cache names. Every minimum row reports TS2322, every current row passes, and complete warm/cold diagnostic matrices match. Compiler invocation receipts prove no copied cache reaches checking, forced reference builds, disabled ordinary incremental checking, and fresh private composite metadata. Consumer and external snapshots remain unchanged. Existing compiler entry and composite controls pass 7/7; the prior focused cache/delegation suite passes 44/44. Production/test typecheck, lint, zero duplication, build and docstrings pass. The behavioral source-only revert remains 0/4 versus four cold TS2322 oracles. Test result persistence is disabled by project policy, so this comment records the PM run receipt. Full npm and Bun release checks will run in CI on the pushed revision; thresholds and worker limits are unchanged."
+files[24]{path,scope}:
   .github/workflows/ci.yml,project
   dist/index.d.ts.map,project
   dist/index.js,project
@@ -155,11 +161,12 @@ files[23]{path,scope}:
   sdk-contracts.ts,project
   test/dependency-fixtures.ts,project
   test/dependency-property-worker.ts,project
+  test/sdk-cache.test.ts,project
   test/sdk-compiler-policy.test.ts,project
   test/sdk-contracts.test.ts,project
   test/sdk-delegation.test.ts,project
   test/sdk-writer-boundary.test.ts,project
-tests[39]:
+tests[41]:
   - command: node --test --experimental-test-coverage --test-coverage-include=sdk-contracts.ts test/sdk-contracts.test.ts
     scope: project
     timeout_seconds: 3600
@@ -469,6 +476,22 @@ tests[39]:
     provenance:
       author: codex-agent
       created_at: "2026-10-27T03:35:15.048Z"
+      source_kind: local_mutation
+      source_ref: fix/min-sdk-drift-check
+  - command: node --test --test-concurrency=1 --experimental-test-coverage --test-coverage-include=sdk-contracts.ts test/sdk-cache.test.ts
+    scope: project
+    timeout_seconds: 1200
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-27T05:44:15.812Z"
+      source_kind: local_mutation
+      source_ref: fix/min-sdk-drift-check
+  - command: node --test --test-concurrency=1 --experimental-test-coverage --test-coverage-include=sdk-contracts.ts --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/sdk-cache.lcov test/sdk-cache.test.ts
+    scope: project
+    timeout_seconds: 1200
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-27T05:47:23.559Z"
       source_kind: local_mutation
       source_ref: fix/min-sdk-drift-check
 docs[8]{path,scope}:
