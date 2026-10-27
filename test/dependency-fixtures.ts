@@ -2,9 +2,11 @@
 import assert from "node:assert/strict";
 import {spawnSync} from "node:child_process";
 import {createHash} from "node:crypto";
-import {mkdirSync, writeFileSync, readdirSync, readFileSync, readlinkSync, lstatSync} from "node:fs";
-import {join} from "node:path";
-import type {SdkContractOptions} from "../sdk-contracts.ts";
+import {cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, readdirSync, readFileSync, readlinkSync, lstatSync, symlinkSync} from "node:fs";
+import {dirname, join, resolve} from "node:path";
+import {tmpdir} from "node:os";
+import {after, type TestContext} from "node:test";
+import {checkSdkContracts, SdkContractRefusal, type SdkContractOptions, type SdkContractDiagnostic} from "../sdk-contracts.ts";
 
 /** Write a dependency exactly where the consumer installed it, independent of its metadata name. */
 export function dependencyEntry(root: string, installed: string, actual: string, declarations = 'export declare const value: "selected";'): void {
@@ -49,4 +51,69 @@ export function installTestCompiler(directory: string, version: string): void {
     encoding: "utf8", timeout: 120000, env: {...Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toLowerCase() !== "npm_config_allow_scripts")), NPM_CONFIG_USERCONFIG: "/dev/null", npm_config_userconfig: "/dev/null"},
   });
   assert.equal(result.status, 0, result.stderr);
+}
+
+/** Lazily install a classic consumer API without changing the repository build compiler pin. */
+export function testCompiler(): string {
+  if (!compilerTool) {
+    compilerTool = mkdtempSync(join(tmpdir(), "sdk-api-tool-"));
+    installTestCompiler(compilerTool, "5.9.3");
+    for (const name of ["@types", "undici-types"]) symlinkSync(resolve(import.meta.dirname, "../node_modules", name), join(compilerTool, "node_modules", name), "junction");
+  }
+  return join(compilerTool, "node_modules/typescript/bin/tsc");
+}
+/** Every test worker owns and cleans its independent compiler fixture. */
+let compilerTool: string | undefined;
+after(() => { if (compilerTool) rmSync(compilerTool, {recursive: true, force: true}); });
+
+/** Return the actual API diagnostics, without invoking or parsing the command-line compiler. */
+export function directApiDiagnostics(project: string): SdkContractDiagnostic[] {
+  const script = `const ts=require(require.resolve('typescript',{paths:[process.argv[1]]})),path=require('node:path');
+ts.sys.write=()=>{};const root=process.argv[1],diagnostics=[],seen=new Set();
+function check(file){if(seen.has(file))return;seen.add(file);const errors=[],config=ts.getParsedCommandLineOfConfigFile(file,{noEmit:true},{...ts.sys,onUnRecoverableConfigFileDiagnostic:d=>errors.push(d)});
+if(!config){diagnostics.push(...errors);return;}
+diagnostics.push(...ts.getPreEmitDiagnostics(ts.createProgram({rootNames:config.fileNames,options:config.options,projectReferences:config.projectReferences,configFileParsingDiagnostics:config.errors})));
+if(config.fileNames.length===0&&config.projectReferences?.length){const order=ts.createSolutionBuilder(ts.createSolutionBuilderHost(ts.sys),[file],{force:true,noEmit:true}).getBuildOrder();if(Array.isArray(order)){for(const reference of config.projectReferences)check(ts.resolveProjectReferencePath(reference));}else diagnostics.push(...order.circularDiagnostics);}}
+check(path.join(root,'tsconfig.json'));
+process.stdout.write(JSON.stringify(diagnostics.filter(d=>d.category===ts.DiagnosticCategory.Error).map(d=>{const pos=d.file&&d.start!==undefined?d.file.getLineAndCharacterOfPosition(d.start):undefined;return {code:'TS'+d.code,file:d.file?path.relative(root,d.file.fileName).split(path.sep).join('/'):'<config>',message:ts.flattenDiagnosticMessageText(d.messageText,'\\n').replaceAll(root,'.'),line:pos?pos.line+1:0,column:pos?pos.character+1:0};})));`;
+  const run = spawnSync(process.execPath, ["-e", script, project], {encoding: "utf8", timeout: 30000});
+  assert.equal(run.status, 0, run.stderr);
+  return JSON.parse(run.stdout) as SdkContractDiagnostic[];
+}
+
+
+/** Allocate an exclusive fixture root and register unconditional cleanup with its test. */
+export function testDirectory(t: TestContext, prefix: string): string {
+  const root = mkdtempSync(join(tmpdir(), prefix));
+  t.after(() => rmSync(root, {recursive: true, force: true}));
+  return root;
+}
+
+/** Give API regressions a real compiler link, isolated consumer and independently named SDK. */
+export function apiConsumer(t: TestContext): {root: string; project: string; bound: ReturnType<typeof dependencyBound>} {
+  const root = testDirectory(t, "sdk-api-review-"), project = join(root, "consumer");
+  mkdirSync(join(project, "node_modules"), {recursive: true});
+  symlinkSync(dirname(dirname(testCompiler())), join(project, "node_modules/typescript"), "junction");
+  writeFileSync(join(project, "package.json"), '{"type":"module"}');
+  writeFileSync(join(project, "consumer.ts"), "export const value: string = 1;");
+  writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions: {types: [], lib: ["ES5"], module: "NodeNext"}, files: ["consumer.ts"]}));
+  return {root, project, bound: dependencyBound(project)};
+}
+
+/** Link a foreign SDK whose unnamed dist metadata must not truncate resolver package identity. */
+export function linkForeignSdk(root: string, project: string, bound: ReturnType<typeof dependencyBound>): void {
+  const foreign = join(root, "foreign SDK"); cpSync(bound.root, foreign, {recursive: true});
+  mkdirSync(join(foreign, "dist")); writeFileSync(join(foreign, "dist/package.json"), '{"type":"module"}');
+  writeFileSync(join(foreign, "dist/index.d.ts"), "export declare const onlyCurrent: 1;");
+  writeFileSync(join(foreign, "package.json"), JSON.stringify({name: "@unbrained/pm-cli", version: "2.0.0", types: "dist/index.d.ts"}));
+  symlinkSync(foreign, join(project, "node_modules/foreign-sdk"), "junction");
+  writeFileSync(join(project, "consumer.ts"), 'export {onlyCurrent} from "foreign-sdk";');
+}
+
+/** Prove an ordinary compiler accepts the foreign API while bound isolation rejects its identity. */
+export async function assertForeignSdk(root: string, project: string, bound: ReturnType<typeof dependencyBound>): Promise<void> {
+  assert.deepEqual(directApiDiagnostics(project), []);
+  const before = filesystemSnapshot(root);
+  await assert.rejects(checkSdkContracts({consumer: project, minimum: bound, current: bound}), error => error instanceof SdkContractRefusal && error.code === "isolation_refused" && error.remedy.includes("index.d.ts"));
+  assert.equal(filesystemSnapshot(root), before);
 }

@@ -6,9 +6,9 @@ import {tmpdir} from "node:os";
 import {dirname, join, resolve} from "node:path";
 import test, {type TestContext} from "node:test";
 import {checkSdkContracts, SdkContractRefusal} from "../sdk-contracts.ts";
-import {dependencyBound, filesystemSnapshot, installTestCompiler} from "./dependency-fixtures.ts";
+import {dependencyBound, filesystemSnapshot, installTestCompiler, testCompiler, directApiDiagnostics} from "./dependency-fixtures.ts";
 
-const pinnedCompiler = resolve(import.meta.dirname, "../node_modules/typescript/bin/tsc");
+const pinnedCompiler = testCompiler();
 /** Allocate a non-git consumer and independently provision its exact stock compiler. */
 function consumer(t: TestContext, version?: string): {root: string; project: string; bound: ReturnType<typeof dependencyBound>} {
   const root = mkdtempSync(join(tmpdir(), "sdk-writer-test-"));
@@ -21,7 +21,7 @@ function consumer(t: TestContext, version?: string): {root: string; project: str
   return {root, project, bound: dependencyBound(project)};
 }
 
-for (const version of ["5.9.3", "6.0.3", "7.0.2"]) test(`unfiltered stock TypeScript ${version} accepts its minimal consumer`, async t => {
+for (const version of ["5.9.3", "6.0.3"]) test(`unfiltered stock TypeScript ${version} accepts its minimal consumer`, async t => {
   const {project, bound} = consumer(t, version);
   writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions: {types: [], lib: ["ES5"], module: "NodeNext", noEmit: true}, files: ["consumer.mts"]}));
   const entry = join(project, "node_modules/typescript/bin/tsc"), original = readFileSync(entry);
@@ -41,22 +41,21 @@ for (const version of ["5.9.3", "6.0.3", "7.0.2"]) test(`unfiltered stock TypeSc
   const oracle = join(dirname(project), "oracle");
   mkdirSync(join(oracle, "node_modules/output"), {recursive: true});
   for (const name of ["consumer.mts", "tsconfig.json"]) writeFileSync(join(oracle, name), readFileSync(join(project, name)));
-  const direct = spawnSync(process.execPath, [entry, "-p", "tsconfig.json", "--noEmit", "--pretty", "false"], {cwd: oracle, encoding: "utf8"});
-  assert.equal(direct.error, undefined); assert.notEqual(direct.status, 0);
-  const codes = [...direct.stdout.matchAll(/error (TS\d+):/g)].map(match => match[1]);
+  symlinkSync(join(project, "node_modules/typescript"), join(oracle, "node_modules/typescript"), "junction");
+  const codes = directApiDiagnostics(oracle).map(d => d.code);
   assert.ok(codes.includes("TS5023"));
   const before = filesystemSnapshot(dirname(project)), failed = await checkSdkContracts({consumer: project, minimum: bound, current: bound});
   assert.equal(failed.ok, false, "unknown options are diagnosed by the actual compiler even with writers enabled");
   assert.deepEqual(failed.rows.map(row => row.diagnostics.map(diagnostic => diagnostic.code)), [codes, codes]);
   assert.equal(filesystemSnapshot(dirname(project)), before, "configuration, diagnostics and file-list probes confine every writer");
-  if (version !== "7.0.2") {
-    mkdirSync(join(project, "reference"));
-    writeFileSync(join(project, "reference/tsconfig.json"), "{ invalid");
-    writeFileSync(join(project, "tsconfig.json"), JSON.stringify({files: [], references: [{path: "reference"}]}));
-    const snapshot = filesystemSnapshot(dirname(project));
-    await assert.rejects(checkSdkContracts({consumer: project, minimum: bound, current: bound}), error => error instanceof SdkContractRefusal && error.code === "isolation_refused");
-    assert.equal(filesystemSnapshot(dirname(project)), snapshot, "uninspectable build graphs are refused before writes");
-  }
+  mkdirSync(join(project, "reference"));
+  writeFileSync(join(project, "reference/tsconfig.json"), "{ invalid");
+  writeFileSync(join(project, "tsconfig.json"), JSON.stringify({files: [], references: [{path: "reference"}]}));
+  const snapshot = filesystemSnapshot(dirname(project)), expectedErrors = directApiDiagnostics(project);
+  const malformed = await checkSdkContracts({consumer: project, minimum: bound, current: bound});
+  assert.ok(expectedErrors.length > 0);
+  for (const row of malformed.rows) assert.deepEqual(row.diagnostics, expectedErrors);
+  assert.equal(filesystemSnapshot(dirname(project)), snapshot, "malformed references are diagnosed without writes");
   assert.deepEqual(readFileSync(entry), original, "stock executable is never wrapped or filtered");
 });
 

@@ -3,14 +3,16 @@ title: Compile packed contracts against each exact selected SDK bound
 description: "Follow-up to PR 153: packed declarations resolved SDK imports from a current-only consumer installation, leaving the minimum bound untested. Isolate each runtime and bound, verify the installed resolution, and regress a current-only public SDK API."
 type: Issue
 pm_format_version: 2
-status: blocked
+status: in_progress
 priority: 1
 tags[1]: "gh:unbraind/pm-ts-starter#154"
 created_at: "2026-10-24T13:07:42.652Z"
-updated_at: "2026-10-27T15:22:21.563Z"
+updated_at: "2026-10-27T17:05:35.806Z"
+assignee: codex-agent
+claim_principal: codex-agent
 author: codex-agent
 acceptance_criteria: Exact manifest minimum and explicit current SDK resolve inside separate packed npm and Bun consumers; a newer-only public API passes current and fails minimum; reverting only consumer provisioning fails the regression.
-comments[152]{created_at,author,text}:
+comments[156]{created_at,author,text}:
   "2026-10-24T13:07:46.558Z",codex-agent,"Scope: correct the packed-consumer compatibility gate added by PR 153. Use separate npm and Bun consumer installations per bound, select the minimum from manifest.json and current release 2026.10.24, and prove the actual resolver result from each consumer. Add a real newer-only SDK API use through emitted declarations, retaining the fixed compiler examples and no-git checks. Repository dependency pins remain unchanged; full npm and Bun release gates will run locally and in CI."
   "2026-10-24T13:07:47.361Z",codex-agent,"Implementation: each compiler project maps the selected SDK public type exports through TypeScript paths, including imports reached through absolute external declarations. Unexported SDK subpaths resolve to an empty declaration rather than falling through to a foreign installation. Packed acceptance now installs npm and Bun consumers separately for each exact bound and verifies package metadata and SDK entry resolution at runtime. Regression uses real acquireLockLease, absent in the manifest minimum and present in 2026.10.24. Typecheck, test typecheck, lint, docstring gate and zero-duplication gate passed."
   "2026-10-24T13:07:47.949Z",codex-agent,"Fail-on-revert proof: restored only checkSdkContracts to its origin/main implementation, leaving the new regression and helper intact. node --test --test-name-pattern='absolute declaration imports report newer-only SDK APIs as minimum drift' test/sdk-contracts.test.ts failed 1/1: expected matrix.ok=false, got true, because the minimum inherited acquireLockLease from the external consumer's current SDK. Restored the fixed function immediately. Before revert the complete targeted suite passed 8/8 with 100% sdk-contracts.ts lines, branches and functions. Running the registered targeted suite again after restoration. Local strict tracker health passes after provisioning the same pm-github version as CI; an existing provenance advisory remains untouched."
@@ -163,15 +165,15 @@ comments[152]{created_at,author,text}:
   "2026-10-27T14:38:26.226Z",codex-agent,"Classic compiler source inspection uses the explicitly authorized program API only for file names. It reads fresh real --showConfig output, runs in a confined child, validates API/executable versions, disables emit and profile/cache writers, suppresses API textual logging and rejects API writeFile calls. It never calls a diagnostic API or language service. Native resolution tracing remains JSON-only, with both text streams discarded in the OS. This handles classic stock compilers whose list-only CLI trace is incomplete while preserving their real binary verdicts. A new real-compiler control covers traceResolution plus a linked output tree, requiring a clean matrix and unchanged filesystem snapshots. No option allowlist, source redirection or semantic phase emulation is introduced."
   "2026-10-27T15:19:16.179Z",codex-agent,"Final path-transport validation: generated names cover LF, CR, tab, spaces, leading dashes, quotes and Unicode. Across pinned 7.0.2 plus stock 5.9.3 and 6.0.3, 51 names produced 102 clean bound rows and 51 foreign-SDK refusals; each stock property passed independently. Minimum-only independent oracle reports TS2305. Final API boundary control passed 1/1, including logging/writer confinement, executable/API mismatch, failed version and worker statuses, malformed configuration diagnostics, and unchanged original bytes. Compiler-entry and hermetic-provenance selection passed 7/7 at normal CPU settings. PM-linked coverage/release-verifier tooling passed 52/52, including JSON coverage and NUL-delimited Git names. Native missing declaration, unbuilt reference, fatal-option and global diagnostic controls remain passing. Function-only revert on final code restored only compilerFiles from d676494: both property and exact newline repro failed, 0/2, with missing expected isolation refusal; all API helpers and assertions remained intact. Finally restored exact source SHA256 f832deaad7e8ccc2815f52bcb678f9f4749a808532f6dc2c00f09e31e33a765d. Actual compiler executable remains the sole verdict/diagnostic authority; the matching API supplies JSON source names only, without diagnostics or emit. Production/test typecheck, lint and zero duplication pass. Broader fresh-consumer provisioning still encounters ETIMEDOUT, including offline probes; cause unproven, no limits or pins weakened. Full npm/Bun release gates are not claimed locally. Main 994112d is merged; remote branch and local committed head agree. Full CI remains pending and will be handed off under the verification wait limit. Test persistence is disabled by project policy; measured receipts remain in comments."
   "2026-10-27T15:22:04.357Z",codex-agent,"Implementation 38bbf29a476909a7ccaf97d34a40b47425ffb380 pushed after main 994112d merge. Final build/docstrings, changelog generation/check, strict tracker health, history-prefix and new-text privacy checks pass; existing provenance advisory unchanged. Source-only API and normal-CPU wrapper controls are green as recorded; no local full suite is claimed. Current code-head CI https://github.com/unbraind/pm-ts-starter/actions/runs/40530175537 is queued: npm run release:check and bun run release:check on Node 22/26 remain required at unchanged thresholds. CodeQL https://github.com/unbraind/pm-ts-starter/actions/runs/40530175414 is pending. Earlier code-head runs remained queued past the verification wait limit; do not prolong polling or treat skipped/pending checks as approval. Final tracker handoff changes no runtime, tests, generated output or dependency graph; its fresh exact-head checks will be linked in the PR body and live checks reference. Leave the item blocked for independent verification, release this agent claim, and keep PR 154 open and unmerged. Final status is implemented with focused verification; full CI and independent review remain open."
-files[31]{path,scope}:
+  "2026-10-27T15:39:57.950Z",codex-agent,"Reopened for the explicit round-12 API redesign. Remote head matches 5433988, worktree is clean and main 994112d is included. Replace compiler-output parsing and nearest-package metadata ownership with structured consumer TypeScript diagnostics and resolver identities. Add nested unnamed SDK metadata, inherited invalid configuration and diagnostic-like filename regressions plus generated layouts and individual revert proofs. Preserve dependency layout, copy/write isolation and public refusal codes. Pinned TypeScript 7 exposes a different native API rather than classic createProgram/resolveModuleName; inspect its available structured resolution contract before selecting support behavior, without substituting another compiler or text parsing."
+  "2026-10-27T16:01:45.963Z",codex-agent,"First API differential suite passes 10/10 on stock TypeScript 5.9.3 and 6.0.3: all six inheritance depth/error-level placements, nine diagnostic-like and unusual filenames, unnamed nested foreign SDK metadata, and 32 generated layouts per compiler. Full diagnostics match an independent direct getParsedCommandLineOfConfigFile/createProgram/getPreEmitDiagnostics oracle; originals remain byte-identical. Retained alias review regression also passes 1/1. Production/test typecheck and lint pass. Removed CLI diagnostic/file-list parsing, nearest-package ownership walking and obsolete CLI writer override policy; compiler APIs never emit, sys.writeFile throws, and no build cache is read through an incremental builder. Native TypeScript 7.0.2 lacks the required resolver API and receives compiler_unavailable with capability guidance, rather than using another compiler or text parsing. Continue with combined generated inheritance/nested SDK layouts, retained regressions and individual behavioral revert proofs."
+  "2026-10-27T16:30:51.099Z",codex-agent,"Retained controls now pass 69/69 across warm/cold caches, real source/configuration/directory/external metadata targets, all file/directory writer shapes, stock 5.9.3/6.0.3 compatibility and typed native API refusal. Reference/dependency/write-boundary selection passes 35/35 including the three review cases. The combined generated PM run passes 10/10: 64 layouts, 128 bound comparisons and 32 foreign-SDK refusals; complete API diagnostics and original snapshots agree. Behavioral reverts were confined to disposable copies: reinstating only the removed diagnostic transport produces the two original isolation refusals for inherited config and header-like filenames, while ordinary diagnostics still pass (1/3); reinstating nearest-package ownership falsely accepts the unnamed nested foreign SDK while ordinary diagnostics still pass (1/2, missing expected rejection). Fixed source was not modified by the proof. Additional retained SDK self-reference/vendored declaration checks use resolver-derived package roots; TypeScript marks valid package self-imports non-external, so root/version identity determines their acceptance. No compiler stdout or nearest-package ownership parser remains."
+  "2026-10-27T17:05:35.768Z",codex-agent,"Final implementation uses an exclusive checker-owned diagnostics.json channel and discards compiler stdout. Fault controls pass for failed/signal/oversized/absent/malformed results, forged stdout and warning-category diagnostics; the real compiler API remains the authority. The final source-only behavioral proof keeps ordinary diagnostics passing while each original finding reappears: diagnostic transport revert 1/3, with inherited TS5023 and header-like filenames wrongly refused; ownership-function revert 1/2, with the foreign SDK wrongly accepted. Fixed implementation was unchanged in the disposable proof; SHA256 434dff167da52c4146288ebbe6391d381af50c6a5833b1396fbb0533d649f804, followed by restored-source review 4/4. Conditional exports without a bare package entry now pass by gathering identities from resolved subpaths before validation. A separate open follow-up pm-ts-starter-native-typescript-api tracks future native resolver capability; current 7.0.2 is explicitly refused rather than substituted or parsed. Full npm release:check is running with private HOME, no global Git config and unchanged coverage/duplication thresholds; Bun follows sequentially. No full-gate pass is claimed yet."
+files[29]{path,scope}:
   .github/workflows/ci.yml,project
   dist/index.d.ts.map,project
   dist/index.js,project
   dist/index.js.map,project
-  dist/sdk-compiler-policy.d.ts,project
-  dist/sdk-compiler-policy.d.ts.map,project
-  dist/sdk-compiler-policy.js,project
-  dist/sdk-compiler-policy.js.map,project
   dist/sdk-contracts.d.ts,project
   dist/sdk-contracts.d.ts.map,project
   dist/sdk-contracts.js,project
@@ -181,13 +183,15 @@ files[31]{path,scope}:
   scripts/coverage-gate.ts,project
   scripts/coverage-json-reporter.ts,project
   scripts/verify-release-changelog-date.ts,project
-  sdk-compiler-policy.ts,project
   sdk-contracts.ts,project
   test/backend.test.ts,project
   test/coverage-gate.test.ts,project
   test/dependency-fixtures.ts,project
   test/dependency-property-worker.ts,project
   test/rehearsal.test.ts,project
+  test/sdk-api-boundary.test.ts,project
+  test/sdk-api-review.test.ts,project
+  test/sdk-api.test.ts,project
   test/sdk-cache.test.ts,project
   test/sdk-compiler-policy.test.ts,project
   test/sdk-contracts.test.ts,project
@@ -195,7 +199,7 @@ files[31]{path,scope}:
   test/sdk-path-transport.test.ts,project
   test/sdk-writer-boundary.test.ts,project
   test/verify-release-changelog-date.test.ts,project
-tests[46]:
+tests[49]:
   - command: node --test --experimental-test-coverage --test-coverage-include=sdk-contracts.ts test/sdk-contracts.test.ts
     scope: project
     timeout_seconds: 3600
@@ -560,6 +564,30 @@ tests[46]:
     provenance:
       author: codex-agent
       created_at: "2026-10-27T15:13:25.081Z"
+      source_kind: local_mutation
+      source_ref: fix/min-sdk-drift-check
+  - command: node --test --test-concurrency=1 --test-reporter=spec test/sdk-api.test.ts
+    scope: project
+    timeout_seconds: 900
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-27T15:51:21.876Z"
+      source_kind: local_mutation
+      source_ref: fix/min-sdk-drift-check
+  - command: node --test --test-concurrency=1 --test-reporter=spec test/sdk-api-review.test.ts
+    scope: project
+    timeout_seconds: 300
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-27T16:32:22.271Z"
+      source_kind: local_mutation
+      source_ref: fix/min-sdk-drift-check
+  - command: node --test --test-concurrency=1 --test-reporter=spec test/sdk-api-boundary.test.ts test/sdk-api-review.test.ts
+    scope: project
+    timeout_seconds: 600
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-27T16:53:45.011Z"
       source_kind: local_mutation
       source_ref: fix/min-sdk-drift-check
 docs[11]{path,scope}:

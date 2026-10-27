@@ -3,11 +3,10 @@ import assert from "node:assert/strict";
 import {spawnSync} from "node:child_process";
 import {cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
-import {fileURLToPath} from "node:url";
-import {join, relative, sep} from "node:path";
+import {dirname, join, relative, sep} from "node:path";
 import test, {after} from "node:test";
 import {checkSdkContracts, type SdkContractMatrix} from "../sdk-contracts.ts";
-import {dependencyBound, filesystemSnapshot, installTestCompiler} from "./dependency-fixtures.ts";
+import {dependencyBound, filesystemSnapshot, installTestCompiler, testCompiler, directApiDiagnostics} from "./dependency-fixtures.ts";
 
 const tools = new Map<string, string>();
 after(() => { for (const root of tools.values()) rmSync(root, {recursive: true, force: true}); });
@@ -24,7 +23,7 @@ function compiler(version: string): string {
 function plain(entry: string, project: string, build: boolean, emit: boolean): {ok: boolean; codes: string[]} {
   const result = spawnSync(process.execPath, [entry, build ? "--build" : "--project", "tsconfig.json", ...emit ? [] : ["--noEmit"], "--pretty", "false"], {cwd: project, encoding: "utf8", timeout: 30000});
   assert.equal(result.error, undefined); assert.equal(result.signal, null);
-  return {ok: result.status === 0, codes: [...result.stdout.matchAll(/error (TS\d+):/g)].map(match => match[1]!)};
+  return {ok: result.status === 0, codes: directApiDiagnostics(project).map(d => d.code)};
 }
 
 /** Give native cache oracles incompatible minimum and compatible current declarations. */
@@ -63,20 +62,12 @@ for (const version of ["5.9.3", "6.0.3"]) for (const mode of ["reference build",
       }
       writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions: options, files: ["reference/index.ts"], ...composite ? {references: [{path: "dependency"}]} : {}}));
     }
-    if (build && !custom) {
-      const refused = spawnSync(process.execPath, [entry, "--build", "--tsBuildInfoFile", join(root, "unsupported-cache")], {cwd: project, encoding: "utf8"});
-      assert.match(refused.stdout, /error TS5094:/, "stock native build mode cannot accept a metadata CLI override");
-    }
     assert.deepEqual(plain(entry, project, build, false), {ok: true, codes: []});
     assert.ok(existsSync(join(project, cache)), "warm build created real compiler state");
     const caches = [cache, "unrelated.tsbuildinfo", "node_modules/cache-fixture/unused.tsbuildinfo", ...composite ? ["dependency/dist/tsconfig.tsbuildinfo"] : []];
     mkdirSync(join(project, "node_modules/cache-fixture"));
     mkdirSync(join(project, "retained.tsbuildinfo")); writeFileSync(join(project, "retained.tsbuildinfo/resource"), "directory input");
     writeFileSync(join(project, caches[1]!), "unused cache"); writeFileSync(join(project, caches[2]!), "dependency cache");
-    writeFileSync(join(project, "node_modules/.bin/package.json"), '{"type":"commonjs"}');
-    writeFileSync(join(project, "node_modules/.bin/tsc"), `const fs=require('node:fs'),cp=require('node:child_process');
-const args=process.argv.slice(2); if(!args.some(a=>['--help','--showConfig','--generateTrace','--version'].includes(a))) fs.appendFileSync('.cache-proof.jsonl',JSON.stringify({args,caches:${JSON.stringify(caches)}.map(p=>fs.existsSync(p))})+'\\n');
-const run=cp.spawnSync(process.execPath,[${JSON.stringify(entry)},...args],{stdio:'inherit'});process.exit(run.status??1);`);
     const cold = join(root, "cold"); cpSync(project, cold, {recursive: true});
     for (const cache of caches) rmSync(join(cold, cache));
     const expected: {ok: boolean; codes: string[]}[] = [];
@@ -87,7 +78,7 @@ const run=cp.spawnSync(process.execPath,[${JSON.stringify(entry)},...args],{stdi
     }
     assert.deepEqual(expected, [{ok: false, codes: ["TS2322"]}, {ok: true, codes: []}]);
     const rows: SdkContractMatrix["rows"][] = [];
-    const controls: {args: string[]; caches: boolean[]}[] = [];
+    const controls: boolean[][] = [];
     for (const consumer of [cold, project]) {
       const before = filesystemSnapshot(consumer), saved = process.env.TMPDIR;
       let scratch = "", bound = 0;
@@ -96,10 +87,9 @@ const run=cp.spawnSync(process.execPath,[${JSON.stringify(entry)},...args],{stdi
         const matrix = await checkSdkContracts({consumer, minimum, current, onProgress(phase) {
           if (phase === "allocated") scratch = join(sandbox, readdirSync(sandbox)[0]!);
           if (phase === "compiled") {
-            const receipts = readFileSync(join(scratch, bound++ === 0 ? "minimum" : "current", ".cache-proof.jsonl"), "utf8").trim().split("\n").map(line => JSON.parse(line) as {args: string[]; caches: boolean[]});
-            assert.equal(receipts.length, 1);
-            controls.push(...receipts);
-            assert.ok(existsSync(join(scratch, bound === 1 ? "minimum" : "current", "retained.tsbuildinfo/resource")), "cache suffix directories are preserved");
+            const copy = join(scratch, bound++ === 0 ? "minimum" : "current");
+            controls.push(caches.map(cache => existsSync(join(copy, cache))));
+            assert.ok(existsSync(join(copy, "retained.tsbuildinfo/resource")), "cache suffix directories are preserved");
           }
         }});
         assert.deepEqual(matrix.rows.map(row => ({ok: row.ok, codes: row.diagnostics.map(diagnostic => diagnostic.code)})), expected);
@@ -109,10 +99,7 @@ const run=cp.spawnSync(process.execPath,[${JSON.stringify(entry)},...args],{stdi
     }
     assert.deepEqual(rows[0], rows[1], "warm and cold consumers produce identical complete bound matrices");
     for (const [index, receipt] of controls.entries()) {
-      assert.deepEqual(receipt.caches, caches.map(() => index >= 2), "cold and warm cache inputs are preserved rather than deleted");
-      if (build) assert.ok(receipt.args.includes("--force"));
-      else if (composite) assert.ok(receipt.args.includes("--tsBuildInfoFile"), "composite project metadata is isolated without changing reference checking");
-      else assert.equal(receipt.args[receipt.args.indexOf("--incremental") + 1], "false");
+      assert.deepEqual(receipt, caches.map(() => index >= 2), "cold and warm cache inputs are preserved rather than deleted");
     }
   });
 }
@@ -121,7 +108,7 @@ for (const version of ["5.9.3", "6.0.3"]) for (const composite of [false, true])
   test(`cache destination preserves ${target}: TypeScript ${version}, ${composite ? "composite" : "ordinary"}`, async t => {
     const root = mkdtempSync(join(tmpdir(), "sdk-cache-input-")), project = join(root, "consumer");
     t.after(() => rmSync(root, {recursive: true, force: true}));
-    const entry = join(compiler(version), "bin/tsc"), {minimum, current} = cacheBounds(root);
+    const {minimum, current} = cacheBounds(root);
     mkdirSync(join(project, "node_modules"), {recursive: true});
     cpSync(current.root, join(project, "node_modules/@unbrained/pm-cli"), {recursive: true});
     symlinkSync(join(compiler(version)), join(project, "node_modules/typescript"), "junction");
@@ -132,17 +119,15 @@ for (const version of ["5.9.3", "6.0.3"]) for (const composite of [false, true])
     const external = join(root, "external-state.cache"); writeFileSync(external, "external input");
     const tsBuildInfoFile = target === "source" ? "consumer.ts" : target === "configuration" ? "tsconfig.json" : target === "directory" ? "cache-directory" : external;
     writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions: {types: [], lib: ["ES5"], module: "NodeNext", ...composite ? {composite: true} : {}, tsBuildInfoFile}, include: ["*.ts"]}));
-    const expected: {ok: boolean; output: string}[] = [];
+    const expected: {ok: boolean; diagnostics: ReturnType<typeof directApiDiagnostics>}[] = [];
     for (const [name, bound] of [["minimum", minimum], ["current", current]] as const) {
       const oracle = join(root, "oracle-" + name); cpSync(project, oracle, {recursive: true});
       rmSync(join(oracle, "node_modules/@unbrained/pm-cli"), {recursive: true}); cpSync(bound.root, join(oracle, "node_modules/@unbrained/pm-cli"), {recursive: true});
-      const args = [entry, "--project", "tsconfig.json", "--noEmit", "--pretty", "false", "--locale", "en", ...composite ? ["--tsBuildInfoFile", join(root, name + ".tsbuildinfo")] : ["--incremental", "false"]];
-      const result = spawnSync(process.execPath, args, {cwd: oracle, encoding: "utf8", timeout: 30000});
-      assert.equal(result.error, undefined); assert.equal(result.signal, null);
-      expected.push({ok: result.status === 0, output: result.stdout.trimEnd()});
+      const diagnostics = directApiDiagnostics(oracle);
+      expected.push({ok: diagnostics.length === 0, diagnostics});
     }
     assert.deepEqual(expected.map(row => row.ok), [false, true]);
-    assert.match(expected[0]!.output, /consumer\.ts\(1,\d+\): error TS2322:/);
+    assert.deepEqual(expected[0]!.diagnostics.map(d => d.code), ["TS2322"]);
     const sandbox = join(root, "sandbox"); mkdirSync(sandbox);
     const before = filesystemSnapshot(project), outside = readFileSync(external);
     const saved = process.env.TMPDIR; let scratch = "", bound = "minimum";
@@ -158,7 +143,7 @@ for (const version of ["5.9.3", "6.0.3"]) for (const composite of [false, true])
           bound = "current";
         }
       }});
-      assert.deepEqual(matrix.rows.map(row => ({ok: row.ok, output: row.diagnostics.map(diagnostic => `${diagnostic.file}(${diagnostic.line},${diagnostic.column}): error ${diagnostic.code}: ${diagnostic.message}`).join("\n")})), expected);
+      assert.deepEqual(matrix.rows.map(row => ({ok: row.ok, diagnostics: row.diagnostics})), expected);
       assert.deepEqual(copies, [inputs.map(input => readFileSync(join(project, input))), inputs.map(input => readFileSync(join(project, input)))], "copied compiler inputs remain byte-identical");
       assert.ok(writerRoots.length > 0, "writer storage is outside the copied project");
       for (const name of writerRoots) assert.equal(relative(join(scratch, "minimum"), join(scratch, name)).split(sep)[0], "..");
@@ -168,10 +153,10 @@ for (const version of ["5.9.3", "6.0.3"]) for (const composite of [false, true])
   });
 }
 
-for (const target of ["source", "configuration", "directory", "cross-project", "imported JSON"]) test(`native build refuses metadata over ${target}`, async t => {
+for (const target of ["source", "configuration", "directory", "cross-project", "imported JSON"]) test(`read-only API preserves reference metadata over ${target}`, async t => {
   const root = mkdtempSync(join(tmpdir(), "sdk-build-input-")), project = join(root, "consumer");
   t.after(() => rmSync(root, {recursive: true, force: true}));
-  const bound = dependencyBound(project), tool = fileURLToPath(new URL("../node_modules/typescript", import.meta.url));
+  const bound = dependencyBound(project), tool = dirname(dirname(testCompiler()));
   symlinkSync(tool, join(project, "node_modules/typescript"), "junction");
   mkdirSync(join(project, "reference")); mkdirSync(join(project, "reference/cache-directory"));
   writeFileSync(join(project, "package.json"), '{"type":"module"}');
@@ -187,6 +172,7 @@ for (const target of ["source", "configuration", "directory", "cross-project", "
   writeFileSync(join(project, "reference/tsconfig.json"), JSON.stringify({compilerOptions: {composite: true, types: [], lib: ["ES5"], module: "NodeNext", resolveJsonModule: true, tsBuildInfoFile}, include: ["*"]}));
   writeFileSync(join(project, "tsconfig.json"), JSON.stringify({files: [], references: [{path: "reference"}, ...target === "cross-project" ? [{path: "other"}] : []]}));
   const before = filesystemSnapshot(project);
-  await assert.rejects(checkSdkContracts({consumer: project, minimum: bound, current: bound}), error => error instanceof Error && "code" in error && error.code === "isolation_refused");
+  const matrix = await checkSdkContracts({consumer: project, minimum: bound, current: bound});
+  for (const row of matrix.rows) assert.equal(row.ok, target === "imported JSON");
   assert.equal(filesystemSnapshot(project), before);
 });

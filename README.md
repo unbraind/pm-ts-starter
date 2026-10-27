@@ -267,78 +267,60 @@ their original bytes, including files excluded by npm pack rules. Only the SDK
 package at the selected bound is replaced in each cloned project. Its canonical
 identity is captured before compilation, preserving internal module-root and SDK
 scope links while still refusing declarations from another SDK root.
-The original tsconfig, in-project extends targets, project references, sources and
-existing build artifacts retain their relative layout and bytes. Compilation runs
-`tsc --project tsconfig.json --noEmit --pretty false --locale en`; reference-only
-solutions use build mode. No config is generated, and no output directory is
-injected or relocated. Source emission is disabled. Project-mode metadata and active profiles use checker-owned storage outside the copied project. Unneutralized build writers must remain confined and cannot overwrite compiler inputs.
-Project mode cannot be combined with `--examples` or `--compiler`. Include the
-project's installed dependencies and compiler in its node_modules before running
-the checker. Neither project nor inline provisioning needs npm or network access.
+The original tsconfig, extends chain, references, sources and existing build artifacts
+retain their relative layout and bytes. Project mode cannot be combined with
+`--examples` or `--compiler`. Include the project's installed dependencies and
+TypeScript JavaScript API in node_modules. Neither mode needs npm or network access.
 Copying never modifies caller files or shares writable hard links with them.
 
-
-See [compiler delegation](docs/sdk-contract-api-compatibility.md) and the
+See [compiler API compatibility](docs/sdk-contract-api-compatibility.md) and the
 [subprocess inventory](docs/sdk-contract-process-inventory.md).
 
 The default inline examples exercise typed authoring composition and certified
 complete tracker reads. Use `--examples docs/examples/sdk-contracts.json` for a
 JSON array of `{id, source}` consumers (1–16 examples, each at most 64 KiB).
-Inline mode creates a strict NodeNext consumer with Node ambient types. It provisions the selected TypeScript artifact inside the copy. Custom compiler
-wrappers and shell shims must resolve their compiled inputs and libraries inside
-the copy too.
-Inline sources are passed through byte for byte. Supply declaration graphs in a
-self-contained consumer project with relative imports; inline imports that resolve
-outside the copy receive a named post-compilation isolation refusal.
-The checker compiles consumer source without executing it.
+Inline mode creates a strict NodeNext consumer with Node ambient types and copies
+the installed compiler artifact selected by `--compiler`. Consumer code is compiled
+without executing it; imports outside the prepared project/dependency layout are refused.
 
-The checker delegates to the consumer's real installed `tsc` executable. Each SDK
-bound runs project typechecking with `--incremental false --noEmit --pretty false --locale en` against
-the unchanged tsconfig. Reference-only solution configurations use `--build
---force --noEmit --pretty false`; ordinary projects retain project compilation so missing
-referenced declarations remain TS6305. TypeScript owns reference handling, fatal
-error short-circuiting, global diagnostics, module resolution and diagnostic order.
-Verdicts and diagnostics come from the executable. Source inspection uses the matching consumer program API only for file names when available; it never collects API diagnostics or creates a language service.
+The checker loads the consumer's own `typescript` JavaScript API in a confined
+child. `getParsedCommandLineOfConfigFile` follows the complete extends chain;
+`createProgram` and `getPreEmitDiagnostics` supply structured diagnostics. The
+original compiler-options object retains TypeScript's configuration metadata.
+Reference-only solutions check their referenced projects without emitting; the
+solution API supplies circular-reference diagnostics. No language service,
+compiler-output parser, formatted diagnostic matcher or diagnostic-phase emulation
+is used. Compiler options pass through without a classification allowlist.
 
-Each row's exit_code is the executable's actual exit status and determines the verdict. Its pretty-false diagnostic
-headers supply line, column, TS code and complete multiline message. File locations are matched against complete JSON source paths, including embedded CR/LF, rather than split from output lines.
-Supplementary trace, list, explain and statistics output is disabled for this channel. Rows retain all diagnostics,
-the full count and up to three sample codes. Disposable project prefixes are
-normalized and external file locations use a marker. Compiler messages are now
-part of the result: the consumer's compiler executable is a trusted input.
-A nonzero exit without recognizable diagnostics is `compiler_unavailable`.
-Every child is bounded to 30 seconds and 8 MiB of output.
+Error-category Diagnostic objects determine the verdict. Each row retains every
+error, its code, file, position and flattened message, plus three sample codes.
+The existing exit_code field is zero for a clean API result and one when errors
+exist. Project prefixes are normalized and external file locations use a marker.
+Results use an exclusive checker-owned JSON file; compiler stdout is discarded. All path transport is JSON; filenames containing diagnostic-like text, CR/LF,
+spaces or quotes remain opaque strings. Each child is bounded to 30 seconds and
+8 MiB of JSON. The compiler module is a trusted executable input.
 
-The consumer's configuration and sources are copied byte for byte. Typecheck and presentation flags disable source emission and keep diagnostic output
-parseable. Every copied source, configuration, cache file and directory is preserved.
-Project mode overrides `tsBuildInfoFile` on the CLI to fresh checker-owned storage
-outside the copied project; configured destinations are never deleted.
-Reference-only builds use `--force`; ordinary projects disable incremental checking.
-Composite project roots retain project mode and receive fresh private metadata,
-because disabling incremental checking causes TS6379 and forcing their referenced
-graph with noEmit causes TS6310. Generated caches never pass to another bound.
-Supported active trace/profile writers also use checker-owned storage outside the copy.
-Stock TypeScript rejects `--tsBuildInfoFile` in build mode (TS5094), so native builds
-retain confined metadata destinations and refuse paths that overwrite resolved compiler
-inputs or project configurations. No config overlay is generated. Unneutralized writers
-must remain confined. If configuration inspection
-fails, ordinary compilation conservatively redirects all supported writers; an
-uninspectable reference build is refused before it can write. Checking options, including
-new options, pass to the real compiler without an option allowlist.
-Reference-only build graphs are inspected before execution and their resolved inputs
-are checked afterward, including cyclic references and child cache destinations.
-Writer capability detection uses the compiler's own help/config output without
-classifying checking options or recreating diagnostics. After compilation, a separate
-resolution-only native invocation writes a fresh JSON trace in checker-owned storage,
-with its textual output discarded directly in the OS. JavaScript compilers expose
-source names through getSourceFiles in a confined child, using fresh showConfig JSON
-and a matching executable/API version. No emit or diagnostic method is called.
-Complete JSON source paths are checked against the private project and installed dependency roots.
-Paths never come from listFiles text or whitespace-delimited output. Both sides
-are canonicalized through realpath using the same function; missing declaration
-paths retain their nearest real ancestor so native TS6305 remains observable.
-Malformed or unrepresentable paths receive a typed refusal naming the escaped path. Unrelated
-external inputs and foreign SDK installations still receive an isolation refusal.
+SDK ownership comes from `resolveModuleName(...).resolvedModule`: packageId,
+isExternalLibraryImport and the canonical resolved file. Installed entry names
+and source imports are resolved by TypeScript, including aliases. Selected SDK
+files must resolve to the verified bound's root and version. Unknown or foreign
+SDK identity receives a named `isolation_refused`; nearest package.json names
+never determine ownership. Both sides of path comparisons use realpath.
+
+Every bound creates a fresh, non-incremental Program. The checker never calls
+emit or an incremental builder and never reads compiler state to skip checking.
+Cache files, configured cache targets and real source inputs are preserved.
+`noEmit` is enabled, trace/profile writers are inactive, and the API host's
+writeFile throws. No configured output path is deleted or rewritten, including
+paths that name source files or linked dependency outputs.
+
+Stock TypeScript 5.9.3 and 6.0.3 are tested without wrapping or filtering their
+compiler options. A consumer must expose createProgram, getPreEmitDiagnostics,
+getParsedCommandLineOfConfigFile and resolveModuleName. API-incompatible versions
+receive `compiler_unavailable` with capability guidance. The repository's pinned
+TypeScript 7.0.2 still builds the package, but its native API does not expose this
+resolver contract; use an installed API-compatible consumer compiler for checking.
+The checker never substitutes a different compiler behind the consumer's back.
 
 Installed aliases retain their directory names. Internal links are rebased into
 the copy. Non-dependency symlinks that leave the consumer root or cannot be resolved
@@ -353,15 +335,13 @@ settings are removed. The copied npmrc retains registry connection settings only
 no installer or lifecycle script executes. Original inputs and linked dependency
 contents remain unchanged, verified by filesystem snapshots.
 
-The differential suite invokes the real executable independently for mutual
-external package links, unbuilt composite references, fatal declaration-only
-options and noLib globals. Unfiltered stock TypeScript 5.9.3, 6.0.3 and the pinned
-7.0.2 each compile a clean minimal consumer and report real type errors; no compiler
-help is filtered. Writer regressions preserve external file and directory targets
-byte for byte. Consumer-config cases retain inherited options, source
-discovery, explicit libraries, aliases, incremental metadata and declaration settings.
-The npm location/execution property and authenticated scoped dependency fixture
-remain, with no registry requests during checking.
+The differential suite compares complete structured diagnostics against an
+independent direct consumer API program. It covers inherited invalid options at
+every level of one-to-three-level extends chains, unnamed nested package metadata,
+linked foreign SDKs, diagnostic-like filenames and generated filesystem layouts.
+Mutual dependency links, unbuilt references, fatal options, global diagnostics,
+warm/cold caches and file/directory writer targets retain dedicated controls.
+Consumer configuration and original filesystem snapshots remain unchanged.
 
 The dependency differential corpus covers 11 installed shapes with passing and
 TS2322 controls: npm and scoped aliases, file copies and links, link dependencies,
@@ -377,7 +357,7 @@ The differential suite covers node16, nodenext and bundler resolution, ESM impor
 and CJS requires, exports types conditions, versioned types conditions and
 typesVersions, at both SDK bounds. npm and Bun consumers install their own exact
 SDKs and compilers and verify resolution at runtime. Each isolated copy also runs
-plain `tsc --noEmit`, comparing all 144 matrix verdicts (84 clean, 60 drift),
+an independent compiler API program, comparing the matrix verdicts and diagnostics,
 including the review's TS2339/TS2305 cases. Another 64 differential rows retain
 all 16 hostile specifiers in consumer and external declarations at both bounds.
 Consumer source and tsconfig bytes must match the originals. The existing eight

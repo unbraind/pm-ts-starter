@@ -1,0 +1,17 @@
+id: pm-ts-starter-native-typescript-api
+title: Enable native TypeScript contract checking when resolver identities are public
+description: "Follow-up to the compiler API redesign in PR 154. Stock TypeScript 7.0.2 exports an unstable native API with structured diagnostics but no resolveModuleName/packageId contract. Its installed dist/api/sync/api.d.ts and dist/api/proto.d.ts expose source metadata without resolved-module identity. The checker currently returns compiler_unavailable for API-incompatible compilers; the repository build pin is unchanged. Add native checking only through compiler-provided resolved package identities, preserving the current 5.9.3/6.0.3 API behavior and without stdout parsing, compiler substitution or package metadata ancestry."
+type: Feature
+status: open
+priority: 3
+tags[4]: api,compatibility,follow-up,typescript
+created_at: "2026-10-27T16:58:37.655Z"
+updated_at: "2026-10-27T16:58:37.655Z"
+author: codex-agent
+acceptance_criteria: Use a public native resolver identity API; clean and incompatible consumers pass direct diagnostic differential tests; retain the typed capability refusal until support exists; preserve all classic API and isolation regressions
+files[2]{path,scope}:
+  sdk-contracts.ts,project
+  test/sdk-writer-boundary.test.ts,project
+docs[1]{path,scope}:
+  docs/sdk-contract-api-compatibility.md,project
+body: ""

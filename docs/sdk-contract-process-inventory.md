@@ -4,19 +4,17 @@
 
 | Boundary | Configuration and environment | Output interpretation |
 | --- | --- | --- |
-| tsc help and config inspection | Consumer executable, argument arrays, private HOME/cache/temp, filtered Node/TS/npm injection. | Help detects writer CLI capabilities; JSON config supplies writer paths and references. Checking options are not classified. |
-| tsc typecheck | Same executable and unchanged config; noEmit, checker-owned writer destinations outside the copied project and pretty-false presentation. Reference-only solutions use forced build. Ordinary projects disable incremental checking; composite roots receive fresh private metadata. | Exit status is the verdict. Pretty-false headers supply file, line, column, TS code and message. No API diagnostics or semantic-phase emulation. |
-| Source API inspection | Matching consumer program API in a confined child, fresh showConfig JSON and executable/API version check; getSourceFiles only, with noEmit, inactive trace/profile/cache writers, suppressed textual logging and a throwing writeFile boundary; no diagnostic or emit method. | JSON file-name strings; malformed paths are refused. |
-| Native tsc resolved-file inspection | Same executable in resolution-only mode after compilation, noEmit and fresh checker-owned metadata/JSON trace destinations; both text streams discarded in the OS; canonical installed package roots tracked with a visited set. | JSON source paths, never line-delimited file-list output, must belong to the copied project or installed linked dependencies; SDK declarations must belong to the selected bound. |
+| Consumer compiler API | Own installed typescript module in a bounded child with private HOME/cache/temp; Node/TS/npm injection removed. Config parsing follows extends, programs are fresh, noEmit is enabled, active trace/profile writers are disabled and writeFile throws. | Structured Diagnostic and resolvedModule objects use an exclusive checker-owned JSON file; stdout is discarded and no compiler text is interpreted. |
 
-Consumer copies preserve exactly their installed names and symlinks; compiler-only
-companion packages are provisioned only for generated inline consumers. External installed package links
-remain read-only inputs rather than recursively copied trees. Mutual links are
-visited once per real path. Writable node_modules/scope containers are detached
-before SDK replacement. Cache files and compiler inputs are preserved. Project metadata uses a CLI override outside the copied project; no project path is deleted. Native builds reject this override (TS5094), so forced builds protect resolved inputs and configurations from metadata writes. Generated metadata never passes between bounds. Escaping non-dependency symlinks receive a typed refusal.
-Trace/profile writers and project metadata use fresh checker-owned paths outside the copy;
-unneutralized destinations are checked through real ancestors and existing children. Each child gets a newly allocated private home. There is no installation, reinstallation, npm-ci,
-package-manager linking, lifecycle-script or diagnostic-API-runner subprocess.
+Installed names and symlinks remain authoritative; only the selected SDK is replaced.
+External installed links remain read-only inputs and canonical dependency roots are
+visited once. Non-dependency links escaping the copy are refused. SDK ownership
+comes from resolver package identities and canonical paths, never metadata ancestry.
+Compiler inputs and caches are preserved. There is no emit, incremental builder,
+installation, reinstallation, package-manager linking or lifecycle-script subprocess.
+The solution builder API is used only to obtain structured reference build order;
+its build/emit methods are never called. Each bound uses independent storage.
+API-incompatible compilers receive compiler_unavailable without a binary fallback.
 
 ## Other shipped runtime and repository tooling
 
@@ -33,23 +31,22 @@ the checker children enumerated above.
 | `scripts/prepare-merge-driver.ts`: installer | Fixed Node runtime plus the resolved repository-pinned pm-ops installer; intended workspace Git configuration changes. | Inherited streams, completion status only. |
 | `scripts/verify-release-changelog-date.ts`: generator and Git enumeration | Trusted repository generator selection and argument arrays; fixed Git ls-files selectors. | A generated Markdown heading and enumerated tracked filenames are read as release evidence; neither stream has SDK diagnostic authority. |
 | `package.json`: production audit launcher | Trusted npm selection, ignore-scripts, explicit null userconfig and filtered allow-scripts setting. Intended repository audit rather than consumer compilation. | Streams inherited, status only. |
-| `package.json` scripts and CI workflow shell commands | Repository-owned npm/Bun/build/lint/changelog/test commands operate on the checked-out package; no consumer project configuration is used as command text. | Gate statuses, build drift and assertion receipts; SDK matrix codes come from the consumer tsc output. |
+| `package.json` scripts and CI workflow shell commands | Repository-owned npm/Bun/build/lint/changelog/test commands operate on the checked-out package; no consumer project configuration is used as command text. | Gate statuses, build drift and assertion receipts; SDK matrix codes come from structured consumer API diagnostics. |
 
 ## Test-only subprocesses
 
-Tests provision exact SDK/compiler packages under npm and Bun, invoke real tsc
-oracles, run isolated PM trackers, and host a synthetic authenticated registry.
-The four review reproductions compare complete parsed diagnostics against tsc.
-Dependency properties use at most two active workers. Test and coverage entrypoints
-serialize files. Test-owned wrappers may write explicit private receipts; they do
-not change consumer configuration or provide an alternative diagnostic engine.
+Tests provision exact public SDK/compiler packages, run independent compiler API
+programs and real cache-warming CLI builds, exercise isolated PM trackers, and host
+a synthetic authenticated registry. Generated dependency properties use at most
+two workers. Diagnostic oracles consume objects rather than rendered headers.
+Test-owned API modules may write explicit private receipts without changing config.
 
 Path-transport audit (authored modules, scripts, tests and emitted starter code):
 
 | Boundary | Lossless representation |
 | --- | --- |
-| Consumer resolved inputs and missing declarations | Matching compiler API JSON names or native JSON trace `createSourceFile` paths; reject malformed paths and canonicalize both isolation operands identically. |
-| Diagnostic file locations | Match complete JSON inventory paths against native headers; messages remain opaque strings. No line splitting of source paths. |
+| Consumer resolved inputs and missing declarations | Compiler program source names and resolvedModule identities serialized as JSON; canonicalize both isolation operands identically. |
+| Diagnostic file locations | Diagnostic.file.fileName and positions from the compiler API, serialized as JSON; no header recognition or line splitting. |
 | Coverage presence | Native test-coverage events serialized by a JSON reporter, canonicalized against the actual required sources. All reported source paths must resolve; unrelated subprocesses do not receive coverage settings. |
 | Tracked release-verifier inputs | `git ls-files -z`, NUL-separated without trimming. |
 | Backend generator and merge-driver launcher | In-memory file maps and argument arrays; no file identities recovered from formatted command output. The launcher retains the pinned pm-ops template. |
@@ -57,4 +54,4 @@ Path-transport audit (authored modules, scripts, tests and emitted starter code)
 | Test receipts | JSON/JSONL strings escape embedded path delimiters before framing. |
 | Remaining newline/whitespace parsers | Source-content audits, INI syntax, release headings, identity records, option/version labels and messages; none supplies filesystem path identity. Path-component splitting uses the platform separator. |
 
-There are no separate generator templates in this package. Build output is regenerated from the audited authored modules. The real compiler remains the verdict/diagnostic authority; compiler APIs supply source paths only, without any semantic diagnostic collector.
+There are no separate generator templates in this package. Build output is regenerated from the audited authored modules. The consumer compiler API supplies diagnostics and resolution identities directly; no textual diagnostic or package-ancestor ownership parser remains.

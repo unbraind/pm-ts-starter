@@ -3,22 +3,17 @@ import assert from "node:assert/strict";
 import {spawnSync} from "node:child_process";
 import {mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
-import {join, relative, resolve} from "node:path";
+import {dirname, join, relative, resolve} from "node:path";
 import test from "node:test";
 import {checkSdkContracts, SdkContractRefusal} from "../sdk-contracts.ts";
-import {dependencyBound, dependencyEntry, filesystemSnapshot} from "./dependency-fixtures.ts";
+import {dependencyBound, dependencyEntry, filesystemSnapshot, testCompiler, directApiDiagnostics} from "./dependency-fixtures.ts";
 
-const compiler = resolve(import.meta.dirname, "../node_modules/typescript/bin/tsc");
+const compiler = testCompiler();
 
-/** Retain complete native output; reconstruct checker records without parsing file paths from text. */
-function oracle(project: string, build = false): {ok: boolean; exit_code: number; codes: string[]; output: string} {
-  const display = ["pretty", "diagnostics", "extendedDiagnostics", "traceResolution", "explainFiles", "listFiles", "listEmittedFiles"].flatMap(flag => [`--${flag}`, String(false)]);
-  const args = [build ? "--build" : "--project", "tsconfig.json", "--noEmit", ...display, ...build ? [] : ["--locale", "en"]];
-  const run = spawnSync(process.execPath, [compiler, ...args], {cwd: project, encoding: "utf8"});
-  assert.equal(run.error, undefined);
-  assert.equal(run.signal, null);
-  assert.ok(run.status !== null);
-  return {ok: run.status === 0, exit_code: run.status, codes: [...run.stdout.matchAll(/error (TS\d+):/g)].map(match => match[1]!), output: run.stdout.replaceAll(project, ".").trimEnd()};
+/** Compare structured consumer API diagnostics rather than rendered compiler headers. */
+function oracle(project: string): {ok: boolean; exit_code: number; codes: string[]; diagnostics: ReturnType<typeof directApiDiagnostics>} {
+  const diagnostics = directApiDiagnostics(project);
+  return {ok: diagnostics.length === 0, exit_code: diagnostics.length ? 1 : 0, codes: diagnostics.map(d => d.code), diagnostics};
 }
 
 for (const shape of ["mutual external symlinks", "unbuilt composite reference", "fatal emitDeclarationOnly", "noLib globals", "multiline type error", "reference-only solution", "reference-only cycle", "missing input", "malformed config", "unicode diagnostic", "missing reference", "uninstalled compiler companion"]) {
@@ -26,7 +21,7 @@ for (const shape of ["mutual external symlinks", "unbuilt composite reference", 
     const root = mkdtempSync(join(tmpdir(), "sdk-delegation-")), project = join(root, "consumer");
     t.after(() => rmSync(root, {recursive: true, force: true}));
     mkdirSync(join(project, "node_modules"), {recursive: true});
-    symlinkSync(resolve(import.meta.dirname, "../node_modules/typescript"), join(project, "node_modules/typescript"), "junction");
+    symlinkSync(dirname(dirname(compiler)), join(project, "node_modules/typescript"), "junction");
     const bound = dependencyBound(project);
     const options: Record<string, unknown> = {types: [], module: "NodeNext", noEmit: true};
     let source = "export const value = 1;";
@@ -60,7 +55,7 @@ for (const shape of ["mutual external symlinks", "unbuilt composite reference", 
     } else if (shape === "uninstalled compiler companion") {
       options.resolveJsonModule = true;
       source = 'import metadata from "@typescript/typescript-linux-x64/package.json" with {type: "json"}; export const name = metadata.name;';
-    } else if (shape === "unicode diagnostic") source = `import ${JSON.stringify("missing\r\u2028module")};`;
+    } else if (shape === "unicode diagnostic") { options.noUncheckedSideEffectImports = true; source = `import ${JSON.stringify("missing\r\u2028module")};`; }
     else options.noLib = true;
     writeFileSync(join(project, "consumer.mts"), source);
     const config = shape === "malformed config" ? "{ invalid" : JSON.stringify({compilerOptions: options, files: (shape.startsWith("reference-only") || shape === "missing reference") ? [] : ["consumer.mts"], references: shape === "missing reference" ? [{path: "missing.json"}] : shape === "unbuilt composite reference" || shape.startsWith("reference-only") ? [{path: "reference"}] : undefined});
@@ -71,18 +66,18 @@ for (const shape of ["mutual external symlinks", "unbuilt composite reference", 
         mkdirSync(join(project, "node_modules/@typescript"));
         symlinkSync(resolve(import.meta.dirname, "../node_modules/@typescript/typescript-linux-x64"), join(project, "node_modules/@typescript/typescript-linux-x64"), "junction");
       }
-      const expected = oracle(project, shape.startsWith("reference-only") || shape === "missing reference"), before = filesystemSnapshot(root);
-      const expectedCodes = shape === "mutual external symlinks" || present ? [] : shape === "unbuilt composite reference" ? ["TS6305"] : shape === "fatal emitDeclarationOnly" ? ["TS5069"] : shape === "multiline type error" ? ["TS2322"] : shape === "uninstalled compiler companion" ? ["TS2307"] : Array<string>(10).fill("TS2318");
+      const expected = oracle(project), before = filesystemSnapshot(root);
+      const expectedCodes = shape === "mutual external symlinks" || present ? [] : shape === "unbuilt composite reference" ? ["TS6305"] : shape === "fatal emitDeclarationOnly" ? ["TS2322", "TS5069"] : shape === "multiline type error" ? ["TS2322"] : shape === "uninstalled compiler companion" ? ["TS2307"] : Array<string>(8).fill("TS2318");
       if (shape === "malformed config" || shape === "missing input" || shape === "unicode diagnostic" || shape === "missing reference") assert.equal(expected.ok, false);
       else if (shape.startsWith("reference-only")) assert.ok(expected.codes.includes(shape === "reference-only cycle" ? "TS6202" : "TS2322"));
       else assert.deepEqual(expected.codes, expectedCodes);
-      if (shape === "multiline type error") assert.match(expected.output, /\n  /);
+      if (shape === "multiline type error") assert.match(expected.diagnostics[0]!.message, /\n  /);
       const matrix = await checkSdkContracts({consumer: project, minimum: bound, current: bound});
       for (const row of matrix.rows) {
         assert.equal(row.ok, expected.ok);
         assert.equal(row.exit_code, expected.exit_code);
         assert.equal(row.diagnostic_count, expected.codes.length);
-        assert.equal(row.diagnostics.map(diagnostic => `${diagnostic.file === "<config>" ? "" : `${diagnostic.file}(${diagnostic.line},${diagnostic.column}): `}error ${diagnostic.code}: ${diagnostic.message}`).join("\n"), expected.output);
+        assert.deepEqual(row.diagnostics, expected.diagnostics);
       }
       assert.equal(readFileSync(join(project, "tsconfig.json"), "utf8"), config);
       assert.equal(filesystemSnapshot(root), before, "compiler reads linked dependencies without modifying original inputs");
@@ -173,7 +168,8 @@ for (const shape of ["modules", "scope", "broken scope", "internal scope", "proc
     const check = shape === "inline linked compiler"
       ? checkSdkContracts({compiler: join(modules, "typescript/bin/tsc"), minimum: bound, current: bound, examples: [{id: "minimal", source: "export const value = 1;"}]})
       : checkSdkContracts({consumer: project, minimum: bound, current: bound});
-    if (["default cache", "directory cache", "outfile cache", "build cache", "dangling cache", "absolute build cache", "dependency build cache", "external cache", "cyclic cache", "external reference", "linked reference", "process home", "config link"].includes(shape)) {
+    if (shape === "bin only") await assert.rejects(check, error => error instanceof SdkContractRefusal && error.code === "compiler_unavailable");
+    else if (["default cache", "directory cache", "outfile cache", "build cache", "dangling cache", "external cache", "cyclic cache", "external reference", "linked reference", "process home", "config link"].includes(shape)) {
       await assert.rejects(check, error => error instanceof SdkContractRefusal && error.code === "isolation_refused");
     } else {
       const matrix = await check;

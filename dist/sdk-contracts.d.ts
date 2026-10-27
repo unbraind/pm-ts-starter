@@ -24,7 +24,7 @@ export interface SdkContractOptions {
     examples?: readonly SdkConsumerExample[];
     /** Self-contained consumer directory, including its own tsconfig and installed TypeScript. */
     consumer?: string;
-    /** Compiler entry for inline examples, including JavaScript wrappers and executable shell shims. */
+    /** Entry inside the installed TypeScript artifact selected for inline examples. */
     compiler?: string;
     /** Optional progress observer, also useful when checking overlapping callers. */
     onProgress?: (phase: SdkContractPhase) => void;
@@ -39,7 +39,7 @@ export interface SdkContractRow {
     example: string;
     /** True only when the consumer compiler reports no errors. */
     ok: boolean;
-    /** Actual tsc exit code, including native builder error statuses. */
+    /** Compiler API status: zero for success, one when error diagnostics exist. */
     exit_code: number;
     /** Full number of diagnostics returned by the compiler. */
     diagnostic_count: number;
@@ -48,7 +48,7 @@ export interface SdkContractRow {
     /** Compiler diagnostics with project-relative locations and original messages. */
     diagnostics: SdkContractDiagnostic[];
 }
-/** One diagnostic parsed from the consumer compiler executable. */
+/** One structured diagnostic returned by the consumer compiler API. */
 export interface SdkContractDiagnostic {
     /** TypeScript diagnostic code. */
     code: string;
