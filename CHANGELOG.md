@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Other
+
+- Make the 2026.10.23 pm toolchain bump pass: refresh SDK-inferred declarations and generated changelog ([pm-ts-starter-tc1023](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-tc1023.toon))
+
 ## 2026.10.25 - 2026-10-25
 
 ### Added
