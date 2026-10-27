@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import {mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
-import {join} from "node:path";
+import {isAbsolute, join, relative, sep} from "node:path";
 import test from "node:test";
 import {compilerWriterArguments, escapingCompilerOutputs, supportedWriterOptions} from "../sdk-compiler-policy.ts";
 
@@ -30,15 +30,26 @@ test("unneutralized writers inspect complete output subtrees and canonical ances
 });
 
 test("writer overrides use fresh private paths and leave unsupported checking options alone", t => {
-  const project = mkdtempSync(join(tmpdir(), "writer-overrides-"));
-  t.after(() => rmSync(project, {recursive: true, force: true}));
+  const root = mkdtempSync(join(tmpdir(), "writer-overrides-"));
+  const project = join(root, "consumer"), output = join(root, "checker-owned");
+  mkdirSync(project); mkdirSync(output);
+  t.after(() => rmSync(root, {recursive: true, force: true}));
+  const caches = new Set<string>();
   const supported = supportedWriterOptions("--generateTrace\n--generateCpuProfile\n--pprofDir\n--tsBuildInfoFile\n--futureOption");
   assert.equal(supported.has("futureOption"), false);
   for (const options of [{generateTrace: "trace", generateCpuProfile: "cpu", pprofDir: "profile", incremental: true}, {composite: true}, {}]) {
-    const result = compilerWriterArguments(supported, options, project, false);
+    const result = compilerWriterArguments(supported, options, output, false);
     assert.deepEqual(escapingCompilerOutputs(options, project, undefined, result.neutralized), []);
-    for (let index = 1; index < result.args.length; index += 2) assert.ok(result.args[index]!.startsWith(project + "/.sdk-output-"));
+    const cache = result.args[result.args.indexOf("--tsBuildInfoFile") + 1]!;
+    assert.ok(result.neutralized.has("tsBuildInfoFile"), "even non-incremental projects override configured cache destinations");
+    assert.ok(!caches.has(cache), "each compilation has independent metadata"); caches.add(cache);
+    for (let index = 1; index < result.args.length; index += 2) {
+      const destination = result.args[index]!;
+      assert.ok(isAbsolute(destination));
+      assert.notEqual(relative(output, destination).split(sep)[0], "..", "writers stay in checker-owned storage");
+      assert.equal(relative(project, destination).split(sep)[0], "..", "writers cannot overwrite copied compiler inputs");
+    }
   }
-  assert.deepEqual(compilerWriterArguments(new Set(), {generateTrace: "trace", incremental: true}, project, false).args, []);
-  assert.deepEqual(compilerWriterArguments(supported, {incremental: true}, project, true).args, []);
+  assert.deepEqual(compilerWriterArguments(new Set(), {generateTrace: "trace", incremental: true}, output, false).args, []);
+  assert.deepEqual(compilerWriterArguments(supported, {incremental: true}, output, true).args, []);
 });
