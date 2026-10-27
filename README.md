@@ -310,31 +310,39 @@ part of the result: the consumer's compiler executable is a trusted input.
 A nonzero exit without recognizable diagnostics is `compiler_unavailable`.
 Every child is bounded to 30 seconds and 8 MiB of output.
 
-The consumer's configuration and sources are copied byte for byte. Only typecheck
-and presentation flags are added; source emission is disabled. Output/cache paths
-must remain confined, and active checking bypasses receive a typed refusal.
+The consumer's configuration and sources are copied byte for byte. Typecheck and presentation flags disable source emission and keep diagnostic output
+parseable. Supported active trace/profile writers and ordinary incremental caches
+are redirected to freshly allocated paths inside the copy. Unneutralized writers,
+including referenced build caches, must remain confined. If configuration inspection
+fails, ordinary compilation conservatively redirects all supported writers; an
+uninspectable reference build is refused before it can write. Checking options, including
+new options, pass to the real compiler without an option allowlist.
 Reference-only build graphs are inspected before execution and their resolved inputs
 are checked afterward, including cyclic references and child cache destinations.
-The existing option policy inspects the compiler's own help/config output without
-recreating diagnostics. After compilation, the compiler's resolved file list is
+Writer capability detection uses the compiler's own help/config output without
+classifying checking options or recreating diagnostics. After compilation, the compiler's resolved file list is
 checked against the private project and installed dependency roots. Unrelated
 external inputs and foreign SDK installations still receive an isolation refusal.
 
 Installed aliases retain their directory names. Internal links are rebased into
-the copy; external installed package links remain links to their original read-only
-inputs. Canonical dependency roots are visited once, so mutual package links do
+the copy. Non-dependency symlinks that leave the consumer root or cannot be resolved
+receive a typed isolation refusal before any compiler runs. External installed package
+links remain links to their original read-only inputs. Canonical dependency roots are visited once, so mutual package links do
 not cause recursive copying or traversal. The selected SDK alone is replaced.
 There is no dependency install, reinstall or package-manager link command.
 
 Every checker subprocess gets private HOME, XDG, cache and temporary directories.
-Inherited npm configuration, Node/TypeScript resolution injection and coverage
+Inherited npm configuration, Node/TypeScript resolution injection, runtime compile caches and coverage
 settings are removed. The copied npmrc retains registry connection settings only;
 no installer or lifecycle script executes. Original inputs and linked dependency
 contents remain unchanged, verified by filesystem snapshots.
 
 The differential suite invokes the real executable independently for mutual
 external package links, unbuilt composite references, fatal declaration-only
-options and noLib globals. Consumer-config cases retain inherited options, source
+options and noLib globals. Unfiltered stock TypeScript 5.9.3, 6.0.3 and the pinned
+7.0.2 each compile a clean minimal consumer and report real type errors; no compiler
+help is filtered. Writer regressions preserve external file and directory targets
+byte for byte. Consumer-config cases retain inherited options, source
 discovery, explicit libraries, aliases, incremental metadata and declaration settings.
 The npm location/execution property and authenticated scoped dependency fixture
 remain, with no registry requests during checking.

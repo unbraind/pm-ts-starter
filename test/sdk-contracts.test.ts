@@ -11,7 +11,6 @@ import {dependencyEntry, dependencyBound, filesystemSnapshot, boundaryRandom} fr
 import { PmClient } from "@unbrained/pm-cli/sdk";
 import { createExtensionTestHarness } from "@unbrained/pm-cli/sdk/testing";
 import extension from "../index.ts";
-import { classifiedCompilerOptions, COMPILER_OPTION_POLICY } from "../sdk-compiler-policy.ts";
 import { checkSdkContracts, parseSdkConsumerExamples, resolveSdkContractCompiler, SDK_CONSUMER_EXAMPLES, SdkContractRefusal, type SdkContractOptions, type SdkContractMatrix } from "../sdk-contracts.ts";
 
 const repo = resolve(import.meta.dirname, "..");
@@ -475,19 +474,13 @@ test("differential hostile specifiers in consumer and external declarations pres
   t.diagnostic(`Hostile differential: ${rows}/${rows} compiler verdicts agree.`);
 });
 
-test("checking bypasses receive a typed refusal and remedy without changing consumer bytes", async t => {
-  const project = installedConsumer("bun", "current");
+test("consumer checking options pass unchanged to the real compiler", async t => {
+  const project = linkedCompilerConsumer(t);
   for (const name of ["skipLibCheck", "skipDefaultLibCheck", "noCheck", "noResolve"]) {
-    consumerConfig(project, "nodenext", "esm");
-    const config = JSON.parse(readFileSync(join(project, "tsconfig.json"), "utf8")) as {compilerOptions: Record<string, unknown>};
-    config.compilerOptions[name] = true;
-    writeFileSync(join(project, "tsconfig.json"), JSON.stringify(config));
-    writeFileSync(join(project, "consumer.mts"), "export const value = 1;");
-    const before = filesystemSnapshot(project);
-    await assert.rejects(checkSdkContracts({minimum: target, current: target, consumer: project}), error => {
-      assert.ok(error instanceof SdkContractRefusal); assert.equal(error.code, "isolation_refused");
-      assert.match(error.remedy, new RegExp(name)); assert.match(error.remedy, /Disable/); return true;
-    });
+    writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions: {types: [], module: "NodeNext", [name]: true}, files: ["consumer.mts"]}));
+    writeFileSync(join(project, "consumer.mts"), "export const value: string = 1;");
+    const plain = plainCopy(project, t), before = filesystemSnapshot(project);
+    assertPlainRows(await checkSdkContracts({minimum: target, current: target, consumer: project}), plain);
     assert.equal(filesystemSnapshot(project), before);
   }
 });
@@ -695,7 +688,7 @@ test("nonexecutable compiler shims receive a typed tooling refusal", async t => 
 test("compiler entries run in place: ESM wrapper, CJS wrapper, lib/tsc.js and bin shim", async t => {
   const root = scratch(t), receipt = join(root, "receipt.jsonl");
   const helper = `const {spawnSync} = require('node:child_process'); const {appendFileSync,existsSync} = require('node:fs');
-for (const key of ['NODE_PATH','NODE_OPTIONS','TS_NODE_PROJECT','TSC_WATCHFILE','TSGO_TEST_SETTING']) if (process.env[key] !== undefined) throw new Error('inherited resolution state');
+for (const key of ['NODE_PATH','NODE_OPTIONS','NODE_COMPILE_CACHE','BUN_RUNTIME_TRANSPILER_CACHE_PATH','TS_NODE_PROJECT','TSC_WATCHFILE','TSGO_TEST_SETTING']) if (process.env[key] !== undefined) throw new Error('inherited resolution state');
 if (process.env.NODE_V8_COVERAGE !== '') throw new Error('inherited coverage output');
 if (existsSync('compiler.cjs')) throw new Error('custom wrapper copied');
 if (!existsSync('node_modules/typescript/bin/tsc')) throw new Error('isolated compiler missing');
@@ -707,7 +700,7 @@ const result = spawnSync(process.execPath,[require('node:path').join(process.cwd
   const shim = join(root, "bin-shim");
   const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'";
   writeFileSync(shim, `#!/bin/sh\nexec ${quote(process.execPath)} "$PWD/node_modules/typescript/bin/tsc" "$@"\n`); chmodSync(shim, 0o755);
-  const keys = ["NODE_PATH", "NODE_OPTIONS", "NODE_V8_COVERAGE", "TS_NODE_PROJECT", "TSC_WATCHFILE", "TSGO_TEST_SETTING"];
+  const keys = ["NODE_PATH", "NODE_OPTIONS", "NODE_V8_COVERAGE", "NODE_COMPILE_CACHE", "BUN_RUNTIME_TRANSPILER_CACHE_PATH", "TS_NODE_PROJECT", "TSC_WATCHFILE", "TSGO_TEST_SETTING"];
   const saved = keys.map(key => process.env[key]);
   try {
     for (const key of keys) process.env[key] = "private-inherited-setting";
@@ -873,39 +866,12 @@ test("hermetic inherited config preserves alias origins and explicit libraries a
 });
 
 
-/** Use the compiler's own complete table as the parameter source for safety controls. */
-function realCompilerPolicy() {
-  const help = spawnSync(process.execPath, [compiler, "--help", "--all", "--locale", "en"], {encoding: "utf8"});
-  assert.equal(help.status, 0, help.stderr);
-  return classifiedCompilerOptions(help.stdout);
-}
-
-for (const [name, row] of realCompilerPolicy()) {
-  if (row.safe !== "confine" && row.safe !== "command") continue;
-  test(`compiler option ${row.category}: ${name}`, async t => {
-    const root = scratch(t), outside = join(root, "outside"), project = installedConsumer("npm", "minimum");
-    mkdirSync(outside); writeFileSync(join(outside, "sentinel"), "unchanged external data");
-    const expected = filesystemSnapshot(root);
-    const config = JSON.stringify({compilerOptions: {target: "ES2022", module: "NodeNext", types: [], incremental: true,
-      declaration: true, sourceMap: true, tsBuildInfoFile: join(outside, "build-info"), [name]: row.safe === "confine" ? join(outside, name) : true}, files: ["policy.mts"]});
-    writeFileSync(join(project, "tsconfig.json"), config);
-    writeFileSync(join(project, "policy.mts"), "export const safe = 1;");
-    try {
-      const matrix = await checkSdkContracts({minimum: target, current: target, consumer: project});
-      assert.equal(matrix.checks, 2);
-    } catch (error) { assert.ok(refuses("isolation_refused")(error)); }
-    assert.equal(filesystemSnapshot(root), expected, `${name}: filesystem snapshot outside sandbox is unchanged`);
-    assert.equal(readFileSync(join(project, "tsconfig.json"), "utf8"), config);
-  });
-}
-
-test("future compiler option refuses before config inspection and help is queried once per compiler", async t => {
+test("new compiler options do not require checker classification", async t => {
   const root = scratch(t), entry = join(root, "compiler.cjs");
   writeFileSync(entry, `const {spawnSync} = require('node:child_process');
-if (!process.argv.includes('--help')) throw new Error('policy must refuse before config inspection');
-const result = spawnSync(process.execPath, [require('node:path').join(process.cwd(),'node_modules/typescript/bin/tsc'), ...process.argv.slice(2)], {encoding:'utf8'});
-process.stdout.write(result.stdout + '\\n--futureUnsafeOption\\ntype: boolean\\n');`);
-  await assert.rejects(checkSdkContracts({minimum: target, current: target, compiler: entry}), refuses("isolation_refused"));
+const result = spawnSync(process.execPath,[require('node:path').join(process.cwd(),'node_modules/typescript/bin/tsc'),...process.argv.slice(2)],{encoding:'utf8'});
+process.stdout.write(result.stdout + (process.argv.includes('--help') ? '\\n--futureCheckingOption\\ntype: boolean\\n' : '')); process.stderr.write(result.stderr); process.exit(result.status ?? 1);`);
+  assert.equal((await checkSdkContracts({minimum: target, current: target, compiler: entry, examples: [SDK_CONSUMER_EXAMPLES[0]!]})).ok, true);
 });
 
 test("compiler config inspection crash and malformed JSON retain typed refusals and cleanup after option discovery", async t => {
@@ -1310,25 +1276,6 @@ const server=createServer((req,res)=>{
 });
 
 
-test("classic compiler binary supplies diagnostics with the original configuration", async t => {
-  const project = scratch(t);
-  const installed = spawnSync("npm", ["install", "--prefix", project, "--ignore-scripts", "--no-audit", "--no-fund", "--no-package-lock", "typescript@6.0.3"], {encoding: "utf8", timeout: 120000, env: installationEnv()});
-  assert.equal(installed.status, 0, installed.stderr);
-  // The fixture wrapper exposes only the already reviewed option surface; production policy stays unchanged.
-  const entry = join(project, "node_modules/typescript/bin/tsc");
-  writeFileSync(join(dirname(entry), "plain-tsc"), readFileSync(entry));
-  writeFileSync(entry, `const {spawnSync}=require('node:child_process');
-const result=spawnSync(process.execPath,[require('node:path').join(__dirname,'plain-tsc'),...process.argv.slice(2)],{encoding:'utf8'});
-const known=new Set(${JSON.stringify([...COMPILER_OPTION_POLICY.keys()])});
-const output=process.argv.includes('--help')?result.stdout.split('\\n').filter(line=>!line.startsWith('--')||known.has(line.slice(2).split(/[,\\s]/)[0])).join('\\n'):result.stdout;
-process.stdout.write(output);process.stderr.write(result.stderr);process.exit(result.status??1);`);
-  writeFileSync(join(project, "consumer.ts"), "export const value: string = 1;");
-  writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions: {types: [], noEmit: true}, files: ["consumer.ts"]}));
-  const matrix = await checkSdkContracts({minimum: target, current: target, consumer: project});
-  assert.ok(matrix.rows.every(row => row.diagnostic_count === 1 && row.codes[0] === "TS2322"));
-});
-
-
 /** Compare the current checker bound to an untouched independent copy, including failing controls. */
 async function dependencyOracle(project: string, bound: SdkContractOptions["current"], t: TestContext): Promise<{ok: boolean; codes: string[]}> {
   const expected = plainCopy(project, t), original = filesystemSnapshot(project);
@@ -1424,19 +1371,25 @@ test("round 10 review alias-fixture resolves by installed name rather than actua
 
 
 test("round 10 internal module and SDK scope links retain canonical selected SDK identity", async t => {
-  for (const shape of ["module-root", "sdk-scope"]) {
+  for (const shape of ["module-root", "sdk-scope", "workspace-self"]) {
     const project = noEmitConsumer(t);
     if (shape === "module-root") {
       renameSync(join(project, "node_modules"), join(project, "installed-modules"));
       symlinkSync(join(project, "installed-modules"), join(project, "node_modules"), "junction");
-    } else {
+    } else if (shape === "sdk-scope") {
       const scope = join(project, "packages/sdk-scope");
       mkdirSync(scope, {recursive:true});
       symlinkSync(scope, join(project, "node_modules/@unbrained"), "junction");
-    }
+    } else symlinkSync(project, join(project, "node_modules/workspace-self"), "junction");
     const bound = dependencyBound(project);
     dependencyEntry(join(project, "node_modules"), "alias-fixture", "actual-fixture");
     writeFileSync(join(project, "consumer.mts"), 'import {value} from "alias-fixture"; import {sdk} from "@unbrained/pm-cli"; export const use: "selected" = value; export {sdk};');
     assert.equal((await dependencyOracle(project, bound, t)).ok, true, shape);
+    if (shape === "workspace-self") {
+      const outside = join(scratch(t), "sentinel"); writeFileSync(outside, "retain external bytes");
+      symlinkSync(outside, join(project, "trace.json"));
+      await assert.rejects(checkSdkContracts({consumer: project, minimum: bound, current: bound}), refuses("isolation_refused"));
+      assert.equal(readFileSync(outside, "utf8"), "retain external bytes", "a self workspace does not exempt consumer output links");
+    }
   }
 });

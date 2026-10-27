@@ -1,20 +1,9 @@
 # Compiler delegation
 
-The checker delegates to the consumer's installed tsc executable. It does not load
-a compiler program API, language service, native API server or RPC transport.
+The consumer's installed `tsc` supplies the verdict, exit status and diagnostics. The checker parses pretty-false headers into file, line, column, code and multiline message, normalizing the private project prefix. It has no compiler program, language service, native API or diagnostic-phase emulation.
 
-Ordinary projects run `tsc --project tsconfig.json --noEmit --pretty false --locale en`
-inside each prepared SDK-bound copy. Reference-only solutions use
-`tsc --build tsconfig.json --noEmit --pretty false`. Project compilation preserves
-TS6305 for unbuilt referenced declarations instead of redirecting imports to source.
+Ordinary projects run `tsc --project tsconfig.json --noEmit --pretty false --locale en`. Reference-only solutions use `tsc --build tsconfig.json --noEmit --pretty false`. TypeScript owns fatal-error ordering, global diagnostics and project references, including TS6305 for missing referenced declarations.
 
-The reported exit_code and parsed diagnostic headers are authoritative.
-Trace/list/statistics presentation is disabled, and multiline messages are retained. TypeScript owns fatal
-option errors, global diagnostics and their order. The checker returns file, line,
-column, code and message; it never reconstructs which compiler phases should run.
-The compiler executable is trusted. Messages come from that executable, with the
-private project prefix normalized.
+Unfiltered stock TypeScript 5.9.3, 6.0.3 and pinned 7.0.2 are tested with clean consumers, type errors and writer/error combinations. The four review reproductions compare complete diagnostics against the real executable. Alias, dependency-graph and unchanged-configuration controls remain.
 
-The four round-11 reproductions are differential tests against the real executable.
-The alias/property and unchanged-configuration regressions remain. The former
-API-compatibility blocker is removed by deleting the alternative diagnostic engine.
+Checking options pass through without classification. Only writer capabilities are queried: supported active writers receive fresh private destinations, including resolved-file probes; unneutralized writes must remain confined. Escaping non-dependency links and uninspectable build graphs are refused. The [README](../README.md) and [process inventory](sdk-contract-process-inventory.md) describe the filesystem and subprocess boundaries.

@@ -1,22 +1,20 @@
 # Subprocess and output boundary inventory
 
-The checker has one compiler execution boundary and no compiler API imports.
-Generated dist repeats the shipped source.
-
 ## Checker runtime
 
 | Boundary | Configuration and environment | Output interpretation |
 | --- | --- | --- |
-| tsc help and config inspection | Consumer executable, argument arrays, private HOME/cache/temp, filtered Node/TS/npm injection. | Help/options and JSON config are used for path/checking guards only. |
-| tsc typecheck | Same executable and unchanged config; noEmit and pretty-false presentation. Reference-only solutions use build. | Exit status is the verdict. Pretty-false headers supply file, line, column, TS code and message. No API diagnostics or semantic-phase emulation. |
-| tsc resolved-file inspection | Same executable after compilation; canonical installed package roots tracked with a visited set. | Resolved inputs must belong to the copied project or installed linked dependencies; SDK declarations must belong to the selected bound. |
+| tsc help and config inspection | Consumer executable, argument arrays, private HOME/cache/temp, filtered Node/TS/npm injection. | Help detects writer CLI capabilities; JSON config supplies writer paths and references. Checking options are not classified. |
+| tsc typecheck | Same executable and unchanged config; noEmit, private writer destinations and pretty-false presentation. Reference-only solutions use build. | Exit status is the verdict. Pretty-false headers supply file, line, column, TS code and message. No API diagnostics or semantic-phase emulation. |
+| tsc resolved-file inspection | Same executable after compilation with noEmit and the same writer redirects; canonical installed package roots tracked with a visited set. | Resolved inputs must belong to the copied project or installed linked dependencies; SDK declarations must belong to the selected bound. |
 
 Consumer copies preserve exactly their installed names and symlinks; compiler-only
 companion packages are provisioned only for generated inline consumers. External installed package links
 remain read-only inputs rather than recursively copied trees. Mutual links are
 visited once per real path. Writable node_modules/scope containers are detached
-before SDK replacement; compiler cache destinations are checked through their real
-ancestors. Each child gets a newly allocated private home. There is no installation, reinstallation, npm-ci,
+before SDK replacement. Escaping non-dependency symlinks receive a typed refusal.
+Trace/profile writers and ordinary incremental metadata use fresh private paths;
+unneutralized destinations are checked through real ancestors and existing children. Each child gets a newly allocated private home. There is no installation, reinstallation, npm-ci,
 package-manager linking, lifecycle-script or API-runner subprocess.
 
 ## Other shipped runtime and repository tooling
