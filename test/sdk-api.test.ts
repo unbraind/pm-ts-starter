@@ -78,7 +78,7 @@ for (const version of ["5.9.3", "6.0.3"]) test(`structured compiler API layouts 
         symlinkSync(foreign, join(project, "node_modules/foreign-sdk"), "junction");
         writeFileSync(join(project, file), 'export {sdk} from "foreign-sdk";');
         const before = filesystemSnapshot(root);
-        await assert.rejects(checkSdkContracts({consumer: project, minimum: bound, current: bound}), error => error instanceof SdkContractRefusal && error.code === "isolation_refused");
+        await assert.rejects(checkSdkContracts({consumer: project, minimum: bound, current: bound}), error => error instanceof SdkContractRefusal && error.code === "unsupported_project_shape");
         assert.equal(filesystemSnapshot(root), before); rmSync(join(project, "node_modules/foreign-sdk"));
       }
       rmSync(join(project, "node_modules", alias));

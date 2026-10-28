@@ -39,13 +39,13 @@ test("API review ordinary diagnostics match the direct program", async t => {
   for (const row of matrix.rows) assert.deepEqual(row.diagnostics, expected);
 });
 
-test("unknown nested local packages are refused without guessing their identity", async t => {
+test("SDK package roots are read from each declaration while ordinary local files stay supported", async t => {
   const {root, project, bound} = apiConsumer(t), directory = join(project, "local package");
   mkdirSync(directory); writeFileSync(join(directory, "package.json"), '{"name":"@unbrained/pm-cli","version":"2.0.0","type":"module"}');
   for (const [declaration, specifier] of [["index.d.ts", "index.js"], ["index.d.mts", "index.mjs"], ["index.d.cts", "index.cjs"]]) {
     writeFileSync(join(directory, declaration!), 'export declare const sdk: "foreign";');
     writeFileSync(join(project, "consumer.ts"), `export {sdk} from "./local package/${specifier}";`);
-    await assertResolvedRefusal(root, project, bound, "unsupported_project_shape", "local package/" + declaration);
+    await assertResolvedRefusal(root, project, bound, "unsupported_project_shape", "local package");
     rmSync(join(directory, declaration!));
   }
   writeFileSync(join(directory, "index.d.ts"), 'export declare const sdk: "foreign";');

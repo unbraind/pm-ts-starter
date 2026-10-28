@@ -4,21 +4,20 @@
 
 | Boundary | Configuration and environment | Output interpretation |
 | --- | --- | --- |
-| Consumer compiler API | Own installed typescript module in a bounded child with private HOME/cache/temp; Node/TS/npm injection removed. Config parsing follows extends, programs are fresh, noEmit is enabled, active trace/profile writers are disabled and writeFile throws. | Structured Diagnostic and resolvedModule objects use an exclusive checker-owned JSON file; stdout is discarded and no compiler text is interpreted. |
+| Consumer compiler API | Own installed typescript module in a 90-second, 8-MiB child with private HOME/cache/temp; Node/TS/npm injection removed. Config parsing follows extends, programs are fresh, noEmit is enabled, active trace/profile writers are disabled and writeFile throws. | Structured Diagnostic and resolvedModule objects use an exclusive checker-owned JSON file; stdout is discarded and no compiler text is interpreted. |
 
 Installed names and symlinks remain authoritative; only the selected SDK is replaced.
 External installed links remain read-only inputs and canonical dependency roots are
-visited once. Non-dependency links escaping the copy are refused. SDK ownership
-comes from resolver package identities and canonical paths, never metadata ancestry.
-The existing copy walk inventories nested local manifest locations without reading
-names. Loaded files crossing an unidentified local package boundary are refused as
-unsupported_project_shape; compiler-identified dependencies remain supported. The inventory never assigns SDK ownership.
+visited once. Non-dependency links escaping the copy are refused. Every loaded
+file uses its own nearest named package metadata; distinct SDK roots are refused
+as unsupported_project_shape / multiple_sdk_copies. The remedy lists relative roots
+and requires deduping to the selected SDK. No local-package inventory or inherited
+outer-package identity is used. Native SDK-specifier resolutions include redirects.
 Compiler inputs and caches are preserved. There is no emit, incremental builder,
 installation, reinstallation, package-manager linking or lifecycle-script subprocess.
 Resolved reference edges are refused before Program creation, naming both configs.
 Check separate roots or flatten references; cached declarations can hide bound drift.
-Import and type-reference identities come from Program resolution caches, preserving
-each usage mode. Each bound uses independent storage. API-incompatible compilers
+SDK-specifier targets come from Program resolution caches, preserving each usage mode. Each bound uses independent storage. API-incompatible compilers
 receive compiler_unavailable or compiler_api_unavailable without a binary fallback.
 
 ## Other shipped runtime and repository tooling

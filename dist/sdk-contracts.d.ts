@@ -82,8 +82,15 @@ export declare class SdkContractRefusal extends Error {
     readonly code: "invalid_input" | "sdk_unavailable" | "compiler_unavailable" | "compiler_api_unavailable" | "unsupported_project_shape" | "isolation_refused";
     /** Safe retry guidance without raw tool output or machine paths. */
     readonly remedy: string;
+    /** Stable explanation for the single-SDK-copy project-shape refusal. */
+    readonly reason: "multiple_sdk_copies" | undefined;
+    /** Canonical SDK declaration roots expressed relative to the prepared consumer. */
+    readonly roots: readonly string[] | undefined;
     /** Construct a typed boundary failure with a safe operator remedy. */
-    constructor(code: SdkContractRefusal["code"], remedy: string);
+    constructor(code: SdkContractRefusal["code"], remedy: string, details?: {
+        reason: "multiple_sdk_copies";
+        roots: string[];
+    });
 }
 /** Public authoring and certified all-status read examples, with checked return semantics. */
 export declare const SDK_CONSUMER_EXAMPLES: readonly SdkConsumerExample[];

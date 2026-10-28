@@ -3,15 +3,17 @@ title: Compile packed contracts against each exact selected SDK bound
 description: "Follow-up to PR 153: packed declarations resolved SDK imports from a current-only consumer installation, leaving the minimum bound untested. Isolate each runtime and bound, verify the installed resolution, and regress a current-only public SDK API."
 type: Issue
 pm_format_version: 2
-status: blocked
+status: in_progress
 priority: 1
 tags[1]: "gh:unbraind/pm-ts-starter#154"
 created_at: "2026-10-24T13:07:42.652Z"
-updated_at: "2026-10-28T16:52:53.514Z"
+updated_at: "2026-10-28T19:32:12.729Z"
+assignee: codex-agent
+claim_principal: codex-agent
 author: codex-agent
 acceptance_criteria: Exact manifest minimum and explicit current SDK resolve inside separate packed npm and Bun consumers; a newer-only public API passes current and fails minimum; reverting only consumer provisioning fails the regression.
 blocked_reason: Final npm/Bun CI release gates and independent review pending
-comments[173]{created_at,author,text}:
+comments[181]{created_at,author,text}:
   "2026-10-24T13:07:46.558Z",codex-agent,"Scope: correct the packed-consumer compatibility gate added by PR 153. Use separate npm and Bun consumer installations per bound, select the minimum from manifest.json and current release 2026.10.24, and prove the actual resolver result from each consumer. Add a real newer-only SDK API use through emitted declarations, retaining the fixed compiler examples and no-git checks. Repository dependency pins remain unchanged; full npm and Bun release gates will run locally and in CI."
   "2026-10-24T13:07:47.361Z",codex-agent,"Implementation: each compiler project maps the selected SDK public type exports through TypeScript paths, including imports reached through absolute external declarations. Unexported SDK subpaths resolve to an empty declaration rather than falling through to a foreign installation. Packed acceptance now installs npm and Bun consumers separately for each exact bound and verifies package metadata and SDK entry resolution at runtime. Regression uses real acquireLockLease, absent in the manifest minimum and present in 2026.10.24. Typecheck, test typecheck, lint, docstring gate and zero-duplication gate passed."
   "2026-10-24T13:07:47.949Z",codex-agent,"Fail-on-revert proof: restored only checkSdkContracts to its origin/main implementation, leaving the new regression and helper intact. node --test --test-name-pattern='absolute declaration imports report newer-only SDK APIs as minimum drift' test/sdk-contracts.test.ts failed 1/1: expected matrix.ok=false, got true, because the minimum inherited acquireLockLease from the external consumer's current SDK. Restored the fixed function immediately. Before revert the complete targeted suite passed 8/8 with 100% sdk-contracts.ts lines, branches and functions. Running the registered targeted suite again after restoration. Local strict tracker health passes after provisioning the same pm-github version as CI; an existing provenance advisory remains untouched."
@@ -185,7 +187,15 @@ comments[173]{created_at,author,text}:
   "2026-10-28T16:38:09.605Z",codex-agent,"Final identity decision: native inspection confirms the typesVersions subpath has resolvedFileName and isExternalLibraryImport but no packageId. The attempted canonical-root fallback was discarded; ownership behavior remains unchanged. The focused refusal now passes for all six node16/nodenext/bundler and ESM/CJS combinations, and the existing package-identity follow-up records the limitation. The retained registered run passed 18/19; its one failure was the obsolete success expectation, now replaced by the passing named refusal. Both reference reviewer fixtures passed again on final behavior. Source/test typecheck, lint, build, 0% duplication and 53/53 documented declarations pass. The old pre-fix acceptance process group was stopped deliberately; its unfinished run is not passing evidence."
   "2026-10-28T16:44:44.518Z",codex-agent,"Round 14 validated artifact: 29 archived files, 79140 bytes, SHA256 35f17f9d931759037b3e58ec3fc37c1fbe94496f40a677115384bd9641ec3d9c. Every archive file matches the validated worktree; adding an ignored shipped file is detected by the inventory seal and restoration matches. No artifact is tracked or published. The reference suite passed 5/5 (48 paired graphs); removing only the refusal produced five failures and one passing ordinary control. Retained controls passed 18/19, with the obsolete typesVersions success expectation replaced by a passing refusal across six resolution-mode/file-kind combinations. Both warm-cache reviewer fixtures and the nested foreign root passed after restoration. Source/test typecheck, lint, build, docstrings, zero duplication, production audit (zero vulnerabilities), release verifiers and changelog checks pass. Additional packed npm/Bun and dependency-corpus validation is still running. Full release evidence will come from fresh Node 22/26 npm and Bun CI at https://github.com/unbraind/pm-ts-starter/pull/154/checks; do not claim complete release gates while pending. Main remains included."
   "2026-10-28T16:52:52.132Z",codex-agent,"Final local acceptance receipt on unchanged implementation 677dc3cb692f0801b4f6a5706571f17ac5379144 (source SHA256 8439fe14d1fff1eeb17402d23aee6129ddda412e0953efac8c556b3b0e854d88): the command linked with packed npm/Bun plus dependency-shape patterns completed 1/2 passing. Dependency corpus passed 12 shapes, 24 untouched native oracles, 44 matching bound comparisons and two explicit unidentified-workspace refusals, including alias-fixture versus actual-fixture. Packed runtime acceptance returned compiler_unavailable from the bounded API worker; the current error does not expose its child exit reason, so no definitive timeout cause or packed pass is claimed. All owned local test processes are finished; the earlier pre-fix process group was stopped and is not passing evidence. CI https://github.com/unbraind/pm-ts-starter/actions/runs/40729183198 is running npm release gates on Node 22/26; both strict tracker health and committed-output checks pass, and Bun gates remain queued. CodeQL https://github.com/unbraind/pm-ts-starter/actions/runs/40729183176 passed. Full npm/Bun, coverage and 200-graph current-head counts remain pending. Complete tracker writes before final verification; this evidence-only push needs fresh exact-head checks at https://github.com/unbraind/pm-ts-starter/pull/154/checks. Preserve the 30-minute waiting cutoff from the implementation push, keep the item blocked and PR unmerged, and hand off any remaining gates without claiming readiness. This agent claim and the package-identity follow-up claim are released; project-reference follow-up remains open."
-files[31]{path,scope}:
+  "2026-10-28T17:26:10.920Z",codex-agent,"Round 15 decision: support one canonical pm SDK root per Program. Inspect declaration ownership through each file own nearest named package metadata, detect vendored/nested/linked/relative copies, and refuse unsupported_project_shape with reason multiple_sdk_copies and a dedupe remedy. Remove inherited resolver identities and relative-package boundary heuristics. Preserve project-reference refusal, exact installed dependency copying, read-only compiler options, structured diagnostics and confinement. Investigate the bounded packed-worker failure rather than claiming the prior local run passed. Main is included; resumed branch matches the remote. This round permits at most 45 minutes of CI waiting."
+  "2026-10-28T17:55:38.419Z",codex-agent,"Single-copy focused suite passed 3/3: vendored-wrapper TS2305 differential reproduction plus 64 dependency-tree variants across stock TypeScript 5.9.3 and 6.0.3. Each one-copy control equals the native API verdict and complete diagnostics; every second SDK root is refused with multiple_sdk_copies, relative root labels and the dedupe remedy. External SDK-copy classification precedes generic file confinement. Removed local manifest-boundary inventory, inherited packageId maps, per-declaration outer identities and type-reference identity heuristics. Native diagnostics, reference refusal and read-only installed layout remain. Typecheck, test typecheck and lint pass; shared assertions extracted to keep duplication at 0%. Packed runtime repro now identifies the earlier failure as a deadline expiry; a disposable instrumented copy is profiling compiler phases without changing the production 30-second budget."
+  "2026-10-28T19:29:06.985Z",codex-agent,"Round 15 design: support one canonical @unbrained/pm-cli root per Program. Each source/resolved SDK target is checked against its own nearest named package metadata (unnamed format metadata is skipped), never the wrapper/importer identity. A second real SDK root or SDK-specifier declaration outside the selected root yields unsupported_project_shape with reason multiple_sdk_copies, structured repo-relative roots and a dedupe remedy, before any result can escape. Deleted inherited package identities, relative-package boundary guesses and their inventory. Single-copy typesVersions and ordinary relative workspace packages now retain native diagnostics rather than identity refusals. Existing project-reference refusal remains unchanged. README and ARCHITECTURE document both refused shapes; the older relative-identity follow-up is superseded in this supported single-SDK domain."
+  "2026-10-28T19:29:15.933Z",codex-agent,"Round 15 focused verification: node --test --test-concurrency=1 test/sdk-single-copy.test.ts test/sdk-api-boundary.test.ts test/sdk-api-review.test.ts passed 12/12, zero skips. Includes the vendored-wrapper TS2305 contrast, 64 paired dependency-tree variants across stock TypeScript 5.9.3 and 6.0.3, random depth 0-3, re-export wrappers, same-version nested aliases, relative imports, symlinks and external copies. Every single-copy matrix matches independent native diagnostics (including TS2322 controls); every extra root gets the typed refusal without partial compilation or input mutation. SDK path aliases outside the selected root are refused too. The restored native/typesVersions/review subset additionally passed 3/3."
+  "2026-10-28T19:29:24.950Z",codex-agent,"Round 15 behavioral revert proof: in a disposable copy, removed only the sdkRoots.size > 1 refusal block. The vendored-wrapper review fixture and both compiler-version property tests fail (3 failures), while the ordinary API diagnostic control passes (1 pass). Working source remains SHA256 8b1f2559694960c06fc507315ff02c3c1a03e8fd54301a4183aa61c057604e8e. A separate function-only inlineConsumer revert restores unintended browser globals and fails the new Node-library regression, with the ordinary control still passing (1 fail, 1 pass). No mutation was made to the reviewed worktree; fixed inline/ordinary controls passed again afterwards."
+  "2026-10-28T19:29:33.568Z",codex-agent,"Round 15 packed-worker repair: the exact packed npm/Bun acceptance command passed 1/1, covering both runtimes and SDK bounds, normal and empty-Git-PATH execution, emitted contracts and CLI plain/JSON output. Keep the real compiler read-only and the 8 MiB JSON ceiling; execute generated plain JavaScript as .cjs and use a tested bounded 90-second worker deadline. Generated inline Node examples explicitly use ES2022 plus Node libraries; supplied consumer configurations remain byte-identical (explicit DOM consumer passes). Reuse independently installed exact-bound runtime fixtures to avoid redundant public installs. Independent test-only API oracles strip inherited injection/coverage/credential variables rather than collecting third-party compiler coverage; production thresholds and source scope are unchanged. A later accidental duplicate packed run selected via --only-last was stopped and is not passing evidence; the completed original 1/1 receipt is authoritative."
+  "2026-10-28T19:29:38.247Z",codex-agent,"Round 15 local static gates pass: source typecheck, test typecheck, lint, build, zero duplication (0/11083 lines across 42 sources), 53/53 declarations documented, production audit (0 vulnerabilities), release publish-attestation and changelog-date verification. One ignored untracked npm artifact has 29 files and 79292 bytes, SHA256 54956fc7c2cc6630087fc6db2bca21751b57bdaadc8a8b2d8d63aa45aeef6958; all archive bytes match validated files, dist inventory equals tracked inventory, and an ignored shipped-file mutation is detected. No artifact is tracked or published. Full npm/Bun release evidence will be fresh PR CI, with at most the owner-authorized 45-minute wait; pending gates will not be counted as passing."
+  "2026-10-28T19:32:12.704Z",codex-agent,"Final retained regression command passed 7/7 with zero skips: both warm-reference reviewer fixtures (TypeScript 5.9.3/6.0.3), nested foreign referenced SDK, newline external SDK, nine unusual diagnostic-location components, and fixed inline Node/explicit DOM plus ordinary diagnostic controls. The exact command is linked. The linked source/test typecheck plus lint command also passed through pm test --run --progress (exit 0). Strict tracker health passes with one unchanged legacy provenance advisory; main-item history verifies and preserves the committed-parent byte prefix. No new upstream CLI/SDK defect was identified; --only-last selects insertion order after command deduplication, so the final static run used --match explicitly."
+files[32]{path,scope}:
   .github/workflows/ci.yml,project
   dist/index.d.ts.map,project
   dist/index.js,project
@@ -215,9 +225,10 @@ files[31]{path,scope}:
   test/sdk-path-transport.test.ts,project
   test/sdk-program-graph.test.ts,project
   test/sdk-reference-refusal.test.ts,project
+  test/sdk-single-copy.test.ts,project
   test/sdk-writer-boundary.test.ts,project
   test/verify-release-changelog-date.test.ts,project
-tests[55]:
+tests[60]:
   - command: node --test --experimental-test-coverage --test-coverage-include=sdk-contracts.ts test/sdk-contracts.test.ts
     scope: project
     timeout_seconds: 3600
@@ -656,6 +667,46 @@ tests[55]:
     provenance:
       author: codex-agent
       created_at: "2026-10-28T16:52:50.772Z"
+      source_kind: local_mutation
+      source_ref: fix/min-sdk-drift-check
+  - command: node --test --test-concurrency=1 test/sdk-single-copy.test.ts
+    scope: project
+    timeout_seconds: 1200
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-28T17:55:26.780Z"
+      source_kind: local_mutation
+      source_ref: fix/min-sdk-drift-check
+  - command: node --test --test-concurrency=1 --test-name-pattern='vendored wrapper review|API review ordinary diagnostics|program checks single-copy typesVersions' test/sdk-single-copy.test.ts test/sdk-api-review.test.ts test/sdk-program-graph.test.ts
+    scope: project
+    timeout_seconds: 900
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-28T18:02:35.635Z"
+      source_kind: local_mutation
+      source_ref: fix/min-sdk-drift-check
+  - command: "node --test --test-concurrency=1 --test-name-pattern='reference refusal:|newline SDK directory|JSON diagnostic locations|generated inline examples|API review ordinary diagnostics' test/sdk-reference-refusal.test.ts test/sdk-path-transport.test.ts test/sdk-api-boundary.test.ts test/sdk-api-review.test.ts"
+    scope: project
+    timeout_seconds: 900
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-28T19:26:03.067Z"
+      source_kind: local_mutation
+      source_ref: fix/min-sdk-drift-check
+  - command: node --test --test-concurrency=1 test/sdk-single-copy.test.ts test/sdk-api-boundary.test.ts test/sdk-api-review.test.ts
+    scope: project
+    timeout_seconds: 1200
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-28T19:26:09.938Z"
+      source_kind: local_mutation
+      source_ref: fix/min-sdk-drift-check
+  - command: node --test --test-concurrency=1 --test-name-pattern='packed npm and Bun consumers' test/sdk-contracts.test.ts
+    scope: project
+    timeout_seconds: 1800
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-28T19:26:16.933Z"
       source_kind: local_mutation
       source_ref: fix/min-sdk-drift-check
 docs[16]{path,scope}:

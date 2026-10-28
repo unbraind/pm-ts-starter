@@ -22,10 +22,11 @@ async function isolationFailure(options: Parameters<typeof checkSdkContracts>[0]
   try { await checkSdkContracts(options); }
   catch (error) {
     assert.ok(error instanceof SdkContractRefusal);
-    assert.equal(error.code, "isolation_refused");
+    assert.equal(error.code, "unsupported_project_shape");
+    assert.equal(error.reason, "multiple_sdk_copies");
     return error;
   }
-  return assert.fail("Expected an isolation_refused result");
+  return assert.fail("Expected a multiple_sdk_copies refusal");
 }
 
 /** An independent direct API program supplies verdicts without parsing compiler output. */
@@ -66,7 +67,7 @@ for (const version of ["shared 5.9.3", "5.9.3", "6.0.3"]) {
       writeFileSync(metadata, JSON.stringify({...JSON.parse(original), name: "@unbrained/pm-cli"}));
       const foreignBefore = filesystemSnapshot(root);
       const refusal = await isolationFailure({consumer: project, minimum, current});
-      assert.ok(refusal.remedy.includes(JSON.stringify(name)), "typed refusal names the complete escaped directory component");
+      assert.ok(refusal.roots?.some(root => root.split("/").includes(name)), "structured refusal roots retain the complete directory component");
       assert.equal(filesystemSnapshot(root), foreignBefore);
       rmSync(join(project, "node_modules/foreign-sdk"));
     }
@@ -80,7 +81,7 @@ test("newline SDK directory review reproduction", async t => {
   const bound = dependencyBound(join(root, "outside\nSDK"));
   writeFileSync(join(project, "consumer.ts"), `export {sdk} from ${JSON.stringify(join(bound.root, "index.js"))};`);
   writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions: {module: "NodeNext", types: [], lib: ["ES5"]}, files: ["consumer.ts"]}));
-  await assert.rejects(checkSdkContracts({consumer: project, minimum: bound, current: bound}), error => error instanceof SdkContractRefusal && error.code === "isolation_refused");
+  await assert.rejects(checkSdkContracts({consumer: project, minimum: bound, current: bound}), error => error instanceof SdkContractRefusal && error.code === "unsupported_project_shape");
 });
 
 test("JSON diagnostic locations retain every unusual path component", async t => {

@@ -10,11 +10,17 @@ export class SdkContractRefusal extends Error {
     code;
     /** Safe retry guidance without raw tool output or machine paths. */
     remedy;
+    /** Stable explanation for the single-SDK-copy project-shape refusal. */
+    reason;
+    /** Canonical SDK declaration roots expressed relative to the prepared consumer. */
+    roots;
     /** Construct a typed boundary failure with a safe operator remedy. */
-    constructor(code, remedy) {
+    constructor(code, remedy, details) {
         super(remedy);
         this.code = code;
         this.remedy = remedy;
+        this.reason = details?.reason;
+        this.roots = details?.roots.slice();
     }
 }
 /** Public authoring and certified all-status read examples, with checked return semantics. */
@@ -65,15 +71,12 @@ function targetRoot(target) {
 /** Copy installed names and bytes without writes to caller files; rebase internal links into the copy. */
 function copyConsumer(source, destination, dependency = false) {
     source = realpathSync(source);
-    const boundaries = [];
     const installed = dependency ? [] : [...dependencyRoots(source)].filter(root => root !== source && inside(source, root));
     cpSync(source, destination, { recursive: true, mode: constants.COPYFILE_FICLONE,
         filter: (file, copied) => {
             if (relative(source, file) === ".git")
                 return false;
             const components = relative(source, file).split(sep);
-            if (!dependency && components.length > 1 && components.at(-1) === "package.json" && !components.includes("node_modules") && !installed.some(root => inside(root, file)) && existsSync(file) && statSync(file).isFile())
-                boundaries.push(dirname(copied));
             if (!lstatSync(file).isSymbolicLink())
                 return true;
             const dependencyPath = dependency || components.includes("node_modules") || installed.some(root => inside(root, file));
@@ -89,7 +92,6 @@ function copyConsumer(source, destination, dependency = false) {
                 symlinkSync(linked, copied);
             return false;
         } });
-    return boundaries;
 }
 /** Detach writable containers while retaining their other entries as read-only installed links. */
 function privateDirectory(project, path) {
@@ -214,7 +216,7 @@ function dependencyRoots(project) {
     return visited;
 }
 /** Run the consumer compiler API in a confined child; JSON is the only result channel. */
-function compileConsumer(project, installed, version, output, boundaries) {
+function compileConsumer(project, installed, version, output) {
     let api;
     try {
         const installedCompiler = realpathSync(join(project, "node_modules/typescript"));
@@ -225,7 +227,7 @@ function compileConsumer(project, installed, version, output, boundaries) {
     catch {
         throw new SdkContractRefusal("compiler_unavailable", "Install the consumer TypeScript JavaScript compiler API before retrying.");
     }
-    const entry = join(output, "compiler.cts"), resultFile = join(output, "diagnostics.json");
+    const entry = join(output, "compiler.cjs"), resultFile = join(output, "diagnostics.json");
     writeFileSync(entry, `const ts=require(${JSON.stringify(api)}),fs=require('node:fs'),path=require('node:path');
 const project=fs.realpathSync(process.argv[2]),installed=fs.realpathSync(process.argv[3]),version=process.argv[4];
 const finish=report=>fs.writeFileSync(process.argv[6],JSON.stringify(report),{flag:'wx'});
@@ -237,35 +239,46 @@ if(!['createProgram','getPreEmitDiagnostics','getParsedCommandLineOfConfigFile']
  /** Find a known canonical ancestor without filesystem reads or metadata inference. */
  const closestRoot=(file,roots)=>{for(let root=path.dirname(file);;root=path.dirname(root)){if(roots.has(root))return root;if(path.dirname(root)===root)return undefined;}};
  const label=file=>inside(project,file)?path.relative(project,file):path.basename(file);
- const refused=file=>{const dependency=closestRoot(file,roots);throw {refusal:'isolation_refused',remedy:'Resolved file '+JSON.stringify(label(file))+(dependency?' (installed dependency '+JSON.stringify(path.basename(dependency))+')':'')+' has unknown or foreign SDK identity; use the selected SDK package.'};};
- const diagnostics=[],roots=new Set(JSON.parse(process.argv[5]).map(canonical)),imports=[],files=[],identities=new Map(),boundaries=JSON.parse(process.argv[7]).map(canonical);
- const compilerRoot=canonical(path.join(project,'node_modules/typescript'));
- const remember=answer=>{if(!answer?.packageId?.subModuleName)return undefined;const file=canonical(answer.resolvedFileName),root=canonical(path.resolve(file,...answer.packageId.subModuleName.split('/').map(()=> '..')));identities.set(root,answer.packageId);return root;};
+ const refused=file=>{throw {refusal:'isolation_refused',remedy:'Resolved file '+JSON.stringify(label(file))+' leaves the prepared project and installed dependencies.'};};
+ const diagnostics=[],roots=new Set(JSON.parse(process.argv[5]).map(canonical)),sdkFiles=new Set(),owners=new Map();
+ /** Cache each file's nearest named package root; unnamed format-only metadata never masks its owner. */
+ function packageOwner(directory){
+  if(owners.has(directory))return owners.get(directory);
+  const metadata=path.join(directory,'package.json');let owner;
+  try{if(fs.statSync(metadata,{throwIfNoEntry:false})?.isFile()){
+   const data=JSON.parse(fs.readFileSync(metadata,'utf8'));
+   if(!data||typeof data!=='object'||Array.isArray(data))throw new Error('Invalid metadata');
+   if(typeof data.name==='string'&&data.name)owner={root:canonical(directory),name:data.name};
+  }}catch{throw {refusal:'isolation_refused',remedy:'Provide readable package metadata at '+JSON.stringify(label(metadata))+'.'};}
+  const parent=path.dirname(directory);owner??=parent===directory?undefined:packageOwner(parent);owners.set(directory,owner);return owner;
+ }
+ const isSdk=name=>name==='@unbrained/pm-cli'||name.startsWith('@unbrained/pm-cli/');
  const record=d=>{if(d.category!==ts.DiagnosticCategory.Error)return;const location=d.file&&d.start!==undefined?d.file.getLineAndCharacterOfPosition(d.start):undefined;
  diagnostics.push({code:'TS'+d.code,file:d.file?(inside(project,canonical(d.file.fileName))?path.relative(project,canonical(d.file.fileName)).split(path.sep).join('/'):'<external>'):'<config>',message:ts.flattenDiagnosticMessageText(d.messageText,'\\n').replaceAll(project,'.'),line:location?location.line+1:0,column:location?location.character+1:0});};
  function collectImports(program,source,file){
-  const accept=(result,name)=>{const answer=result?.resolvedModule;if(!answer)return;imports.push({name,file:canonical(answer.resolvedFileName),source:file,root:remember(answer),answer});};
+  if(Array.isArray(source.imports)&&!source.imports.some(specifier=>isSdk(specifier.text)))return;
+  const accept=(result,name)=>{if(isSdk(name)&&result?.resolvedModule)sdkFiles.add(canonical(result.resolvedModule.resolvedFileName));};
   if(typeof program.forEachResolvedModule==='function'){program.forEachResolvedModule(accept,source);return;}
-  if(Array.isArray(source.imports)&&!source.imports.length)return;
   if(Array.isArray(source.imports)&&typeof program.getResolvedModuleFromModuleSpecifier==='function'){
    for(const specifier of source.imports)accept(program.getResolvedModuleFromModuleSpecifier(specifier,source),specifier.text);
   }else if(Array.isArray(source.imports)&&typeof program.getModeForUsageLocation==='function'&&typeof program.getResolvedModule==='function'){
    for(const specifier of source.imports)accept(program.getResolvedModule(source,specifier.text,program.getModeForUsageLocation(source,specifier)),specifier.text);
   }else throw {refusal:'compiler_api_unavailable',remedy:'Consumer Program must expose usage-mode module resolutions for '+JSON.stringify(label(file))+'.'};
  }
- function verifyOwnership(){
-  for(const imported of imports){
-   if(imported.name==='@unbrained/pm-cli'||imported.name.startsWith('@unbrained/pm-cli/')||imported.answer.packageId?.name==='@unbrained/pm-cli'){
-    if(imported.root!==installed||imported.answer.packageId?.name!=='@unbrained/pm-cli'||imported.answer.packageId.version!==version||typeof imported.answer.isExternalLibraryImport!=='boolean'||(!imported.answer.isExternalLibraryImport&&!inside(installed,imported.source)))refused(imported.file);
-   }
+ /** Every SDK declaration is owned by its own package, including copies vendored inside another dependency. */
+ function verifySdkCopies(program){
+  const sdkRoots=new Set([installed]),files=program.getSourceFiles().map(source=>({source,file:canonical(source.fileName)}));
+  for(const {source,file} of files)collectImports(program,source,file);
+  for(const file of new Set([...files.map(entry=>entry.file),...sdkFiles])){
+   const owner=packageOwner(path.dirname(file));
+   if(owner?.name==='@unbrained/pm-cli')sdkRoots.add(owner.root);
+   else if(sdkFiles.has(file)&&!inside(installed,file))sdkRoots.add(owner?.root??path.dirname(file));
   }
-  for(const source of files){
-   const candidate=closestRoot(source.file,identities),root=source.owner&&candidate&&candidate.length<source.owner.length?undefined:candidate,identity=identities.get(root);
-   if(!identity&&boundaries.some(boundary=>inside(boundary,source.file)))throw {refusal:'unsupported_project_shape',remedy:'Resolved file '+JSON.stringify(label(source.file))+' crosses a nested local package boundary without a Program package identity. Install and import that package by name, or check it separately as its own root.'};
-   if(identity?.name==='@unbrained/pm-cli'&&(root!==installed||identity.version!==version))refused(source.file);
-   if(source.owner===installed&&identity?.name!=='@unbrained/pm-cli')refused(source.file);
-   if(source.owner&&source.owner!==project&&!identity&&!source.library&&!source.json)refused(source.file);
+  if(sdkRoots.size>1){
+   const roots=[...sdkRoots].map(root=>(path.relative(project,root)||'.').split(path.sep).join('/')).sort();
+   throw {refusal:'unsupported_project_shape',reason:'multiple_sdk_copies',roots,remedy:'multiple_sdk_copies: SDK declaration roots '+JSON.stringify(roots)+'. Dedupe to one @unbrained/pm-cli package and resolve SDK imports to the selected root.'};
   }
+  for(const {file} of files)if(!inside(project,file)&&!closestRoot(file,roots))refused(file);
  }
  const checkRoot=config=>{
   if(!inside(project,config)||(fs.existsSync(config)&&!inside(project,canonical(config))))refused(config);
@@ -277,36 +290,21 @@ if(!['createProgram','getPreEmitDiagnostics','getParsedCommandLineOfConfigFile']
   }
   const options=parsed.options;options.noEmit=true;options.generateTrace=undefined;options.generateCpuProfile=undefined;options.pprofDir=undefined;
   const program=ts.createProgram({rootNames:parsed.fileNames,options,configFileParsingDiagnostics:parsed.errors});
-  const packages=new Set(),modulesSeen=new Set();
-  for(const context of [project,...roots]){
-   const modules=path.join(context,'node_modules');if(!fs.existsSync(modules))continue;
-   const container=canonical(modules);if(modulesSeen.has(container))continue;modulesSeen.add(container);
-   const names=fs.readdirSync(modules).flatMap(name=>name.startsWith('@')&&fs.existsSync(path.join(modules,name))?fs.readdirSync(path.join(modules,name)).map(child=>name+'/'+child):[name]);
-   for(const name of names){const location=path.join(modules,name);if(name.startsWith('.')||!fs.existsSync(location)||!fs.statSync(location).isDirectory())continue;
-    packages.add(canonical(location));
-   }
-  }
   ts.getPreEmitDiagnostics(program).forEach(record);
-  program.forEachResolvedTypeReferenceDirective?.(result=>remember(result.resolvedTypeReferenceDirective));
-  program.getAutomaticTypeDirectiveResolutions?.().forEach(result=>remember(result.resolvedTypeReferenceDirective));
-  for(const source of program.getSourceFiles()){
-   const file=canonical(source.fileName),owner=closestRoot(file,packages);
-   files.push({file,owner,library:inside(compilerRoot,file)&&program.isSourceFileDefaultLibrary(source),json:source.scriptKind===ts.ScriptKind.JSON});
-   if(!inside(project,file)&&!closestRoot(file,roots))refused(file);
-   collectImports(program,source,file);
-  }
+  verifySdkCopies(program);
  };
  try{
   checkRoot(path.join(project,'tsconfig.json'));
-  verifyOwnership();
   finish({ok:!diagnostics.length,exit_code:diagnostics.length?1:0,diagnostics});
  }catch(error){if(error.refusal)finish(error);else throw error;}
 }`);
-    const result = spawnSync(process.execPath, [entry, project, installed, version, JSON.stringify([...dependencyRoots(project)]), resultFile, JSON.stringify(boundaries)], {
-        cwd: project, encoding: "utf8", timeout: 30000, maxBuffer: 8 * 1024 * 1024, env: subprocessEnvironment(project), stdio: ["ignore", "ignore", "pipe"],
+    const result = spawnSync(process.execPath, [entry, project, installed, version, JSON.stringify([...dependencyRoots(project)]), resultFile], {
+        cwd: project, encoding: "utf8", timeout: 90000, maxBuffer: 8 * 1024 * 1024, env: subprocessEnvironment(project), stdio: ["ignore", "ignore", "pipe"],
     });
-    if (result.error || result.signal || result.status !== 0 || !existsSync(resultFile) || !lstatSync(resultFile).isFile() || statSync(resultFile).size > 8 * 1024 * 1024)
-        throw new SdkContractRefusal("compiler_unavailable", "Provide the consumer working TypeScript JavaScript API; compilation must finish within 30 seconds and 8 MiB of JSON.");
+    if (result.error || result.signal || result.status !== 0 || !existsSync(resultFile) || !lstatSync(resultFile).isFile() || statSync(resultFile).size > 8 * 1024 * 1024) {
+        const failure = result.error ? result.error.code === "ETIMEDOUT" ? "deadline" : "spawn/buffer" : result.signal ? "signal" : result.status !== 0 ? "exit" : "result channel";
+        throw new SdkContractRefusal("compiler_unavailable", `Compiler API worker failed (${failure}); provide a working consumer API within 90 seconds and 8 MiB of JSON.`);
+    }
     let report;
     try {
         report = JSON.parse(readFileSync(resultFile, "utf8"));
@@ -319,7 +317,11 @@ if(!['createProgram','getPreEmitDiagnostics','getParsedCommandLineOfConfigFile']
     if (report.refusal) {
         if (!["invalid_input", "sdk_unavailable", "compiler_unavailable", "compiler_api_unavailable", "unsupported_project_shape", "isolation_refused"].includes(report.refusal) || typeof report.remedy !== "string")
             isolationRefusal();
-        throw new SdkContractRefusal(report.refusal, report.remedy);
+        if (report.reason !== undefined || report.roots !== undefined) {
+            if (report.refusal !== "unsupported_project_shape" || report.reason !== "multiple_sdk_copies" || !Array.isArray(report.roots) || !report.roots.length || report.roots.some(root => typeof root !== "string" || isAbsolute(root)))
+                isolationRefusal();
+        }
+        throw new SdkContractRefusal(report.refusal, report.remedy, report.reason ? { reason: report.reason, roots: report.roots } : undefined);
     }
     if (typeof report.ok !== "boolean" || !Array.isArray(report.diagnostics) || report.exit_code !== Number(!report.ok))
         isolationRefusal();
@@ -334,7 +336,7 @@ function inlineConsumer(project, compiler) {
     mkdirSync(project, { recursive: true });
     writeFileSync(join(project, "package.json"), JSON.stringify({ type: "module" }));
     writeFileSync(join(project, "tsconfig.json"), JSON.stringify({ compilerOptions: {
-            strict: true, noEmit: true, skipLibCheck: false, target: "ES2022", module: "NodeNext", moduleResolution: "NodeNext", types: ["node"],
+            strict: true, noEmit: true, skipLibCheck: false, target: "ES2022", lib: ["ES2022"], module: "NodeNext", moduleResolution: "NodeNext", types: ["node"],
         }, files: ["consumer.ts"] }));
     const entry = resolve(compiler);
     if (!existsSync(entry) || !statSync(entry).isFile())
@@ -380,7 +382,7 @@ export async function checkSdkContracts(options) {
         for (const target of ["minimum", "current"]) {
             const project = join(scratch, target);
             // Clone the consumer-owned resolution unchanged, then replace only the selected SDK.
-            const boundaries = copyConsumer(template, project);
+            copyConsumer(template, project);
             const installed = join(project, "node_modules", "@unbrained", "pm-cli");
             privateDirectory(project, dirname(installed));
             rmSync(installed, { recursive: true, force: true });
@@ -391,7 +393,7 @@ export async function checkSdkContracts(options) {
             for (const example of examples) {
                 if (options.consumer === undefined)
                     writeFileSync(join(project, "consumer.ts"), example.source);
-                const { ok, exit_code, diagnostics } = compileConsumer(project, installedRoot, targets[target].version, mkdtempSync(join(scratch, "compiler-output-")), boundaries);
+                const { ok, exit_code, diagnostics } = compileConsumer(project, installedRoot, targets[target].version, mkdtempSync(join(scratch, "compiler-output-")));
                 targetRoot({ root: installed, version: targets[target].version });
                 rows.push({ target, sdk: targets[target].version, example: example.id, ok, exit_code, diagnostic_count: diagnostics.length,
                     codes: diagnostics.slice(0, 3).map(diagnostic => diagnostic.code), diagnostics });

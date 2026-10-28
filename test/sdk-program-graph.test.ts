@@ -4,7 +4,7 @@ import {spawnSync} from "node:child_process";
 import {cpSync, mkdirSync, rmSync, symlinkSync, writeFileSync} from "node:fs";
 import {dirname, join} from "node:path";
 import test from "node:test";
-import {checkSdkContracts, SdkContractRefusal} from "../sdk-contracts.ts";
+import {checkSdkContracts} from "../sdk-contracts.ts";
 import {apiConsumer, dependencyBound, directApiDiagnostics, filesystemSnapshot} from "./dependency-fixtures.ts";
 
 /** Check the real binary in an independent writable copy; never parse compiler text. */
@@ -47,7 +47,7 @@ test("program review retains require usage in an mts consumer", async t => {
   await agreesWithBuild(project, bound);
 });
 
-test("program refuses typesVersions resolutions without a compiler package identity", async t => {
+test("program checks single-copy typesVersions resolutions against native diagnostics", async t => {
   const {project, bound} = apiConsumer(t);
   writeFileSync(join(bound.root, "package.json"), JSON.stringify({name: "@unbrained/pm-cli", version: bound.version, types: "index.d.ts", typesVersions: {">=5.9": {"*": ["selected.d.ts"]}}}));
   writeFileSync(join(bound.root, "selected.d.ts"), 'export declare const sdk: "current";');
@@ -56,7 +56,7 @@ test("program refuses typesVersions resolutions without a compiler package ident
     writeFileSync(join(project, file), kind === "mts" ? 'import {sdk} from "@unbrained/pm-cli/sdk"; export const value: "current" = sdk;' : 'import sdk = require("@unbrained/pm-cli/sdk"); export const value: "current" = sdk.sdk;');
     writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions: {types: [], lib: ["ES5"], moduleResolution: resolution, module: resolution === "Bundler" ? "Preserve" : resolution}, files: [file]}));
     assert.deepEqual(directApiDiagnostics(project), []);
-    await assert.rejects(checkSdkContracts({consumer: project, minimum: bound, current: bound}), error => error instanceof SdkContractRefusal && error.code === "isolation_refused" && error.remedy.includes("selected.d.ts"));
+    await agreesWithBuild(project, bound);
   }
 });
 

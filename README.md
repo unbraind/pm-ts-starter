@@ -279,7 +279,7 @@ See [compiler API compatibility](docs/sdk-contract-api-compatibility.md) and the
 The default inline examples exercise typed authoring composition and certified
 complete tracker reads. Use `--examples docs/examples/sdk-contracts.json` for a
 JSON array of `{id, source}` consumers (1–16 examples, each at most 64 KiB).
-Inline mode creates a strict NodeNext consumer with Node ambient types and copies
+Inline mode creates a strict NodeNext consumer with ES2022 libraries and Node ambient types and copies
 the installed compiler artifact selected by `--compiler`. Consumer code is compiled
 without executing it; imports outside the prepared project/dependency layout are refused.
 
@@ -299,22 +299,19 @@ error, its code, file, position and flattened message, plus three sample codes.
 The existing exit_code field is zero for a clean API result and one when errors
 exist. Project prefixes are normalized and external file locations use a marker.
 Results use an exclusive checker-owned JSON file; compiler stdout is discarded. All path transport is JSON; filenames containing diagnostic-like text, CR/LF,
-spaces or quotes remain opaque strings. Each child is bounded to 30 seconds and
+spaces or quotes remain opaque strings. Each child is bounded to 90 seconds and
 8 MiB of JSON. The compiler module is a trusted executable input.
 
-SDK ownership comes from the Program's own cached `resolvedModule` answers: packageId,
-isExternalLibraryImport and the canonical resolved file. Import nodes retain their
-individual usage mode, including require imports in ESM files and explicit
-resolution-mode type imports. No preprocessing or second resolution is performed. Selected SDK
-files must resolve to the verified bound's root and version. Unknown or foreign
-SDK identity receives a named `isolation_refused`; nearest package.json names
-never determine ownership. Both sides of path comparisons use realpath.
-Relative imports across nested local package boundaries can lack a compiler package
-identity. The copy inventories manifest locations without reading package names;
-an actually loaded source in such a package receives `unsupported_project_shape`
-unless the Program identifies the package. Install/import the package by name or
-check it separately as its own root.
-Unused metadata and ordinary local declarations remain supported.
+Each Program supports one canonical SDK root: the selected `@unbrained/pm-cli`.
+Every loaded file is classified through its own nearest named package.json;
+format-only unnamed metadata does not hide its owning package. Canonical realpaths
+merge aliases to the same root. Vendored, nested, relative and symlinked SDK copies
+receive `unsupported_project_shape` with reason `multiple_sdk_copies`, a list of
+repo-relative roots and a remedy to dedupe to one SDK. SDK-specifier targets must
+also belong to the selected root. No importing package can lend its identity to
+another package. Ordinary local packages and single-copy typesVersions resolutions
+use the native compiler verdict. Project references are the other refused shape;
+see [architecture](ARCHITECTURE.md).
 
 Every bound creates a fresh, non-incremental Program. The checker never calls
 emit or an incremental builder and never reads compiler state to skip checking.
@@ -328,8 +325,8 @@ compiler options. A consumer must expose createProgram, getPreEmitDiagnostics,
 getParsedCommandLineOfConfigFile and the Program's usage-mode resolution APIs.
 Missing compiler APIs receive `compiler_unavailable`; missing Program resolution
 capabilities receive `compiler_api_unavailable` naming the source file. The repository's pinned
-TypeScript 7.0.2 still builds the package, but its native API does not expose this
-resolver contract; use an installed API-compatible consumer compiler for checking.
+TypeScript 7.0.2 still builds the package, but its native API does not expose the required
+classic Program API; use an installed API-compatible consumer compiler for checking.
 The checker never substitutes a different compiler behind the consumer's back.
 
 Installed aliases retain their directory names. Internal links are rebased into
@@ -367,8 +364,7 @@ consumer tree. The alias-fixture/actual-fixture review case has a dedicated regr
 
 The differential suite covers node16, nodenext and bundler resolution, ESM imports
 and CJS requires, exports types conditions, versioned types conditions and
-typesVersions, at both SDK bounds. A typesVersions resolution without a native
-packageId is refused as `isolation_refused`; no identity is synthesized. npm and Bun consumers install their own exact
+typesVersions, at both SDK bounds. Single-copy typesVersions resolutions retain their native diagnostics. npm and Bun consumers install their own exact
 SDKs and compilers and verify resolution at runtime. Each isolated copy also runs
 an independent compiler API program, comparing the matrix verdicts and diagnostics,
 including the review's TS2339/TS2305 cases. Another 64 differential rows retain

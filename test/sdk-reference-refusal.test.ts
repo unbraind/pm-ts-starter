@@ -5,19 +5,14 @@ import {cpSync, mkdirSync, readFileSync, rmSync, writeFileSync} from "node:fs";
 import {join} from "node:path";
 import test from "node:test";
 import {checkSdkContracts, SdkContractRefusal} from "../sdk-contracts.ts";
-import {apiConsumer, boundaryRandom, directApiDiagnostics, filesystemSnapshot} from "./dependency-fixtures.ts";
+import {apiConsumer, boundaryRandom, directApiDiagnostics, assertProjectShapeRefusal, assertApiMatrix} from "./dependency-fixtures.ts";
 
 /** Refusals identify both configs, explain the supported alternative and leave inputs untouched. */
 async function refused(project: string, bound: ReturnType<typeof apiConsumer>["bound"], target: string): Promise<void> {
-  const before = filesystemSnapshot(project), phases: string[] = [];
-  await assert.rejects(checkSdkContracts({consumer: project, minimum: bound, current: bound, onProgress: phase => {phases.push(phase);}}), error => {
-    assert.ok(error instanceof SdkContractRefusal); assert.equal(error.code, "unsupported_project_shape");
+  await assertProjectShapeRefusal(project, bound, error => {
     assert.ok(error.remedy.includes('"tsconfig.json"'), error.remedy); assert.ok(error.remedy.includes(JSON.stringify(target)), error.remedy);
     assert.match(error.remedy, /each referenced project separately as its own root, or flatten the references/);
-    return true;
   });
-  assert.ok(!phases.includes("compiled"), "no partial compilation result");
-  assert.equal(filesystemSnapshot(project), before);
 }
 
 /** Warm a real build or force its cold recheck without parsing compiler output. */
@@ -75,11 +70,8 @@ for (const version of ["5.9.3", "6.0.3"]) test(`reference graph refusal property
     const config = {compilerOptions: {types: [], lib: ["ES5"], module: "NodeNext"}, files: ["consumer.ts"]};
     writeFileSync(join(project, "tsconfig.json"), JSON.stringify(config));
     // The no-reference domain retains its previous API verdict and package-boundary refusal.
-    if (foreign) await assert.rejects(checkSdkContracts({consumer: project, minimum: bound, current: bound}), error => error instanceof SdkContractRefusal && error.code === "unsupported_project_shape" && error.remedy.includes("foreign/index.d.ts"));
-    else {
-      const expected = directApiDiagnostics(project), matrix = await checkSdkContracts({consumer: project, minimum: bound, current: bound});
-      for (const row of matrix.rows) {assert.equal(row.ok, !expected.length); assert.deepEqual(row.diagnostics, expected);}
-    }
+    if (foreign) await assert.rejects(checkSdkContracts({consumer: project, minimum: bound, current: bound}), error => error instanceof SdkContractRefusal && error.code === "unsupported_project_shape" && error.reason === "multiple_sdk_copies");
+    else await assertApiMatrix(project, bound, directApiDiagnostics(project));
     const target = foreign ? "foreign" : "p0";
     writeFileSync(join(project, "tsconfig.json"), JSON.stringify({...config, references: [{path: target}]}));
     await refused(project, bound, target + "/tsconfig.json");

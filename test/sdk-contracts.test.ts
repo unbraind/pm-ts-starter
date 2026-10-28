@@ -40,8 +40,8 @@ function publishedSdks(): { root: string; minimum: string; current: string } {
   const root = mkdtempSync(join(tmpdir(), "sdk-published-test-"));
   published = { root, minimum: join(root, "minimum/node_modules/@unbrained/pm-cli"), current: join(root, "current/node_modules/@unbrained/pm-cli") };
   for (const [name, version] of [["minimum", minimumVersion], ["current", currentVersion]]) {
-    const install = spawnSync("npm", ["install", "--prefix", join(root, name!), "--ignore-scripts", "--no-package-lock", "--no-audit", "--no-fund", `@unbrained/pm-cli@${version}`], { encoding: "utf8", timeout: 120000, env: installationEnv() });
-    assert.equal(install.status, 0, install.stderr);
+    const install = spawnSync("npm", ["install", "--prefer-offline", "--prefix", join(root, name!), "--ignore-scripts", "--no-package-lock", "--no-audit", "--no-fund", `@unbrained/pm-cli@${version}`], { encoding: "utf8", timeout: 120000, env: installationEnv() });
+    assert.equal(install.status, 0, install.stderr || install.stdout || install.error?.message || "Package installation failed.");
   }
   return published;
 }
@@ -259,12 +259,12 @@ test("packed npm and Bun consumers resolve each exact SDK bound and compile emit
   const noGit = join(root, "no-git"); mkdirSync(noGit);
   for (const runtime of ["npm", "bun"]) for (const bound of ["minimum", "current"] as const) {
     const version = bound === "minimum" ? minimumVersion : currentVersion;
-    const project = join(root, `${runtime}-${bound}`); mkdirSync(project);
-    writeFileSync(join(project, "package.json"), JSON.stringify({ private: true, type: "module" }));
+    const project = installedConsumer(runtime as "npm" | "bun", bound);
+    t.after(() => { for (const name of ["authoring.ts", "complete-read.ts", "emitted-consumer.ts", "consumer.mjs", "tsconfig.json", "tracker"]) rmSync(join(project, name), {recursive: true, force: true}); });
     const install = spawnSync(runtime, runtime === "npm"
-      ? ["install", "--ignore-scripts", "--no-audit", "--no-fund", "--no-package-lock", tarball, `@unbrained/pm-cli@${version}`, "typescript@5.9.3", "@types/node@26.6.5"]
-      : ["add", "--ignore-scripts", tarball, `@unbrained/pm-cli@${version}`, "typescript@5.9.3", "@types/node@26.6.5"], { cwd: project, encoding: "utf8", timeout: 120000, env: installationEnv() });
-    assert.equal(install.status, 0, install.stderr);
+      ? ["install", "--prefer-offline", "--ignore-scripts", "--no-audit", "--no-fund", "--no-package-lock", tarball]
+      : ["add", "--ignore-scripts", tarball], { cwd: project, encoding: "utf8", timeout: 120000, env: installationEnv() });
+    assert.equal(install.status, 0, install.stderr || install.stdout || install.error?.message || "Package installation failed.");
     const emitted = join(project, "node_modules/pm-ts-starter/dist/index.js").replaceAll("\\", "/");
     const ownMinimum = join(installedConsumer(runtime as "npm" | "bun", "minimum"), "node_modules/@unbrained/pm-cli");
     const ownCurrent = join(installedConsumer(runtime as "npm" | "bun", "current"), "node_modules/@unbrained/pm-cli");
@@ -332,8 +332,8 @@ function installedConsumer(runtime: "npm" | "bun", bound: "minimum" | "current")
   const version = bound === "minimum" ? minimumVersion : currentVersion;
   writeFileSync(join(root, "package.json"), JSON.stringify({ private: true, type: "module" }));
   const packages = [`@unbrained/pm-cli@${version}`, "typescript@5.9.3", "@types/node@26.6.5"];
-  const result = spawnSync(runtime, runtime === "npm" ? ["install", "--ignore-scripts", "--no-audit", "--no-fund", ...packages]
-    : ["add", "--ignore-scripts", ...packages], { cwd: root, encoding: "utf8", timeout: 120000, env: installationEnv() });
+  const result = spawnSync(runtime, runtime === "npm" ? ["install", "--save-exact", "--prefer-offline", "--ignore-scripts", "--no-audit", "--no-fund", ...packages]
+    : ["add", "--exact", "--ignore-scripts", ...packages], { cwd: root, encoding: "utf8", timeout: 120000, env: installationEnv() });
   assert.ifError(result.error);
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const verify = spawnSync(runtime === "npm" ? process.execPath : "bun", ["--input-type=module", "-e", `
@@ -417,7 +417,7 @@ function compareOracle(matrix: SdkContractMatrix, receipt: string, source: strin
 
 test("differential compiler matrix covers node16 nodenext bundler, ESM import CJS require, types types@ typesVersions and both bounds", async t => {
   const root = scratch(t);
-  let rows = 0, drift = 0, refusals = 0;
+  let rows = 0, drift = 0;
   for (const runtime of ["npm", "bun"] as const) {
     // Both installed endpoints are independently verified under this package manager.
     const project = installedConsumer(runtime, "minimum");
@@ -434,14 +434,6 @@ test("differential compiler matrix covers node16 nodenext bundler, ESM import CJ
             : `import sdk = require("@unbrained/pm-cli/sdk"); ${control === "onlyImport" ? 'import {onlyImport} from "@unbrained/pm-cli/sdk";' : ""} export const use = sdk.api.${control};`;
           writeFileSync(join(project, `consumer.${mode === "esm" ? "mts" : "cts"}`), source);
           writeFileSync(receipt, "");
-          if (layout === "typesVersions") {
-            const before = filesystemSnapshot(project);
-            await assert.rejects(checkSdkContracts({minimum, current, consumer: project}), error => error instanceof SdkContractRefusal && error.code === "isolation_refused" && error.remedy.includes("selected.d.ts"));
-            const native = JSON.parse(readFileSync(receipt, "utf8")) as {status: number; codes: string[]; config: string};
-            assert.equal(native.status, control === "common" ? 0 : 1); assert.equal(native.config, config);
-            if (control === "onlyImport") {assert.ok(native.codes.includes("TS2339")); assert.ok(native.codes.includes("TS2305"));}
-            assert.equal(filesystemSnapshot(project), before); refusals++; continue;
-          }
           const matrix = await checkSdkContracts({ minimum, current, consumer: project });
           compareOracle(matrix, receipt, project, config);
           const expected = control === "common" || (layout === "types" && mode === "esm");
@@ -456,8 +448,8 @@ test("differential compiler matrix covers node16 nodenext bundler, ESM import CJ
       }
     }
   }
-  assert.equal(rows, 96); assert.equal(drift, 36); assert.equal(refusals, 24);
-  t.diagnostic(`Differential matrix: ${rows}/${rows} compiler verdicts agree; ${drift} drift, ${rows - drift} clean; ${refusals} missing-identity refusals retain native oracle checks.`);
+  assert.equal(rows, 144); assert.equal(drift, 60);
+  t.diagnostic(`Differential matrix: ${rows}/${rows} compiler verdicts agree; ${drift} drift, ${rows - drift} clean.`);
 });
 
 test("differential hostile specifiers in consumer and external declarations preserve every earlier row at both bounds", async t => {
@@ -690,7 +682,7 @@ test("post-compile isolation refuses resolved external inputs and preserves nati
   writeFileSync(join(project, "consumer.mts"), 'export {api} from "./vendor/alternate-sdk/import.js";');
   await assert.rejects(checkSdkContracts({minimum: target, current: target, consumer: project}), error => {
     assert.ok(error instanceof SdkContractRefusal);
-    assert.match(error.remedy, /vendor\/alternate-sdk\/import\.d\.ts/);
+    assert.match(error.remedy, /vendor\/alternate-sdk/);
     return error.code === "unsupported_project_shape";
   });
 });
@@ -1101,7 +1093,7 @@ const server=createServer((req,res)=>{
   const npmrc = `@fixture:registry=http://127.0.0.1:${port}/\n//127.0.0.1:${port}/:_authToken=synthetic-fixture-token\n`;
   writeFileSync(join(provision, ".npmrc"), npmrc);
   const install = spawnSync("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund", "@fixture/private@1.0.0"], {cwd: provision, encoding: "utf8", timeout: 30000, env: installationEnv()});
-  assert.equal(install.status, 0, install.stderr);
+  assert.equal(install.status, 0, install.stderr || install.stdout || install.error?.message || "Package installation failed.");
   cpSync(join(provision, "node_modules/@fixture"), join(project, "node_modules/@fixture"), {recursive: true});
   writeFileSync(join(project, ".npmrc"), npmrc + "global=true\nprefix=../../tripwire\n");
   const requestBytes = readFileSync(receipt, "utf8");
@@ -1169,19 +1161,13 @@ test("round 10 dependency-shape differential preserves aliases file link workspa
     writeFileSync(join(project, "package-lock.json"), JSON.stringify({name: "fixture", lockfileVersion: 3, packages: {}}));
     for (const valid of [true, false]) {
       writeFileSync(join(project, "consumer.mts"), `import {value} from ${JSON.stringify(installed)}; import {sdk} from "@unbrained/pm-cli"; export const use: ${valid ? '"selected"' : '"wrong"'} = value; export {sdk};`);
-      if (shape === "unidentified-workspace-relative") {
-        const expected = plainCopy(project, t), before = filesystemSnapshot(project);
-        assert.equal(expected.ok, valid);
-        await assert.rejects(checkSdkContracts({consumer: project, minimum: bound, current: bound}), error => error instanceof SdkContractRefusal && error.code === "unsupported_project_shape" && error.remedy.includes("packages/sibling/index.d.ts"));
-        assert.equal(filesystemSnapshot(project), before); continue;
-      }
       const expected = await dependencyOracle(project, bound, t);
       assert.equal(expected.ok, valid, shape);
       if (!valid) assert.deepEqual(expected.codes, ["TS2322"], shape);
       comparisons += 2;
     }
   }
-  t.diagnostic(`Dependency corpus: ${cases.length} installed shapes, 24 untouched plain-tsc oracles, ${comparisons} bound comparisons and two unidentified-workspace refusals; matching verdicts and error codes, including the alias-fixture/actual-fixture review case.`);
+  t.diagnostic(`Dependency corpus: ${cases.length} installed shapes, 24 untouched plain-tsc oracles, ${comparisons} bound comparisons; matching verdicts and error codes, including the alias-fixture/actual-fixture review case.`);
 });
 
 test("round 10 property preserves 200 random alias scoped file dependency graphs by installed import name", async t => {

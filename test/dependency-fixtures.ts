@@ -47,7 +47,7 @@ export function boundaryRandom(seed: number): () => number {
 
 /** Provision an exact unmodified public compiler without lifecycle scripts or user credentials. */
 export function installTestCompiler(directory: string, version: string): void {
-  const result = spawnSync("npm", ["install", "--prefix", directory, "--ignore-scripts", "--no-package-lock", "--no-audit", "--no-fund", `typescript@${version}`], {
+  const result = spawnSync("npm", ["install", "--prefer-offline", "--prefix", directory, "--ignore-scripts", "--no-package-lock", "--no-audit", "--no-fund", `typescript@${version}`], {
     encoding: "utf8", timeout: 120000, env: {...Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toLowerCase() !== "npm_config_allow_scripts")), NPM_CONFIG_USERCONFIG: "/dev/null", npm_config_userconfig: "/dev/null"},
   });
   assert.equal(result.status, 0, result.stderr);
@@ -77,7 +77,9 @@ if(!config){diagnostics.push(...errors);return;}
 diagnostics.push(...ts.getPreEmitDiagnostics(ts.createProgram({rootNames:config.fileNames,options:config.options,projectReferences:config.projectReferences,configFileParsingDiagnostics:config.errors})));}
 check(path.join(root,'tsconfig.json'));
 process.stdout.write(JSON.stringify(diagnostics.filter(d=>d.category===ts.DiagnosticCategory.Error).map(d=>{const pos=d.file&&d.start!==undefined?d.file.getLineAndCharacterOfPosition(d.start):undefined;return {code:'TS'+d.code,file:d.file?location(d.file.fileName):'<config>',message:ts.flattenDiagnosticMessageText(d.messageText,'\\n').replaceAll(root,'.'),line:pos?pos.line+1:0,column:pos?pos.character+1:0};})));`;
-  const run = spawnSync(process.execPath, ["-e", script, project], {encoding: "utf8", timeout: 30000});
+  const run = spawnSync(process.execPath, ["-e", script, project], {encoding: "utf8", timeout: 30000,
+    env: {...Object.fromEntries(Object.entries(process.env).filter(([key]) => !/NODE_OPTIONS|NODE_PATH|NODE_V8_COVERAGE|NODE_COMPILE_CACHE|BUN_RUNTIME_TRANSPILER_CACHE_PATH|TOKEN|SECRET|PASSWORD|CREDENTIAL|NPM_MEDIA_SERVER/i.test(key))), NODE_V8_COVERAGE: ""},
+  });
   assert.equal(run.status, 0, run.stderr);
   return JSON.parse(run.stdout) as SdkContractDiagnostic[];
 }
@@ -114,7 +116,7 @@ export function linkForeignSdk(root: string, project: string, bound: ReturnType<
 
 /** Prove an ordinary compiler accepts the foreign API while bound isolation rejects its identity. */
 export async function assertForeignSdk(root: string, project: string, bound: ReturnType<typeof dependencyBound>): Promise<void> {
-  await assertResolvedRefusal(root, project, bound, "isolation_refused", "index.d.ts");
+  await assertResolvedRefusal(root, project, bound, "unsupported_project_shape", "foreign SDK");
 }
 
 /** Require a clean direct oracle, a named typed refusal and byte-identical original inputs. */
@@ -123,4 +125,21 @@ export async function assertResolvedRefusal(root: string, project: string, bound
   const before = filesystemSnapshot(root);
   await assert.rejects(checkSdkContracts({consumer: project, minimum: bound, current: bound}), error => error instanceof SdkContractRefusal && error.code === code && error.remedy.includes(file));
   assert.equal(filesystemSnapshot(root), before);
+}
+
+/** Assert a project-shape refusal, its detail contract and complete absence of partial rows or input writes. */
+export async function assertProjectShapeRefusal(project: string, bound: SdkContractOptions["current"], details: (error: SdkContractRefusal) => void): Promise<void> {
+  const before = filesystemSnapshot(project), observed: string[] = [];
+  await assert.rejects(checkSdkContracts({consumer: project, minimum: bound, current: bound, onProgress: event => {observed.push(event);}}), failure => {
+    assert.ok(failure instanceof SdkContractRefusal); assert.equal(failure.code, "unsupported_project_shape");
+    details(failure); return true;
+  });
+  assert.ok(!observed.includes("compiled")); assert.equal(filesystemSnapshot(project), before);
+}
+
+/** Compare every bound with an independent API diagnostic list while preserving the original project. */
+export async function assertApiMatrix(project: string, bound: SdkContractOptions["current"], expected: SdkContractDiagnostic[]): Promise<void> {
+  const initial = filesystemSnapshot(project), result = await checkSdkContracts({consumer: project, minimum: bound, current: bound});
+  for (const row of result.rows) {assert.equal(row.ok, expected.length === 0); assert.deepEqual(row.diagnostics, expected);}
+  assert.equal(filesystemSnapshot(project), initial);
 }
