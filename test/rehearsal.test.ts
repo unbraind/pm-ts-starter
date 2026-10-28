@@ -458,6 +458,7 @@ test("installed CLI emits TOON/JSON and typed field refusals with Git absent", a
 async function assertStartupSourceRefusal(t: TestContext, mode: "omitted" | "active"): Promise<void> {
   const { options, host, env, args } = await installedRehearsalFixture(t);
   rmSync(join(host, "schema", "workflows.json"));
+  const callerSchemaBefore = bytes(join(host, "schema"));
   const before = bytes(options.source), sourceIndex = args.indexOf("--source");
   const invocation = mode === "omitted" ? args.filter((_, index) => index !== sourceIndex && index !== sourceIndex + 1) :
     args.map(value => value === options.source ? host : value);
@@ -469,8 +470,8 @@ async function assertStartupSourceRefusal(t: TestContext, mode: "omitted" | "act
   assert.match(error.required, /pm-cli#1568/);
   assert.equal(existsSync(options.workDir), false);
   assert.doesNotMatch(result.stdout + result.stderr, /source_unchanged/);
-  // The pinned host already wrote before the refusal: no extension receipt can certify those earlier bytes.
-  assert.equal(existsSync(join(host, "schema", "workflows.json")), true);
+  // Refused startup preserves caller schema, including deliberately absent files.
+  assert.equal(bytes(join(host, "schema")), callerSchemaBefore);
   assert.equal(bytes(options.source), before);
 }
 
