@@ -3,10 +3,10 @@ import assert from "node:assert/strict";
 import {spawnSync} from "node:child_process";
 import {cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
-import {dirname, join, relative, sep} from "node:path";
+import {join, relative, sep} from "node:path";
 import test, {after} from "node:test";
 import {checkSdkContracts, type SdkContractMatrix} from "../sdk-contracts.ts";
-import {dependencyBound, filesystemSnapshot, installTestCompiler, testCompiler, directApiDiagnostics} from "./dependency-fixtures.ts";
+import {dependencyBound, filesystemSnapshot, installTestCompiler, directApiDiagnostics} from "./dependency-fixtures.ts";
 
 const tools = new Map<string, string>();
 after(() => { for (const root of tools.values()) rmSync(root, {recursive: true, force: true}); });
@@ -20,8 +20,8 @@ function compiler(version: string): string {
   return join(root, "node_modules/typescript");
 }
 /** Invoke the real compiler directly; no checker parsing or synthetic compiler diagnostics. */
-function plain(entry: string, project: string, build: boolean, emit: boolean): {ok: boolean; codes: string[]} {
-  const result = spawnSync(process.execPath, [entry, build ? "--build" : "--project", "tsconfig.json", ...emit ? [] : ["--noEmit"], "--pretty", "false"], {cwd: project, encoding: "utf8", timeout: 30000});
+function plain(entry: string, project: string): {ok: boolean; codes: string[]} {
+  const result = spawnSync(process.execPath, [entry, "--project", "tsconfig.json", "--noEmit", "--pretty", "false"], {cwd: project, encoding: "utf8", timeout: 30000});
   assert.equal(result.error, undefined); assert.equal(result.signal, null);
   return {ok: result.status === 0, codes: directApiDiagnostics(project).map(d => d.code)};
 }
@@ -35,9 +35,9 @@ function cacheBounds(root: string) {
   return {minimum, current};
 }
 
-for (const version of ["5.9.3", "6.0.3"]) for (const mode of ["reference build", "project", "composite project"] as const) for (const custom of [false, true]) {
+for (const version of ["5.9.3", "6.0.3"]) for (const mode of ["project", "composite project"] as const) for (const custom of [false, true]) {
   test(`cache-free TypeScript ${version}: ${mode}, ${custom ? "custom target" : "tsbuildinfo"}`, async t => {
-    const build = mode === "reference build", composite = mode === "composite project";
+    const composite = mode === "composite project";
     const tool = compiler(version), entry = join(tool, "bin/tsc"), root = mkdtempSync(join(tmpdir(), "sdk-warm-cache-"));
     t.after(() => rmSync(root, {recursive: true, force: true}));
     const project = join(root, "warm"), sandbox = join(root, "sandbox"); mkdirSync(sandbox);
@@ -47,24 +47,12 @@ for (const version of ["5.9.3", "6.0.3"]) for (const mode of ["reference build",
     symlinkSync(tool, join(project, "node_modules/typescript"), "junction");
     writeFileSync(join(project, "package.json"), '{"type":"module"}');
     writeFileSync(join(project, "reference/index.ts"), 'import {sdk} from "@unbrained/pm-cli"; export const value: "current" = sdk;');
-    const cache = custom ? "reference/compiler-state.cache" : build ? "reference/dist/tsconfig.tsbuildinfo" : "dist/tsconfig.tsbuildinfo";
-    const options = {types: [], lib: ["ES5"], module: "NodeNext", rootDir: ".", outDir: "dist", ...build || composite ? {composite: true} : {incremental: true}, ...custom ? {tsBuildInfoFile: "reference/compiler-state.cache"} : {}};
-    if (build) {
-      writeFileSync(join(project, "reference/tsconfig.json"), JSON.stringify({compilerOptions: {...options, ...custom ? {tsBuildInfoFile: "compiler-state.cache"} : {}}, files: ["index.ts"]}));
-      writeFileSync(join(project, "tsconfig.json"), JSON.stringify({files: [], references: [{path: "reference"}]}));
-    } else {
-      if (composite) {
-        mkdirSync(join(project, "dependency"));
-        writeFileSync(join(project, "dependency/index.ts"), "export const dependency = 1;");
-        writeFileSync(join(project, "dependency/tsconfig.json"), JSON.stringify({compilerOptions: {composite: true, types: [], lib: ["ES5"], module: "NodeNext", outDir: "dist"}, files: ["index.ts"]}));
-        assert.deepEqual(plain(entry, join(project, "dependency"), true, true), {ok: true, codes: []});
-        writeFileSync(join(project, "reference/index.ts"), 'import {dependency} from "../dependency/index.js"; import {sdk} from "@unbrained/pm-cli"; export const value: "current" = sdk; export {dependency};');
-      }
-      writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions: options, files: ["reference/index.ts"], ...composite ? {references: [{path: "dependency"}]} : {}}));
-    }
-    assert.deepEqual(plain(entry, project, build, false), {ok: true, codes: []});
+    const cache = custom ? "reference/compiler-state.cache" : "dist/tsconfig.tsbuildinfo";
+    const options = {types: [], lib: ["ES5"], module: "NodeNext", rootDir: ".", outDir: "dist", ...composite ? {composite: true} : {incremental: true}, ...custom ? {tsBuildInfoFile: "reference/compiler-state.cache"} : {}};
+    writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions: options, files: ["reference/index.ts"]}));
+    assert.deepEqual(plain(entry, project), {ok: true, codes: []});
     assert.ok(existsSync(join(project, cache)), "warm build created real compiler state");
-    const caches = [cache, "unrelated.tsbuildinfo", "node_modules/cache-fixture/unused.tsbuildinfo", ...composite ? ["dependency/dist/tsconfig.tsbuildinfo"] : []];
+    const caches = [cache, "unrelated.tsbuildinfo", "node_modules/cache-fixture/unused.tsbuildinfo"];
     mkdirSync(join(project, "node_modules/cache-fixture"));
     mkdirSync(join(project, "retained.tsbuildinfo")); writeFileSync(join(project, "retained.tsbuildinfo/resource"), "directory input");
     writeFileSync(join(project, caches[1]!), "unused cache"); writeFileSync(join(project, caches[2]!), "dependency cache");
@@ -74,7 +62,7 @@ for (const version of ["5.9.3", "6.0.3"]) for (const mode of ["reference build",
     for (const [name, bound] of [["minimum", minimum], ["current", current]] as const) {
       const oracle = join(root, "oracle-" + name); cpSync(cold, oracle, {recursive: true});
       rmSync(join(oracle, "node_modules/@unbrained/pm-cli"), {recursive: true}); cpSync(bound.root, join(oracle, "node_modules/@unbrained/pm-cli"), {recursive: true});
-      expected.push(plain(entry, oracle, build, false));
+      expected.push(plain(entry, oracle));
     }
     assert.deepEqual(expected, [{ok: false, codes: ["TS2322"]}, {ok: true, codes: []}]);
     const rows: SdkContractMatrix["rows"][] = [];
@@ -152,27 +140,3 @@ for (const version of ["5.9.3", "6.0.3"]) for (const composite of [false, true])
     assert.deepEqual(readFileSync(external), outside, "external input is never rewritten");
   });
 }
-
-for (const target of ["source", "configuration", "directory", "cross-project", "imported JSON"]) test(`read-only API preserves reference metadata over ${target}`, async t => {
-  const root = mkdtempSync(join(tmpdir(), "sdk-build-input-")), project = join(root, "consumer");
-  t.after(() => rmSync(root, {recursive: true, force: true}));
-  const bound = dependencyBound(project), tool = dirname(dirname(testCompiler()));
-  symlinkSync(tool, join(project, "node_modules/typescript"), "junction");
-  mkdirSync(join(project, "reference")); mkdirSync(join(project, "reference/cache-directory"));
-  writeFileSync(join(project, "package.json"), '{"type":"module"}');
-  writeFileSync(join(project, "reference/consumer.ts"), 'export const value: string = 1;');
-  writeFileSync(join(project, "reference/another.ts"), "export const valid = 1;");
-  writeFileSync(join(project, "reference/input.json"), '{"value":1}');
-  if (target === "imported JSON") writeFileSync(join(project, "reference/consumer.ts"), 'import value from "./input.json" with {type:"json"}; export {value};');
-  if (target === "cross-project") {
-    mkdirSync(join(project, "other")); writeFileSync(join(project, "other/consumer.ts"), "export const other = 1;");
-    writeFileSync(join(project, "other/tsconfig.json"), JSON.stringify({compilerOptions: {composite: true, types: [], lib: ["ES5"]}, files: ["consumer.ts"]}));
-  }
-  const tsBuildInfoFile = target === "source" ? "consumer.ts" : target === "configuration" ? "tsconfig.json" : target === "directory" ? "cache-directory" : target === "imported JSON" ? "input.json" : "../other/consumer.ts";
-  writeFileSync(join(project, "reference/tsconfig.json"), JSON.stringify({compilerOptions: {composite: true, types: [], lib: ["ES5"], module: "NodeNext", resolveJsonModule: true, tsBuildInfoFile}, include: ["*"]}));
-  writeFileSync(join(project, "tsconfig.json"), JSON.stringify({files: [], references: [{path: "reference"}, ...target === "cross-project" ? [{path: "other"}] : []]}));
-  const before = filesystemSnapshot(project);
-  const matrix = await checkSdkContracts({consumer: project, minimum: bound, current: bound});
-  for (const row of matrix.rows) assert.equal(row.ok, target === "imported JSON");
-  assert.equal(filesystemSnapshot(project), before);
-});

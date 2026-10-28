@@ -283,7 +283,7 @@ if(!['createProgram','getPreEmitDiagnostics','getParsedCommandLineOfConfigFile']
  const closestRoot=(file,roots)=>{for(let root=path.dirname(file);;root=path.dirname(root)){if(roots.has(root))return root;if(path.dirname(root)===root)return undefined;}};
  const label=file=>inside(project,file)?path.relative(project,file):path.basename(file);
  const refused=file=>{const dependency=closestRoot(file,roots);throw {refusal:'isolation_refused',remedy:'Resolved file '+JSON.stringify(label(file))+(dependency?' (installed dependency '+JSON.stringify(path.basename(dependency))+')':'')+' has unknown or foreign SDK identity; use the selected SDK package.'};};
- const diagnostics=[],roots=new Set(JSON.parse(process.argv[5]).map(canonical)),imports=[],files=[],identities=new Map(),projects=new Set(),boundaries=JSON.parse(process.argv[7]).map(canonical);
+ const diagnostics=[],roots=new Set(JSON.parse(process.argv[5]).map(canonical)),imports=[],files=[],identities=new Map(),boundaries=JSON.parse(process.argv[7]).map(canonical);
  const compilerRoot=canonical(path.join(project,'node_modules/typescript'));
  const remember=answer=>{if(!answer?.packageId?.subModuleName)return undefined;const file=canonical(answer.resolvedFileName),root=canonical(path.resolve(file,...answer.packageId.subModuleName.split('/').map(()=> '..')));identities.set(root,answer.packageId);return root;};
  const record=d=>{if(d.category!==ts.DiagnosticCategory.Error)return;const location=d.file&&d.start!==undefined?d.file.getLineAndCharacterOfPosition(d.start):undefined;
@@ -306,19 +306,22 @@ if(!['createProgram','getPreEmitDiagnostics','getParsedCommandLineOfConfigFile']
   }
   for(const source of files){
    const candidate=closestRoot(source.file,identities),root=source.owner&&candidate&&candidate.length<source.owner.length?undefined:candidate,identity=identities.get(root);
-   if(!identity&&boundaries.some(boundary=>inside(boundary,source.file)&&!projects.has(boundary)))throw {refusal:'unsupported_project_shape',remedy:'Resolved file '+JSON.stringify(label(source.file))+' crosses a nested local package boundary without a Program package identity. Install and import that package by name, or give it a referenced project config.'};
+   if(!identity&&boundaries.some(boundary=>inside(boundary,source.file)))throw {refusal:'unsupported_project_shape',remedy:'Resolved file '+JSON.stringify(label(source.file))+' crosses a nested local package boundary without a Program package identity. Install and import that package by name, or check it separately as its own root.'};
    if(identity?.name==='@unbrained/pm-cli'&&(root!==installed||identity.version!==version))refused(source.file);
    if(source.owner===installed&&identity?.name!=='@unbrained/pm-cli')refused(source.file);
    if(source.owner&&source.owner!==project&&!identity&&!source.library&&!source.json)refused(source.file);
   }
  }
- const visit=config=>{
+ const checkRoot=config=>{
   if(!inside(project,config)||(fs.existsSync(config)&&!inside(project,canonical(config))))refused(config);
-  const directory=path.dirname(config);projects.add(fs.existsSync(directory)?canonical(directory):directory);
   const fatal=[],parsed=ts.getParsedCommandLineOfConfigFile(config,{noEmit:true},{...ts.sys,onUnRecoverableConfigFileDiagnostic:d=>fatal.push(d)});
   if(!parsed){fatal.forEach(record);return;}
+  if(parsed.projectReferences?.length){
+   const reference=ts.resolveProjectReferencePath(parsed.projectReferences[0]);
+   throw {refusal:'unsupported_project_shape',remedy:'Project references are unsupported: '+JSON.stringify(path.relative(project,config))+' references '+JSON.stringify(path.relative(project,reference))+'. Check each referenced project separately as its own root, or flatten the references; referenced declarations must be regenerated for each SDK bound.'};
+  }
   const options=parsed.options;options.noEmit=true;options.generateTrace=undefined;options.generateCpuProfile=undefined;options.pprofDir=undefined;
-  const program=ts.createProgram({rootNames:parsed.fileNames,options,projectReferences:parsed.projectReferences,configFileParsingDiagnostics:parsed.errors});
+  const program=ts.createProgram({rootNames:parsed.fileNames,options,configFileParsingDiagnostics:parsed.errors});
   const packages=new Set(),modulesSeen=new Set();
   for(const context of [project,...roots]){
    const modules=path.join(context,'node_modules');if(!fs.existsSync(modules))continue;
@@ -338,13 +341,8 @@ if(!['createProgram','getPreEmitDiagnostics','getParsedCommandLineOfConfigFile']
    collectImports(program,source,file);
   }
  };
- function visitProjects(config){
-  const order=ts.createSolutionBuilder(ts.createSolutionBuilderHost(ts.sys),[config],{force:true,noEmit:true}).getBuildOrder();
-  if(Array.isArray(order))for(const reference of order)visit(reference);
-  else order.circularDiagnostics.forEach(record);
- }
  try{
-  visitProjects(path.join(project,'tsconfig.json'));
+  checkRoot(path.join(project,'tsconfig.json'));
   verifyOwnership();
   finish({ok:!diagnostics.length,exit_code:diagnostics.length?1:0,diagnostics});
  }catch(error){if(error.refusal)finish(error);else throw error;}

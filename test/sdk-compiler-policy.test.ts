@@ -51,11 +51,9 @@ for (const version of ["5.9.3", "6.0.3"]) test(`unfiltered stock TypeScript ${ve
   mkdirSync(join(project, "reference"));
   writeFileSync(join(project, "reference/tsconfig.json"), "{ invalid");
   writeFileSync(join(project, "tsconfig.json"), JSON.stringify({files: [], references: [{path: "reference"}]}));
-  const snapshot = filesystemSnapshot(dirname(project)), expectedErrors = directApiDiagnostics(project);
-  const malformed = await checkSdkContracts({consumer: project, minimum: bound, current: bound});
-  assert.ok(expectedErrors.length > 0);
-  for (const row of malformed.rows) assert.deepEqual(row.diagnostics, expectedErrors);
-  assert.equal(filesystemSnapshot(dirname(project)), snapshot, "malformed references are diagnosed without writes");
+  const snapshot = filesystemSnapshot(dirname(project));
+  await assert.rejects(checkSdkContracts({consumer: project, minimum: bound, current: bound}), error => error instanceof SdkContractRefusal && error.code === "unsupported_project_shape" && error.remedy.includes("reference/tsconfig.json"));
+  assert.equal(filesystemSnapshot(dirname(project)), snapshot, "reference refusal preserves all inputs");
   assert.deepEqual(readFileSync(entry), original, "stock executable is never wrapped or filtered");
 });
 

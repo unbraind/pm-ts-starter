@@ -61,9 +61,5 @@ test("unknown nested local packages are refused without guessing their identity"
   writeFileSync(join(directory, "package.json"), '{"type":"module"}');
   writeFileSync(join(project, "consumer.ts"), "export const unused = 1;");
   assert.equal((await checkSdkContracts({consumer: project, minimum: bound, current: bound})).ok, true, "unused nested metadata does not change the verdict");
-  writeFileSync(join(project, "consumer.ts"), 'export {sdk} from "./local package/index.js";');
-  writeFileSync(join(directory, "tsconfig.json"), JSON.stringify({compilerOptions: {types: [], lib: ["ES5"], composite: true, module: "NodeNext"}, files: ["index.d.ts"]}));
-  writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions: {types: [], lib: ["ES5"], module: "NodeNext"}, files: ["consumer.ts"], references: [{path: "local package"}]}));
-  assert.deepEqual(directApiDiagnostics(project), []);
-  assert.equal((await checkSdkContracts({consumer: project, minimum: bound, current: bound})).ok, true, "a compiler-owned referenced project boundary remains supported");
+
 });

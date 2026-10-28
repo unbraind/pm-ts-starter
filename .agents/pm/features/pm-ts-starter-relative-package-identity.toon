@@ -1,17 +1,20 @@
 id: pm-ts-starter-relative-package-identity
 title: Support relative local packages with compiler-owned identities
-description: "Follow-up to PR 154. A Program can resolve a relative declaration import without packageId even when it crosses a nested local package boundary. The checker now inventories manifest locations during copying, without reading names, and returns unsupported_project_shape for a loaded unknown boundary unless the compiler identifies the package or the solution includes its project config. This avoids synthetic resolution and metadata ancestry. Broader relative-package support needs a compiler-owned identity contract; ordinary local declarations, unused metadata, installed dependencies and referenced projects remain supported."
+description: "Follow-up to PR 154. Relative declarations across nested local package boundaries and some classic typesVersions subpaths lack a Program packageId. Preserve typed refusals until ownership is available from compiler resolution data, without synthetic imports, independent resolution or package metadata ancestry. Ordinary local declarations, unused metadata and compiler-identified installed dependencies remain supported. Project references are refused separately and tracked by pm-ts-starter-project-references."
 type: Feature
 status: open
 priority: 3
 tags[3]: compatibility,compiler-api,follow-up
 created_at: "2026-10-27T19:39:58.222Z"
-updated_at: "2026-10-27T19:39:58.222Z"
+updated_at: "2026-10-28T16:38:16.633Z"
 author: codex-agent
 acceptance_criteria: "Obtain ownership from actual Program resolution data without synthetic imports or package metadata ancestry; retain current typed refusal until identity is available; preserve direct compiler diagnostics and exact installed layouts; include named, unnamed, nested and mts/cts/ts package fixtures"
-files[2]{path,scope}:
+comments[1]{created_at,author,text}:
+  "2026-10-28T16:30:53.920Z",codex-agent,"Round 14 removes the referenced-project exemption entirely: references are now unsupported and tracked separately by pm-ts-starter-project-references. Native TypeScript 5.9.3 also returns resolvedFileName and isExternalLibraryImport but no packageId for the typesVersions subpath fixture in test/sdk-program-graph.test.ts. Retain isolation_refused there and unsupported_project_shape for unidentified relative local packages. The dependency corpus retains the original relative workspace fixture as a refusal and adds an installed-name workspace control. Future support must obtain a compiler-owned identity without synthesizing resolution or walking metadata ancestry."
+files[3]{path,scope}:
   sdk-contracts.ts,project
   test/sdk-api-review.test.ts,project
+  test/sdk-program-graph.test.ts,project
 docs[1]{path,scope}:
   docs/sdk-contract-api-compatibility.md,project
 body: ""

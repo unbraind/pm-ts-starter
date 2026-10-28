@@ -271,7 +271,7 @@ test("packed npm and Bun consumers resolve each exact SDK bound and compile emit
     const options = { minimum: { root: ownMinimum, version: minimumVersion }, current: { root: ownCurrent, version: currentVersion }, consumer: project };
     for (const example of SDK_CONSUMER_EXAMPLES) writeFileSync(join(project, `${example.id}.ts`), example.source);
     writeFileSync(join(project, "emitted-consumer.ts"), `import { checkSdkContracts as compileSdkContracts, type SdkContractMatrix, type SdkContractOptions } from "pm-ts-starter";
-export async function consume(options: SdkContractOptions): Promise<SdkContractMatrix> { return checkSdkContracts(options); }`);
+export async function consume(options: SdkContractOptions): Promise<SdkContractMatrix> { return compileSdkContracts(options); }`);
     writeFileSync(join(project, "tsconfig.json"), JSON.stringify({ compilerOptions: { strict: true, skipLibCheck: false,
       module: "NodeNext", moduleResolution: "NodeNext", target: "ES2022", types: ["node"] },
       files: ["authoring.ts", "complete-read.ts", "emitted-consumer.ts"] }));
@@ -291,7 +291,7 @@ console.log(JSON.stringify({sdkVersion, resolved, sdkEntry, matrix: await checkS
     const installedSdk = join(project, "node_modules/@unbrained/pm-cli");
     assert.equal(receipt.resolved, join(installedSdk, "package.json"));
     assert.ok(receipt.sdkEntry.startsWith(`${installedSdk}/`));
-    assert.equal(receipt.matrix.ok, true); assert.equal(receipt.matrix.checks, 2);
+    assert.equal(receipt.matrix.ok, true, JSON.stringify(receipt.matrix)); assert.equal(receipt.matrix.checks, 2);
     assert.deepEqual(receipt.matrix.rows.map(row => row.sdk), [minimumVersion, currentVersion]);
     if (runtime === "npm" && bound === "current") {
       const tracker = join(project, "tracker");
@@ -417,7 +417,7 @@ function compareOracle(matrix: SdkContractMatrix, receipt: string, source: strin
 
 test("differential compiler matrix covers node16 nodenext bundler, ESM import CJS require, types types@ typesVersions and both bounds", async t => {
   const root = scratch(t);
-  let rows = 0, drift = 0;
+  let rows = 0, drift = 0, refusals = 0;
   for (const runtime of ["npm", "bun"] as const) {
     // Both installed endpoints are independently verified under this package manager.
     const project = installedConsumer(runtime, "minimum");
@@ -434,6 +434,14 @@ test("differential compiler matrix covers node16 nodenext bundler, ESM import CJ
             : `import sdk = require("@unbrained/pm-cli/sdk"); ${control === "onlyImport" ? 'import {onlyImport} from "@unbrained/pm-cli/sdk";' : ""} export const use = sdk.api.${control};`;
           writeFileSync(join(project, `consumer.${mode === "esm" ? "mts" : "cts"}`), source);
           writeFileSync(receipt, "");
+          if (layout === "typesVersions") {
+            const before = filesystemSnapshot(project);
+            await assert.rejects(checkSdkContracts({minimum, current, consumer: project}), error => error instanceof SdkContractRefusal && error.code === "isolation_refused" && error.remedy.includes("selected.d.ts"));
+            const native = JSON.parse(readFileSync(receipt, "utf8")) as {status: number; codes: string[]; config: string};
+            assert.equal(native.status, control === "common" ? 0 : 1); assert.equal(native.config, config);
+            if (control === "onlyImport") {assert.ok(native.codes.includes("TS2339")); assert.ok(native.codes.includes("TS2305"));}
+            assert.equal(filesystemSnapshot(project), before); refusals++; continue;
+          }
           const matrix = await checkSdkContracts({ minimum, current, consumer: project });
           compareOracle(matrix, receipt, project, config);
           const expected = control === "common" || (layout === "types" && mode === "esm");
@@ -448,8 +456,8 @@ test("differential compiler matrix covers node16 nodenext bundler, ESM import CJ
       }
     }
   }
-  assert.equal(rows, 144); assert.equal(drift, 60);
-  t.diagnostic(`Differential matrix: ${rows}/${rows} compiler verdicts agree; ${drift} drift, ${rows - drift} clean.`);
+  assert.equal(rows, 96); assert.equal(drift, 36); assert.equal(refusals, 24);
+  t.diagnostic(`Differential matrix: ${rows}/${rows} compiler verdicts agree; ${drift} drift, ${rows - drift} clean; ${refusals} missing-identity refusals retain native oracle checks.`);
 });
 
 test("differential hostile specifiers in consumer and external declarations preserve every earlier row at both bounds", async t => {
@@ -727,7 +735,7 @@ test("inline sources are unchanged; actual external declarations refuse after co
   assert.equal(literals.ok, true, "path-like string content must reach the compiler unchanged");
 });
 
-test("hermetic local config references and unused internal aliases agree with plain tsc", async t => {
+test("hermetic unused internal aliases and existing declarations agree with plain tsc", async t => {
   const root = scratch(t), reference = join(root, "reference");
   mkdirSync(join(root, "node_modules")); mkdirSync(reference);
   symlinkSync(dirname(dirname(compiler)), join(root, "node_modules/typescript"), "junction");
@@ -735,24 +743,14 @@ test("hermetic local config references and unused internal aliases agree with pl
   writeFileSync(join(reference, "tsconfig.json"), JSON.stringify({compilerOptions: {composite: true, target: "ES2022", module: "NodeNext", types: [], outDir: "dist"}, files: ["index.ts"]}));
   writeFileSync(join(reference, "index.ts"), "export const value = 1;");
   const build = spawnSync(process.execPath, [compiler, "--build", "reference"], {cwd: root, encoding: "utf8"}); assert.equal(build.status, 0, build.stdout);
-  const config = JSON.parse(consumerConfig(root, "nodenext", "esm")) as {compilerOptions: Record<string, unknown>; references?: {path: string}[]};
+  const config = JSON.parse(consumerConfig(root, "nodenext", "esm")) as {compilerOptions: Record<string, unknown>};
   Object.assign(config.compilerOptions, {paths: {unused: ["./reference/index.ts"]}, typeRoots: ["./node_modules/@types"], rootDirs: ["."]});
-  config.references = [{path: "./reference"}];
   writeFileSync(join(root, "tsconfig.json"), JSON.stringify(config));
   writeFileSync(join(root, "consumer.mts"), 'import {value} from "./reference/dist/index.js"; import {version} from "typescript"; export const use = {value, version};');
   const plain = plainCopy(root, t); assert.equal(plain.ok, true);
   const matrix = await checkSdkContracts({minimum: target, current: target, consumer: root});
   assert.equal(matrix.ok, plain.ok); assert.equal(matrix.checks, 2);
-  // A missing referenced build must remain an error; dropping references would
-  // silently compile the referenced source instead of checking its built contract.
-  writeFileSync(join(root, "consumer.mts"), 'import {value} from "./reference/index.js"; export const use = value;');
-  unlinkSync(join(reference, "dist/index.d.ts"));
-  const missing = plainCopy(root, t);
-  assert.equal(missing.ok, false);
-  assert.ok(missing.codes.includes("TS6305"));
-  const rejected = await checkSdkContracts({minimum: target, current: target, consumer: root});
-  assert.equal(rejected.failed, 2, "retain project references and refuse missing build declarations");
-  assert.ok(rejected.rows.every(row => row.codes.includes("TS6305")));
+
 });
 
 test("hermetic inherited config preserves alias origins and explicit libraries against plain tsc", async t => {
@@ -792,7 +790,6 @@ interface DiscoveryCase {
   name: string;
   config: Record<string, unknown>;
   files?: Record<string, string>;
-  build?: boolean;
 }
 
 test("original discovery differential corpus equals plain tsc file lists, verdicts and error codes", async t => {
@@ -824,9 +821,6 @@ test("original discovery differential corpus equals plain tsc file lists, verdic
     {name: "types-empty", config: {compilerOptions: {types: []}, files: ["input/src/consumer.mts"]}, files: {"src/consumer.mts": "export const use = 1;"}},
     {name: "extends-chain-outDir", config: {extends: "./input/config/child.json", compilerOptions: {types: ["node"]}}, files: {"config/base.json": JSON.stringify({compilerOptions: {...options, outDir: "../dist"}, include: ["../src/**/*", "../dist/**/*"]}), "config/child.json": JSON.stringify({extends: "./base.json"}), "dist/stale.d.ts": stale, "src/consumer.mts": bad}},
     {name: "extends-include-exclude", config: {extends: "./input/config/base.json"}, files: {"config/base.json": JSON.stringify({include: ["../**/*"], exclude: ["../excluded"]}), "excluded/stale.d.ts": stale}},
-    {name: "reference-solution", config: {files: [], references: [{path: "input/reference"}]}, files: {"reference/tsconfig.json": JSON.stringify({compilerOptions: {composite: true, types: []}, files: ["index.ts"]}), "reference/index.ts": "export const value = 1;"}},
-    {name: "reference-built", config: {files: ["input/src/consumer.mts"], references: [{path: "input/reference"}]}, files: {"reference/tsconfig.json": JSON.stringify({compilerOptions: {composite: true, module: "NodeNext", target: "ES2022", types: [], outDir: "dist"}, files: ["index.ts"]}), "reference/index.ts": "export const value = 1;", "src/consumer.mts": 'import {value} from "../reference/index.js"; export const use = value;'}, build: true},
-    {name: "reference-missing-build", config: {files: ["input/src/consumer.mts"], references: [{path: "input/reference"}]}, files: {"reference/tsconfig.json": JSON.stringify({compilerOptions: {composite: true, module: "NodeNext", target: "ES2022", types: [], outDir: "dist"}, files: ["index.ts"]}), "reference/index.ts": "export const value = 1;", "src/consumer.mts": 'import {value} from "../reference/index.js"; export const use = value;'}},
     {name: "composite-unlisted-import", config: {compilerOptions: {composite: true}, files: ["input/src/consumer.mts"]}, files: {"src/consumer.mts": 'import {value} from "./helper.mjs"; export const use = value;', "src/helper.mts": "export const value = 1;"}},
     {name: "composite-listed-import", config: {compilerOptions: {composite: true}, files: ["input/src/consumer.mts", "input/src/helper.mts"]}, files: {"src/consumer.mts": 'import {value} from "./helper.mjs"; export const use = value;', "src/helper.mts": "export const value = 1;"}},
     {name: "incremental-outFile-cache", config: {compilerOptions: {incremental: true, module: "System", outFile: "input/dist/bundle.js", outDir: "input/dist", rootDir: "input/src"}, files: ["input/src/consumer.ts"]}, files: {"src/consumer.ts": "export const use = 1;"}},
@@ -858,10 +852,6 @@ test("original discovery differential corpus equals plain tsc file lists, verdic
       writeFileSync(join(project, "input", file), content);
     }
     writeFileSync(join(project, "tsconfig.json"), JSON.stringify({...entry.config, compilerOptions: {...options, ...(entry.config.compilerOptions as Record<string, unknown>)}}));
-    if (entry.build) {
-      const build = spawnSync(process.execPath, [compiler, "--build", "input/reference"], {cwd: project, encoding: "utf8"});
-      assert.equal(build.status, 0, `${entry.name}: ${build.stdout}`);
-    }
     const expected = plainCopy(project, t);
     const originalBytes = filesystemSnapshot(project);
     const matrix = await checkSdkContracts({minimum: {root: endpoints.minimum, version: minimumVersion}, current: {root: endpoints.current, version: currentVersion}, consumer: project}).catch((error: unknown) => { throw new Error(entry.name, {cause: error}); });
@@ -1036,18 +1026,6 @@ test("direct SDK callers need no npm script environment or executable search pat
   }
 });
 
-test("solution references preserve a valid empty compiler source-file list", async t => {
-  const project = linkedCompilerConsumer(t), reference = join(project, "reference");
-  mkdirSync(reference);
-  writeFileSync(join(reference, "index.ts"), 'export const value = 1;');
-  writeFileSync(join(reference, "tsconfig.json"), JSON.stringify({compilerOptions: {composite: true, types: []}, files: ["index.ts"]}));
-  writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions: {types: []}, files: [], references: [{path: "./reference"}]}));
-  const expected = plainCopy(project, t);
-  assert.equal(expected.ok, true);
-  const matrix = await checkSdkContracts({minimum: target, current: target, consumer: project});
-  assertPlainRows(matrix, expected);
-});
-
 test("round 9 npm location tripwires survive the fixed global-prefix case and generated configurations", async t => {
   const project = noEmitConsumer(t), outside = scratch(t), home = join(outside, "home"), prefix = join(outside, "prefix");
   mkdirSync(home); mkdirSync(prefix);
@@ -1150,22 +1128,23 @@ async function dependencyOracle(project: string, bound: SdkContractOptions["curr
 }
 
 test("round 10 dependency-shape differential preserves aliases file link workspaces peers bundled and installed names", async t => {
-  const cases = ["review-npm-alias", "scoped-alias", "file-copy", "file-link", "link", "workspace", "peer", "bundled", "metadata-mismatch", "nested-alias", "hidden-store"];
+  const cases = ["review-npm-alias", "scoped-alias", "file-copy", "file-link", "link", "workspace", "unidentified-workspace-relative", "peer", "bundled", "metadata-mismatch", "nested-alias", "hidden-store"];
   let comparisons = 0;
   for (const shape of cases) {
     const project = noEmitConsumer(t), bound = dependencyBound(project);
     const installed = shape === "scoped-alias" ? "@scope/alias-fixture" : "alias-fixture";
     const dependencies: Record<string, string> = {[installed]: shape === "scoped-alias" ? "npm:@actual/fixture@1" : "npm:actual-fixture@1"};
     let workspace: string[] | undefined;
-    if (["file-link", "link", "workspace", "hidden-store"].includes(shape)) {
+    if (["file-link", "link", "workspace", "unidentified-workspace-relative", "hidden-store"].includes(shape)) {
       const location = shape === "hidden-store" ? "node_modules/.store/actual-fixture" : "packages/actual-fixture";
       dependencyEntry(project, location, "actual-fixture");
       symlinkSync(join(project, location), join(project, "node_modules", installed), "junction");
-      dependencies[installed] = shape === "workspace" ? "workspace:*" : (shape === "link" ? "link:" : "file:") + "./packages/actual-fixture";
-      if (shape === "workspace") {
+      dependencies[installed] = shape.includes("workspace") ? "workspace:*" : (shape === "link" ? "link:" : "file:") + "./packages/actual-fixture";
+      if (shape.includes("workspace")) {
         workspace = ["packages/*"];
         dependencyEntry(project, "packages/sibling", "sibling");
-        writeFileSync(join(project, location, "index.d.ts"), 'export {value} from "../sibling/index.js";');
+        writeFileSync(join(project, location, "index.d.ts"), shape === "workspace" ? 'export {value} from "sibling";' : 'export {value} from "../sibling/index.js";');
+        if (shape === "workspace") symlinkSync(join(project, "packages/sibling"), join(project, "node_modules/sibling"), "junction");
       }
     } else {
       dependencyEntry(join(project, "node_modules"), installed, shape === "scoped-alias" ? "@actual/fixture" : "actual-fixture");
@@ -1190,13 +1169,19 @@ test("round 10 dependency-shape differential preserves aliases file link workspa
     writeFileSync(join(project, "package-lock.json"), JSON.stringify({name: "fixture", lockfileVersion: 3, packages: {}}));
     for (const valid of [true, false]) {
       writeFileSync(join(project, "consumer.mts"), `import {value} from ${JSON.stringify(installed)}; import {sdk} from "@unbrained/pm-cli"; export const use: ${valid ? '"selected"' : '"wrong"'} = value; export {sdk};`);
+      if (shape === "unidentified-workspace-relative") {
+        const expected = plainCopy(project, t), before = filesystemSnapshot(project);
+        assert.equal(expected.ok, valid);
+        await assert.rejects(checkSdkContracts({consumer: project, minimum: bound, current: bound}), error => error instanceof SdkContractRefusal && error.code === "unsupported_project_shape" && error.remedy.includes("packages/sibling/index.d.ts"));
+        assert.equal(filesystemSnapshot(project), before); continue;
+      }
       const expected = await dependencyOracle(project, bound, t);
       assert.equal(expected.ok, valid, shape);
       if (!valid) assert.deepEqual(expected.codes, ["TS2322"], shape);
       comparisons += 2;
     }
   }
-  t.diagnostic(`Dependency corpus: ${cases.length} installed shapes, 22 untouched plain-tsc oracles, ${comparisons} bound comparisons; matching verdicts and error codes, including the alias-fixture/actual-fixture review case.`);
+  t.diagnostic(`Dependency corpus: ${cases.length} installed shapes, 24 untouched plain-tsc oracles, ${comparisons} bound comparisons and two unidentified-workspace refusals; matching verdicts and error codes, including the alias-fixture/actual-fixture review case.`);
 });
 
 test("round 10 property preserves 200 random alias scoped file dependency graphs by installed import name", async t => {

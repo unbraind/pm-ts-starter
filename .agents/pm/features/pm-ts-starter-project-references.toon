@@ -1,0 +1,15 @@
+id: pm-ts-starter-project-references
+title: Support TypeScript project references in SDK bound checks (regenerate referenced declarations per bound)
+description: Follow-up to pm-ts-starter-min-sdk-drift and PR 154. Project references are deliberately refused until every bound can regenerate declarations without changing consumer inputs and every referenced root retains compiler-owned package isolation.
+type: Feature
+status: open
+priority: 3
+tags: []
+created_at: "2026-10-28T16:02:24.774Z"
+updated_at: "2026-10-28T16:07:23.007Z"
+author: codex-agent
+acceptance_criteria: A warm current-SDK inferred declaration exposing currentOnly must yield TS2339 after a forced minimum rebuild; warm and cold matrices must agree.; A nested foreign SDK reached by relative import and added as a referenced config must never bypass package identity isolation.; Traverse every reference node with cycle protection; regenerate outputs separately per bound; preserve all consumer files and retain typed refusal until exact support exists.
+parent: pm-ts-starter-min-sdk-drift
+files[1]{path,scope,note}:
+  test/sdk-reference-refusal.test.ts,project,Warm current inference and nested foreign SDK reproductions
+body: ""

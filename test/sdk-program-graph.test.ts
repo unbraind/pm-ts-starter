@@ -4,7 +4,7 @@ import {spawnSync} from "node:child_process";
 import {cpSync, mkdirSync, rmSync, symlinkSync, writeFileSync} from "node:fs";
 import {dirname, join} from "node:path";
 import test from "node:test";
-import {checkSdkContracts} from "../sdk-contracts.ts";
+import {checkSdkContracts, SdkContractRefusal} from "../sdk-contracts.ts";
 import {apiConsumer, dependencyBound, directApiDiagnostics, filesystemSnapshot} from "./dependency-fixtures.ts";
 
 /** Check the real binary in an independent writable copy; never parse compiler text. */
@@ -32,28 +32,12 @@ async function agreesWithBuild(project: string, bound: ReturnType<typeof depende
   assert.equal(filesystemSnapshot(project), before);
 }
 
-/** Give every referenced project source files, with an optional error at any graph depth. */
-function referenceGraph(project: string, depth: number, invalid: number): void {
-  writeFileSync(join(project, "tsconfig.json"), JSON.stringify({files: [], references: [{path: "p0"}]}));
-  for (let level = 0; level <= depth; level++) {
-    const directory = join(project, "p" + level); mkdirSync(directory, {recursive: true});
-    writeFileSync(join(directory, "tsconfig.json"), JSON.stringify({compilerOptions: {types: [], lib: ["ES5"], module: "NodeNext", composite: true, outDir: "dist"}, files: ["consumer.ts"], references: level < depth ? [{path: "../p" + (level + 1)}] : []}));
-    writeFileSync(join(directory, "consumer.ts"), 'import {sdk} from "@unbrained/pm-cli"; export const value: ' + (invalid === level ? '"wrong"' : '"current"') + ' = sdk;');
-  }
-}
-
 /** Select distinct declaration branches so the wrong usage mode changes the diagnostic verdict. */
 function conditionalSdk(root: string, version: string, branch: string): void {
   const exports = branch === "dual" ? {import: "./import.d.mts", require: "./require.d.mts"} : {[branch]: `./${branch}.d.mts`};
   writeFileSync(join(root, "package.json"), JSON.stringify({name: "@unbrained/pm-cli", version, type: "module", exports: {".": exports}}));
   for (const mode of ["import", "require"]) writeFileSync(join(root, mode + ".d.mts"), `export declare const sdk: "${mode}";`);
 }
-
-test("program review traverses source-bearing intermediate references", async t => {
-  const {project, bound} = apiConsumer(t); referenceGraph(project, 1, 1);
-  assert.deepEqual(directApiDiagnostics(project).map(d => d.code), ["TS2322"]);
-  await agreesWithBuild(project, bound);
-});
 
 test("program review retains require usage in an mts consumer", async t => {
   const {project, bound} = apiConsumer(t); conditionalSdk(bound.root, bound.version, "require");
@@ -63,6 +47,19 @@ test("program review retains require usage in an mts consumer", async t => {
   await agreesWithBuild(project, bound);
 });
 
+test("program refuses typesVersions resolutions without a compiler package identity", async t => {
+  const {project, bound} = apiConsumer(t);
+  writeFileSync(join(bound.root, "package.json"), JSON.stringify({name: "@unbrained/pm-cli", version: bound.version, types: "index.d.ts", typesVersions: {">=5.9": {"*": ["selected.d.ts"]}}}));
+  writeFileSync(join(bound.root, "selected.d.ts"), 'export declare const sdk: "current";');
+  for (const resolution of ["Node16", "NodeNext", "Bundler"]) for (const kind of ["mts", "cts"]) {
+    const file = "consumer." + kind;
+    writeFileSync(join(project, file), kind === "mts" ? 'import {sdk} from "@unbrained/pm-cli/sdk"; export const value: "current" = sdk;' : 'import sdk = require("@unbrained/pm-cli/sdk"); export const value: "current" = sdk.sdk;');
+    writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions: {types: [], lib: ["ES5"], moduleResolution: resolution, module: resolution === "Bundler" ? "Preserve" : resolution}, files: [file]}));
+    assert.deepEqual(directApiDiagnostics(project), []);
+    await assert.rejects(checkSdkContracts({consumer: project, minimum: bound, current: bound}), error => error instanceof SdkContractRefusal && error.code === "isolation_refused" && error.remedy.includes("selected.d.ts"));
+  }
+});
+
 test("program keeps symlinked config origins for relative extends and files", async t => {
   const {project, bound} = apiConsumer(t); mkdirSync(join(project, "config"));
   writeFileSync(join(project, "base.json"), '{"compilerOptions":{"types":[],"lib":["ES5"],"module":"NodeNext"}}');
@@ -70,18 +67,6 @@ test("program keeps symlinked config origins for relative extends and files", as
   writeFileSync(join(project, "config/template.json"), '{"extends":"./base.json","files":["consumer.ts"]}');
   rmSync(join(project, "tsconfig.json")); symlinkSync("config/template.json", join(project, "tsconfig.json"));
   assert.deepEqual(directApiDiagnostics(project).map(d => d.code), ["TS2322"]);
-  await agreesWithBuild(project, bound);
-});
-
-test("program checks both logical reference nodes sharing a physical config", async t => {
-  const {project, bound} = apiConsumer(t); mkdirSync(join(project, "shared"));
-  writeFileSync(join(project, "shared/project.json"), JSON.stringify({compilerOptions: {types: [], lib: ["ES5"], module: "NodeNext", composite: true}, files: ["consumer.ts"]}));
-  for (const name of ["a", "b"]) {
-    mkdirSync(join(project, name)); symlinkSync("../shared/project.json", join(project, name, "tsconfig.json"));
-    writeFileSync(join(project, name, "consumer.ts"), `export const value: string = ${name === "a" ? '"valid"' : '1'};`);
-  }
-  writeFileSync(join(project, "tsconfig.json"), JSON.stringify({files: [], references: [{path: "a"}, {path: "b"}]}));
-  const expected = directApiDiagnostics(project); assert.deepEqual(expected.map(d => [d.code, d.file]), [["TS2322", "b/consumer.ts"]]);
   await agreesWithBuild(project, bound);
 });
 
@@ -97,14 +82,6 @@ test("program source aliases use canonical diagnostic filenames without changing
 
 for (const version of ["5.9.3", "6.0.3"]) test(`program graph and module-mode properties TypeScript ${version}`, async t => {
   const {project, bound} = apiConsumer(t, version); rmSync(join(project, "consumer.ts"));
-  await t.test("every reference depth and error location", async () => {
-    for (let depth = 1; depth <= 3; depth++) for (let invalid = -1; invalid <= depth; invalid++) {
-      referenceGraph(project, depth, invalid);
-      const expected = directApiDiagnostics(project); assert.deepEqual(expected.map(d => d.code), invalid < 0 ? [] : ["TS2322"]);
-      await agreesWithBuild(project, bound);
-      for (let level = 0; level <= depth; level++) rmSync(join(project, "p" + level), {recursive: true});
-    }
-  });
   await t.test("module syntax by file kind and conditional export", async () => {
     const syntaxes = [
       {name: "import", source: 'import {sdk} from "@unbrained/pm-cli"; export {sdk};'},
@@ -123,5 +100,5 @@ for (const version of ["5.9.3", "6.0.3"]) test(`program graph and module-mode pr
       await agreesWithBuild(project, bound); rmSync(join(project, file));
     }
   });
-  t.diagnostic("12 reference graphs and 81 syntax/file/export combinations; complete API diagnostics and real tsc --build verdict agree");
+  t.diagnostic("81 syntax/file/export combinations; complete API diagnostics and real tsc --build verdict agree");
 });

@@ -267,7 +267,7 @@ their original bytes, including files excluded by npm pack rules. Only the SDK
 package at the selected bound is replaced in each cloned project. Its canonical
 identity is captured before compilation, preserving internal module-root and SDK
 scope links while still refusing declarations from another SDK root.
-The original tsconfig, extends chain, references, sources and existing build artifacts
+The original tsconfig, extends chain, sources and existing build artifacts
 retain their relative layout and bytes. Project mode cannot be combined with
 `--examples` or `--compiler`. Include the project's installed dependencies and
 TypeScript JavaScript API in node_modules. Neither mode needs npm or network access.
@@ -287,8 +287,9 @@ The checker loads the consumer's own `typescript` JavaScript API in a confined
 child. `getParsedCommandLineOfConfigFile` follows the complete extends chain;
 `createProgram` and `getPreEmitDiagnostics` supply structured diagnostics. The
 original compiler-options object retains TypeScript's configuration metadata.
-The solution API supplies the full build order and circular-reference diagnostics.
-Every project is checked, including children of projects that contain sources.
+Project references are refused before Program creation as `unsupported_project_shape`,
+naming the referencing and referenced configs. Existing declarations may be stale for
+the selected SDK; check each project separately as its own root or flatten references.
 TypeScript's logical config paths retain their relative origins through symlinks. No language service,
 compiler-output parser, formatted diagnostic matcher or diagnostic-phase emulation
 is used. Compiler options pass through without a classification allowlist.
@@ -311,8 +312,8 @@ never determine ownership. Both sides of path comparisons use realpath.
 Relative imports across nested local package boundaries can lack a compiler package
 identity. The copy inventories manifest locations without reading package names;
 an actually loaded source in such a package receives `unsupported_project_shape`
-unless the Program identifies the package or the solution explicitly includes its
-project config. Install/import the package by name or reference its project config.
+unless the Program identifies the package. Install/import the package by name or
+check it separately as its own root.
 Unused metadata and ordinary local declarations remain supported.
 
 Every bound creates a fresh, non-incremental Program. The checker never calls
@@ -348,9 +349,9 @@ The differential suite compares complete structured diagnostics against an
 independent direct consumer API program. It covers inherited invalid options at
 every level of one-to-three-level extends chains, unnamed nested package metadata,
 linked foreign SDKs, diagnostic-like filenames and generated filesystem layouts.
-Reference graphs of depth 1–3 and every error location, plus 81 file-kind/import-syntax/
-conditional-export combinations per compiler, also compare verdicts with real `tsc --build`.
-Mutual dependency links, unbuilt references, fatal options, global diagnostics,
+Generated reference graphs are refused, with paired reference-free controls. The
+81 file-kind/import-syntax/conditional-export combinations per compiler also compare
+verdicts with real `tsc --build`. Mutual dependency links, fatal options, global diagnostics,
 warm/cold caches and file/directory writer targets retain dedicated controls.
 Consumer configuration and original filesystem snapshots remain unchanged.
 
@@ -366,7 +367,8 @@ consumer tree. The alias-fixture/actual-fixture review case has a dedicated regr
 
 The differential suite covers node16, nodenext and bundler resolution, ESM imports
 and CJS requires, exports types conditions, versioned types conditions and
-typesVersions, at both SDK bounds. npm and Bun consumers install their own exact
+typesVersions, at both SDK bounds. A typesVersions resolution without a native
+packageId is refused as `isolation_refused`; no identity is synthesized. npm and Bun consumers install their own exact
 SDKs and compilers and verify resolution at runtime. Each isolated copy also runs
 an independent compiler API program, comparing the matrix verdicts and diagnostics,
 including the review's TS2339/TS2305 cases. Another 64 differential rows retain

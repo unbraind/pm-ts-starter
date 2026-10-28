@@ -69,14 +69,13 @@ after(() => { if (compilerTool) rmSync(compilerTool, {recursive: true, force: tr
 /** Return the actual API diagnostics, without invoking or parsing the command-line compiler. */
 export function directApiDiagnostics(project: string): SdkContractDiagnostic[] {
   const script = `const ts=require(require.resolve('typescript',{paths:[process.argv[1]]})),path=require('node:path'),fs=require('node:fs');
-ts.sys.write=()=>{};const root=fs.realpathSync(process.argv[1]),diagnostics=[],seen=new Set();
+ts.sys.write=()=>{};const root=fs.realpathSync(process.argv[1]),diagnostics=[];
 /** Render the public location contract after canonicalizing the native diagnostic file. */
 const location=file=>{const name=path.relative(root,fs.realpathSync(file));return path.isAbsolute(name)||name==='..'||name.startsWith('..'+path.sep)?'<external>':name.split(path.sep).join('/');};
-function check(file){if(seen.has(file))return;seen.add(file);const errors=[],config=ts.getParsedCommandLineOfConfigFile(file,{noEmit:true},{...ts.sys,onUnRecoverableConfigFileDiagnostic:d=>errors.push(d)});
+function check(file){const errors=[],config=ts.getParsedCommandLineOfConfigFile(file,{noEmit:true},{...ts.sys,onUnRecoverableConfigFileDiagnostic:d=>errors.push(d)});
 if(!config){diagnostics.push(...errors);return;}
 diagnostics.push(...ts.getPreEmitDiagnostics(ts.createProgram({rootNames:config.fileNames,options:config.options,projectReferences:config.projectReferences,configFileParsingDiagnostics:config.errors})));}
-const order=ts.createSolutionBuilder(ts.createSolutionBuilderHost(ts.sys),[path.join(root,'tsconfig.json')],{force:true,noEmit:true}).getBuildOrder();
-if(Array.isArray(order))order.forEach(check);else diagnostics.push(...order.circularDiagnostics);
+check(path.join(root,'tsconfig.json'));
 process.stdout.write(JSON.stringify(diagnostics.filter(d=>d.category===ts.DiagnosticCategory.Error).map(d=>{const pos=d.file&&d.start!==undefined?d.file.getLineAndCharacterOfPosition(d.start):undefined;return {code:'TS'+d.code,file:d.file?location(d.file.fileName):'<config>',message:ts.flattenDiagnosticMessageText(d.messageText,'\\n').replaceAll(root,'.'),line:pos?pos.line+1:0,column:pos?pos.character+1:0};})));`;
   const run = spawnSync(process.execPath, ["-e", script, project], {encoding: "utf8", timeout: 30000});
   assert.equal(run.status, 0, run.stderr);

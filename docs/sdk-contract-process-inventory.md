@@ -12,12 +12,11 @@ visited once. Non-dependency links escaping the copy are refused. SDK ownership
 comes from resolver package identities and canonical paths, never metadata ancestry.
 The existing copy walk inventories nested local manifest locations without reading
 names. Loaded files crossing an unidentified local package boundary are refused as
-unsupported_project_shape; compiler-identified dependencies and referenced project
-roots remain supported. The inventory never assigns SDK ownership.
+unsupported_project_shape; compiler-identified dependencies remain supported. The inventory never assigns SDK ownership.
 Compiler inputs and caches are preserved. There is no emit, incremental builder,
 installation, reinstallation, package-manager linking or lifecycle-script subprocess.
-The solution builder API supplies the complete reference build order, including
-children of source-bearing projects; its build/emit methods are never called.
+Resolved reference edges are refused before Program creation, naming both configs.
+Check separate roots or flatten references; cached declarations can hide bound drift.
 Import and type-reference identities come from Program resolution caches, preserving
 each usage mode. Each bound uses independent storage. API-incompatible compilers
 receive compiler_unavailable or compiler_api_unavailable without a binary fallback.
