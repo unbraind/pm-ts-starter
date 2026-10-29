@@ -273,7 +273,7 @@ function compileConsumer(project: string, installed: string, version: string, ou
     if (!inside(installedCompiler, api)) throw new Error("foreign compiler API");
   }
   catch { throw new SdkContractRefusal("compiler_unavailable", "Install the consumer TypeScript JavaScript compiler API before retrying."); }
-  const entry = join(output, "compiler.cjs"), resultFile = join(output, "diagnostics.json");
+  const entry = join(output, "compiler.cjs"), resultFile = join(output, "diagnostics.json"), rootsFile = join(output, "roots.json");
   writeFileSync(entry, `const ts=require(${JSON.stringify(api)}),fs=require('node:fs'),path=require('node:path');
 const project=fs.realpathSync(process.argv[2]),installed=fs.realpathSync(process.argv[3]),version=process.argv[4];
 const finish=report=>fs.writeFileSync(process.argv[6],JSON.stringify(report),{flag:'wx'});
@@ -286,7 +286,7 @@ if(!['createProgram','getPreEmitDiagnostics','getParsedCommandLineOfConfigFile']
  const closestRoot=(file,roots)=>{for(let root=path.dirname(file);;root=path.dirname(root)){if(roots.has(root))return root;if(path.dirname(root)===root)return undefined;}};
  const label=file=>inside(project,file)?path.relative(project,file):path.basename(file);
  const refused=file=>{throw {refusal:'isolation_refused',remedy:'Resolved file '+JSON.stringify(label(file))+' leaves the prepared project and installed dependencies.'};};
- const diagnostics=[],roots=new Set(JSON.parse(process.argv[5]).map(canonical)),sdkFiles=new Set(),owners=new Map();
+ const diagnostics=[],roots=new Set(JSON.parse(fs.readFileSync(process.argv[5],'utf8')).map(canonical)),sdkFiles=new Set(),owners=new Map();
  /** Cache each file's nearest named package root; unnamed format-only metadata never masks its owner. */
  function packageOwner(directory){
   if(owners.has(directory))return owners.get(directory);
@@ -344,7 +344,10 @@ if(!['createProgram','getPreEmitDiagnostics','getParsedCommandLineOfConfigFile']
   finish({ok:!diagnostics.length,exit_code:diagnostics.length?1:0,diagnostics});
  }catch(error){if(error.refusal)finish(error);else throw error;}
 }`);
-  const result = spawnSync(process.execPath, [entry, project, installed, version, JSON.stringify([...dependencyRoots(project)]), resultFile], {
+  // The root inventory grows with the installed tree: a file keeps it clear of argv limits (128 KiB per argument on
+  // Linux, 32,767 characters per command line on Windows), which spawnSync would report as E2BIG.
+  writeFileSync(rootsFile, JSON.stringify([...dependencyRoots(project)]), {flag: "wx"});
+  const result = spawnSync(process.execPath, [entry, project, installed, version, rootsFile, resultFile], {
     cwd: project, encoding: "utf8", timeout: 90000, maxBuffer: 8 * 1024 * 1024, env: subprocessEnvironment(project), stdio: ["ignore", "ignore", "pipe"],
   });
   if (result.error || result.signal || result.status !== 0 || !existsSync(resultFile) || !lstatSync(resultFile).isFile() || statSync(resultFile).size > 8 * 1024 * 1024) {
@@ -407,7 +410,9 @@ export async function checkSdkContracts(options: SdkContractOptions): Promise<Sd
 
     if (options.consumer === undefined) inlineConsumer(template, compiler);
     else {
-      copyConsumer(resolve(options.consumer), template);
+      const consumer = resolve(options.consumer);
+      if (!statSync(consumer, {throwIfNoEntry: false})?.isDirectory()) throw new SdkContractRefusal("invalid_input", "Provide an existing consumer project directory containing its tsconfig.json and installed TypeScript.");
+      copyConsumer(consumer, template);
       privateDirectory(template, join(template, "node_modules"));
 
     }

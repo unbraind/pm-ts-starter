@@ -291,7 +291,9 @@ test("tracked workflow filenames use NUL records for every unusual component", t
   execFileSync("git", ["init", "-q"], {cwd: root});
   mkdirSync(join(root, ".github/workflows"), {recursive: true}); mkdirSync(join(root, "dist"));
   writeFileSync(join(root, "dist/cli.js"), "console.log(process.argv.includes('--date-from-version') ? '## 2026.1.2 - 2026-01-02' : '## 2026.1.2 - 2030-12-31');");
-  const names = ["plain", "line\nfeed", "carriage\rreturn", "tab\tname", " spaced ", "--leading", "single'quote", 'double"quote', "é漢字"];
+  // Windows cannot create file names containing control characters or double quotes.
+  const names = ["plain", "line\nfeed", "carriage\rreturn", "tab\tname", " spaced ", "--leading", "single'quote", 'double"quote', "é漢字"]
+    .filter(name => process.platform !== "win32" || !/[\n\r\t"]/.test(name));
   for (const name of names) {
     const file = `.github/workflows/${name}.yml`;
     writeFileSync(join(root, file), "run: pm-changelog --release-version-from-package");

@@ -1240,3 +1240,19 @@ test("round 10 internal module and SDK scope links retain canonical selected SDK
     }
   }
 });
+
+test("dependency-root inventories larger than one command-line argument reach the compiler worker", async t => {
+  const project = noEmitConsumer(t), bound = dependencyBound(project);
+  // 2,000 installed packages: their scratch realpaths exceed Linux's 128 KiB per-argument and Windows' command-line limits.
+  const stem = "inventory-".padEnd(48, "x");
+  for (let index = 0; index < 2000; index++) dependencyEntry(project, `node_modules/${stem}-${index}`, `${stem}-${index}`);
+  const matrix = await checkSdkContracts({consumer: project, minimum: bound, current: bound});
+  assert.equal(matrix.ok, true, JSON.stringify(matrix.rows.map(row => row.codes)));
+});
+
+test("missing or non-directory consumer paths are typed invalid_input refusals without machine paths", async t => {
+  const project = noEmitConsumer(t), bound = dependencyBound(project);
+  for (const consumer of [join(project, "missing-consumer"), join(project, "consumer.mts")]) {
+    await assert.rejects(checkSdkContracts({consumer, minimum: bound, current: bound}), error => refuses("invalid_input")(error) && !(error as SdkContractRefusal).remedy.includes(project));
+  }
+});

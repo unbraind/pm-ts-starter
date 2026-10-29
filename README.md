@@ -367,9 +367,9 @@ verdicts with real `tsc --build`. Mutual dependency links, fatal options, global
 warm/cold caches and file/directory writer targets retain dedicated controls.
 Consumer configuration and original filesystem snapshots remain unchanged.
 
-The dependency differential corpus covers 11 installed shapes with passing and
+The dependency differential corpus covers 12 installed shapes with passing and
 TS2322 controls: npm and scoped aliases, file copies and links, link dependencies,
-workspaces, peers, bundled dependencies, differing metadata names, nested aliases
+named and relative workspaces, peers, bundled dependencies, differing metadata names, nested aliases
 and hidden stores. A separate property runs 200 independent seeded dependency
 graphs through plain tsc and the checker, with imports by installed name. It uses
 at most two active test workers; these are ordinary test processes, with no agent

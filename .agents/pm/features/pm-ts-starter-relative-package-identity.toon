@@ -6,11 +6,12 @@ status: open
 priority: 3
 tags[3]: compatibility,compiler-api,follow-up
 created_at: "2026-10-27T19:39:58.222Z"
-updated_at: "2026-10-28T16:38:16.633Z"
+updated_at: "2026-10-29T20:48:42.309Z"
 author: codex-agent
 acceptance_criteria: "Obtain ownership from actual Program resolution data without synthetic imports or package metadata ancestry; retain current typed refusal until identity is available; preserve direct compiler diagnostics and exact installed layouts; include named, unnamed, nested and mts/cts/ts package fixtures"
-comments[1]{created_at,author,text}:
+comments[2]{created_at,author,text}:
   "2026-10-28T16:30:53.920Z",codex-agent,"Round 14 removes the referenced-project exemption entirely: references are now unsupported and tracked separately by pm-ts-starter-project-references. Native TypeScript 5.9.3 also returns resolvedFileName and isExternalLibraryImport but no packageId for the typesVersions subpath fixture in test/sdk-program-graph.test.ts. Retain isolation_refused there and unsupported_project_shape for unidentified relative local packages. The dependency corpus retains the original relative workspace fixture as a refusal and adds an installed-name workspace control. Future support must obtain a compiler-owned identity without synthesizing resolution or walking metadata ancestry."
+  "2026-10-29T20:48:42.308Z",claude-hub,"Correction to the Round 14 comment (the earlier record stays as written): current behavior on this branch keeps native compiler verdicts for both shapes it described as refusals. test/sdk-program-graph.test.ts 'program checks single-copy typesVersions resolutions against native diagnostics' expects no diagnostics and agreement with the build for Node16/NodeNext/Bundler x mts/cts, with no isolation_refused. The dependency corpus in test/sdk-contracts.test.ts runs unidentified-workspace-relative through dependencyOracle like the other 11 shapes (plain compiler verdict, not a refusal). README and docs/sdk-contract-api-compatibility.md already describe it this way; README now counts 12 shapes."
 files[3]{path,scope}:
   sdk-contracts.ts,project
   test/sdk-api-review.test.ts,project

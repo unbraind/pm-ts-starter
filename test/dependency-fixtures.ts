@@ -4,7 +4,7 @@ import {spawnSync} from "node:child_process";
 import {createHash} from "node:crypto";
 import {cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, readdirSync, readFileSync, readlinkSync, lstatSync, symlinkSync} from "node:fs";
 import {dirname, join, resolve} from "node:path";
-import {tmpdir} from "node:os";
+import {devNull, tmpdir} from "node:os";
 import {after, type TestContext} from "node:test";
 import {checkSdkContracts, SdkContractRefusal, type SdkContractOptions, type SdkContractDiagnostic} from "../sdk-contracts.ts";
 
@@ -48,17 +48,21 @@ export function boundaryRandom(seed: number): () => number {
 /** Provision an exact unmodified public compiler without lifecycle scripts or user credentials. */
 export function installTestCompiler(directory: string, version: string): void {
   const result = spawnSync("npm", ["install", "--prefer-offline", "--prefix", directory, "--ignore-scripts", "--no-package-lock", "--no-audit", "--no-fund", `typescript@${version}`], {
-    encoding: "utf8", timeout: 120000, env: {...Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toLowerCase() !== "npm_config_allow_scripts")), NPM_CONFIG_USERCONFIG: "/dev/null", npm_config_userconfig: "/dev/null"},
+    encoding: "utf8", timeout: 120000, env: {...Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toLowerCase() !== "npm_config_allow_scripts")), NPM_CONFIG_USERCONFIG: devNull, npm_config_userconfig: devNull},
   });
-  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.status, 0, `npm install typescript@${version} failed (status ${result.status}, signal ${result.signal}, error ${result.error?.message ?? "none"}): ${result.stderr}`);
 }
 
 /** Lazily install a classic consumer API without changing the repository build compiler pin. */
 export function testCompiler(): string {
   if (!compilerTool) {
-    compilerTool = mkdtempSync(join(tmpdir(), "sdk-api-tool-"));
-    installTestCompiler(compilerTool, "5.9.3");
-    for (const name of ["@types", "undici-types"]) symlinkSync(resolve(import.meta.dirname, "../node_modules", name), join(compilerTool, "node_modules", name), "junction");
+    // Cache the fixture only once it is complete, so a failed install is reported, not reused as a missing tsc.
+    const directory = mkdtempSync(join(tmpdir(), "sdk-api-tool-"));
+    try {
+      installTestCompiler(directory, "5.9.3");
+      for (const name of ["@types", "undici-types"]) symlinkSync(resolve(import.meta.dirname, "../node_modules", name), join(directory, "node_modules", name), "junction");
+    } catch (error) { rmSync(directory, {recursive: true, force: true}); throw error; }
+    compilerTool = directory;
   }
   return join(compilerTool, "node_modules/typescript/bin/tsc");
 }

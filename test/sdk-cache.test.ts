@@ -14,8 +14,11 @@ after(() => { for (const root of tools.values()) rmSync(root, {recursive: true, 
 function compiler(version: string): string {
   let root = tools.get(version);
   if (!root) {
-    root = mkdtempSync(join(tmpdir(), "sdk-cache-compiler-")); tools.set(version, root);
-    installTestCompiler(root, version);
+    // Register the compiler only after its install succeeds, so a failed install is never reused.
+    const directory = mkdtempSync(join(tmpdir(), "sdk-cache-compiler-"));
+    try { installTestCompiler(directory, version); }
+    catch (error) { rmSync(directory, {recursive: true, force: true}); throw error; }
+    tools.set(version, directory); root = directory;
   }
   return join(root, "node_modules/typescript");
 }
