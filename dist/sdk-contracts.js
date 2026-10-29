@@ -188,7 +188,7 @@ function isolationRefusal() {
 /** Compare complete path components, including canonical symlink destinations. */
 function inside(root, file) {
     const path = relative(root, file);
-    return !isAbsolute(path) && path !== ".." && !path.startsWith("../") && !path.startsWith("..\\");
+    return !isAbsolute(path) && path !== ".." && !path.startsWith(".." + sep);
 }
 /** Resolve package links once per real path, including mutually linked external dependencies. */
 function dependencyRoots(project) {
@@ -341,11 +341,11 @@ function inlineConsumer(project, compiler) {
     const entry = resolve(compiler);
     if (!existsSync(entry) || !statSync(entry).isFile())
         throw new SdkContractRefusal("compiler_unavailable", "Provide an installed TypeScript compiler entry and its JavaScript API.");
-    const parts = entry.split(/[/\\]node_modules[/\\]/);
-    const modules = parts.length > 1 ? join(parts.slice(0, -1).join("/node_modules/"), "node_modules") : dirname(dirname(dirname(resolveSdkContractCompiler())));
+    const parts = dirname(entry).split(sep), lastModules = parts.lastIndexOf("node_modules");
+    const modules = lastModules >= 0 ? parts.slice(0, lastModules + 1).join(sep) : dirname(dirname(dirname(resolveSdkContractCompiler())));
     const artifact = join(modules, "typescript");
     if (!existsSync(artifact) || !inside(realpathSync(artifact), realpathSync(entry)))
-        throw new SdkContractRefusal("compiler_unavailable", "Select an entry inside the installed TypeScript package whose JavaScript API will check these examples.");
+        throw new SdkContractRefusal("compiler_unavailable", "Select a file inside node_modules/typescript or a symlink into it; external shell/JavaScript wrappers are rejected. The package's JavaScript API checks inline examples; the entry is never executed.");
     const ambient = existsSync(join(modules, "@types")) ? readdirSync(join(modules, "@types")).map(name => "@types/" + name) : [];
     const native = existsSync(join(modules, "@typescript")) ? readdirSync(join(modules, "@typescript")).map(name => "@typescript/" + name) : [];
     materializeInlineDependencies(project, modules, ["typescript", "undici-types", ...ambient, ...native]);
@@ -356,7 +356,7 @@ export function resolveSdkContractCompiler(from = import.meta.url) {
         return join(dirname(createRequire(from).resolve("typescript/package.json")), "bin", "tsc");
     }
     catch {
-        throw new SdkContractRefusal("compiler_unavailable", "Install TypeScript or pass --compiler pointing to its executable JavaScript entry.");
+        throw new SdkContractRefusal("compiler_unavailable", "Install TypeScript or pass --compiler selecting a file inside node_modules/typescript or a symlink into it; external shell/JavaScript wrappers are rejected and the package must expose the JavaScript compiler API.");
     }
 }
 /** Compile real declarations with original option values and disposable output/cache storage. */

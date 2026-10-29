@@ -24,7 +24,7 @@ export interface SdkContractOptions {
     examples?: readonly SdkConsumerExample[];
     /** Self-contained consumer directory, including its own tsconfig and installed TypeScript. */
     consumer?: string;
-    /** Entry inside the installed TypeScript artifact selected for inline examples. */
+    /** Inline-only file whose realpath is inside node_modules/typescript; external wrappers are rejected. The package's JavaScript API is loaded, never the entry. */
     compiler?: string;
     /** Optional progress observer, also useful when checking overlapping callers. */
     onProgress?: (phase: SdkContractPhase) => void;

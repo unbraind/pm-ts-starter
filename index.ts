@@ -485,7 +485,7 @@ const sdkContractsCommand = defineCommand({
     { long: "--minimum-sdk", value_name: "directory", value_type: "string", description: "Installed package root matching this extension's declared SDK floor." },
     { long: "--current-sdk", value_name: "directory", value_type: "string", description: "Installed current published SDK package root." },
     { long: "--current-version", value_name: "version", value_type: "string", description: "Exact current published SDK version." },
-    { long: "--compiler", value_name: "file", value_type: "string", description: "TypeScript compiler entry (JavaScript or executable shell shim); defaults to the local compiler." },
+    { long: "--compiler", value_name: "file", value_type: "string", description: "Inline examples only: file inside selected node_modules/typescript; .bin/tsc symlinks into that package work, external shell/JavaScript wrappers are rejected. Uses the package's JavaScript API; defaults to the local package." },
     { long: "--consumer", value_name: "directory", value_type: "string", description: "Self-contained consumer project with its own tsconfig and installed TypeScript." },
     { long: "--examples", value_name: "file", value_type: "string", description: "JSON array of id/source consumers; defaults to shipped public API examples." },
   ],

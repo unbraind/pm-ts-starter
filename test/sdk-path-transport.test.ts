@@ -2,12 +2,32 @@
 import assert from "node:assert/strict";
 import {mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
-import {dirname, join, resolve} from "node:path";
+import {dirname, join, resolve, sep} from "node:path";
 import test from "node:test";
 import {checkSdkContracts, SdkContractRefusal} from "../sdk-contracts.ts";
-import {boundaryRandom, dependencyBound, dependencyEntry, filesystemSnapshot, installTestCompiler, testCompiler, directApiDiagnostics} from "./dependency-fixtures.ts";
+import {apiConsumer, boundaryRandom, dependencyBound, dependencyEntry, filesystemSnapshot, installTestCompiler, testCompiler, directApiDiagnostics} from "./dependency-fixtures.ts";
 
 const unusual = ["\n", "\r", "\t", " ", "--leading", "'", '"', "é漢字"];
+
+test("native containment property preserves literal backslash names while refusing real escapes", async t => {
+  const {root, project, bound} = apiConsumer(t), random = boundaryRandom(154489), sources: string[] = [];
+  for (let index = 0; index < 8; index++) {
+    const name = (sep === "/" ? "..\\" : "..literal-") + random().toString(36), target = join(project, name);
+    mkdirSync(target); writeFileSync(join(target, "index.d.ts"), "export declare const value: 1;");
+    symlinkSync(target, join(project, "alias-" + index), "junction");
+    sources.push(`export {value as v${index}} from "./alias-${index}/index.js";`);
+  }
+  writeFileSync(join(project, "consumer.ts"), sources.join("\n"));
+  assert.deepEqual(directApiDiagnostics(project), []);
+  const before = filesystemSnapshot(root), matrix = await checkSdkContracts({consumer: project, minimum: bound, current: bound});
+  assert.equal(matrix.ok, true); assert.equal(matrix.checks, 2); assert.equal(filesystemSnapshot(root), before);
+  const outside = join(root, "outside"); mkdirSync(outside);
+  writeFileSync(join(outside, "index.d.ts"), "export declare const value: 1;");
+  symlinkSync(outside, join(project, "escape"), "junction");
+  const refused = filesystemSnapshot(root);
+  await assert.rejects(checkSdkContracts({consumer: project, minimum: bound, current: bound}), error => error instanceof SdkContractRefusal && error.code === "isolation_refused");
+  assert.equal(filesystemSnapshot(root), refused);
+});
 
 /** Create a consumer using the installed compiler link without reconstructing its package identity. */
 function consumerDirectory(root: string, tool = dirname(dirname(testCompiler()))): string {

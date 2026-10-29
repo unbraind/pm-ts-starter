@@ -276,8 +276,16 @@ export async function consume(options: SdkContractOptions): Promise<SdkContractM
       module: "NodeNext", moduleResolution: "NodeNext", target: "ES2022", types: ["node"] },
       files: ["authoring.ts", "complete-read.ts", "emitted-consumer.ts"] }));
     const entry = join(project, "consumer.mjs");
-    writeFileSync(entry, `import {checkSdkContracts} from 'pm-ts-starter';
+    const wrapper = join(project, 'compiler-wrapper.cjs');
+    writeFileSync(wrapper, 'process.exit(47);'); chmodSync(wrapper, 0o755);
+    writeFileSync(entry, `import extension, {checkSdkContracts} from 'pm-ts-starter';
+import {createExtensionTestHarness} from '@unbrained/pm-cli/sdk/testing';
+import assert from 'node:assert/strict';
 import {createRequire} from 'node:module'; import {readFileSync} from 'node:fs';
+const harness = await createExtensionTestHarness(extension,{name:'pm-ts-starter',capabilities:['commands','renderers','hooks','schema','importers','search','parser','preflight','services']});
+const help = harness.activation.registrations.flags.flatMap(entry=>entry.flags).find(entry=>entry.long==='--compiler').description;
+assert.match(help,/external shell\\/JavaScript wrappers are rejected/);
+await assert.rejects(checkSdkContracts({minimum:${JSON.stringify(options.minimum)},current:${JSON.stringify(options.current)},compiler:${JSON.stringify(wrapper)},examples:[{id:'inline',source:'export const value = 1;'}]}),error=>error.code==='compiler_unavailable'&&/wrappers are rejected/.test(error.remedy));
 const require = createRequire(${JSON.stringify(emitted)});
 const resolved = require.resolve('@unbrained/pm-cli/package.json');
 const sdkVersion = JSON.parse(readFileSync(resolved, 'utf8')).version;
@@ -299,6 +307,9 @@ console.log(JSON.stringify({sdkVersion, resolved, sdkEntry, matrix: await checkS
       const cli = join(project, "node_modules/@unbrained/pm-cli/dist/cli.js");
       const activated = spawnSync(process.execPath, [cli, "--pm-path", tracker, "package", "install", join(project, "node_modules/pm-ts-starter"), "--project"], { cwd: project, encoding: "utf8", timeout: 30000 });
       assert.equal(activated.status, 0, activated.stderr);
+      const helpRun = spawnSync(process.execPath, [cli, '--pm-path', tracker, 'ts-starter', 'sdk-contracts', '--help'], {cwd: project, encoding: 'utf8', timeout: 30000});
+      assert.equal(helpRun.status, 0, helpRun.stderr);
+      assert.match(helpRun.stdout.replace(/\s+/g, ' '), /external shell\/JavaScript wrappers are rejected/);
       for (const format of [[], ["--json"]]) {
         const cliRun = spawnSync(process.execPath, [cli, "--pm-path", tracker, "ts-starter", "sdk-contracts", "--minimum-sdk", endpoints.minimum,
           "--current-sdk", endpoints.current, "--current-version", currentVersion, "--compiler", compiler, ...format], {
@@ -307,6 +318,10 @@ console.log(JSON.stringify({sdkVersion, resolved, sdkEntry, matrix: await checkS
         assert.equal(cliRun.status, 0, cliRun.stderr);
         if (format.length) assert.equal(JSON.parse(cliRun.stdout).checks, 4);
         else assert.match(cliRun.stdout, /checks: 4/);
+        const refused = spawnSync(process.execPath, [cli, '--pm-path', tracker, 'ts-starter', 'sdk-contracts', '--minimum-sdk', endpoints.minimum, '--current-sdk', endpoints.current, '--current-version', currentVersion, '--compiler', wrapper, ...format], {cwd: project, encoding: 'utf8', timeout: 30000});
+        assert.equal(refused.status, 2, refused.stderr);
+        assert.match(refused.stdout + refused.stderr, /compiler_unavailable/);
+        assert.match(refused.stdout + refused.stderr, /wrappers are rejected/);
       }
     }
     // The same packed module also works with PATH containing no git (or other tools).

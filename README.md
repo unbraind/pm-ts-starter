@@ -252,6 +252,21 @@ error count, up to three sample codes, and compiler diagnostic locations/message
 Disposable project prefixes are normalized in those messages. `invalid_input`, `sdk_unavailable`,
 `compiler_unavailable`, `compiler_api_unavailable`, `unsupported_project_shape` and `isolation_refused` are typed refusals with retry guidance.
 
+`--compiler` applies only to inline examples. It selects the installed
+`node_modules/typescript` package through a file inside it (for example
+`typescript/bin/tsc` or `typescript/lib/typescript.js`), or a symlink whose real
+path is inside that package (including a symlink at `node_modules/.bin/tsc`).
+The checker loads that package's JavaScript API; it never executes the selected
+file. Regular shell, JavaScript and Windows command wrappers outside the package
+are rejected with `compiler_unavailable`, even when executable. For a wrapper at
+`node_modules/.bin/tsc`, pass `node_modules/typescript/bin/tsc` instead.
+The package must expose the classic compiler APIs described below. With
+`--consumer`, omit `--compiler`: the consumer's own installed TypeScript is used.
+The last `node_modules` component in the supplied compiler path selects the
+installation. A path without that component selects the checker's local
+`node_modules`; a symlink to a different installation is rejected. Prefer the
+explicit package entry shown above when selecting another installation.
+
 Pass `--consumer ./consumer` to check a self-contained consumer project. Its sources,
 package metadata, dependencies and tsconfig are copied into an exclusive directory
 for each bound. Each copy contains the selected SDK as a physical package in its

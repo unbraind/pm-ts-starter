@@ -3,15 +3,17 @@ title: Compile packed contracts against each exact selected SDK bound
 description: "Follow-up to PR 153: packed declarations resolved SDK imports from a current-only consumer installation, leaving the minimum bound untested. Isolate each runtime and bound, verify the installed resolution, and regress a current-only public SDK API."
 type: Issue
 pm_format_version: 2
-status: blocked
+status: in_progress
 priority: 1
 tags[1]: "gh:unbraind/pm-ts-starter#154"
 created_at: "2026-10-24T13:07:42.652Z"
-updated_at: "2026-10-28T20:28:26.814Z"
+updated_at: "2026-10-29T18:57:29.376Z"
+assignee: codex-agent
+claim_principal: codex-agent
 author: codex-agent
 acceptance_criteria: Exact manifest minimum and explicit current SDK resolve inside separate packed npm and Bun consumers; a newer-only public API passes current and fails minimum; reverting only consumer provisioning fails the regression.
 blocked_reason: Merged-head npm/Bun release CI and independent review pending after bounded wait
-comments[184]{created_at,author,text}:
+comments[193]{created_at,author,text}:
   "2026-10-24T13:07:46.558Z",codex-agent,"Scope: correct the packed-consumer compatibility gate added by PR 153. Use separate npm and Bun consumer installations per bound, select the minimum from manifest.json and current release 2026.10.24, and prove the actual resolver result from each consumer. Add a real newer-only SDK API use through emitted declarations, retaining the fixed compiler examples and no-git checks. Repository dependency pins remain unchanged; full npm and Bun release gates will run locally and in CI."
   "2026-10-24T13:07:47.361Z",codex-agent,"Implementation: each compiler project maps the selected SDK public type exports through TypeScript paths, including imports reached through absolute external declarations. Unexported SDK subpaths resolve to an empty declaration rather than falling through to a foreign installation. Packed acceptance now installs npm and Bun consumers separately for each exact bound and verifies package metadata and SDK entry resolution at runtime. Regression uses real acquireLockLease, absent in the manifest minimum and present in 2026.10.24. Typecheck, test typecheck, lint, docstring gate and zero-duplication gate passed."
   "2026-10-24T13:07:47.949Z",codex-agent,"Fail-on-revert proof: restored only checkSdkContracts to its origin/main implementation, leaving the new regression and helper intact. node --test --test-name-pattern='absolute declaration imports report newer-only SDK APIs as minimum drift' test/sdk-contracts.test.ts failed 1/1: expected matrix.ok=false, got true, because the minimum inherited acquireLockLease from the external consumer's current SDK. Restored the fixed function immediately. Before revert the complete targeted suite passed 8/8 with 100% sdk-contracts.ts lines, branches and functions. Running the registered targeted suite again after restoration. Local strict tracker health passes after provisioning the same pm-github version as CI; an existing provenance advisory remains untouched."
@@ -196,7 +198,16 @@ comments[184]{created_at,author,text}:
   "2026-10-28T19:34:13.397Z",codex-agent,"Round 15 implementation 4ec576f446325f38d12df778ffde61a208bc876d is pushed with main 994112d included. CI run https://github.com/unbraind/pm-ts-starter/actions/runs/40755279900 has passed strict tracker health and committed-output reproduction on both Node 22 and 26 (2/2 each); npm gates are running and Bun is pending (0/4 full gates completed at handoff). This append-only tracker handoff will be pushed immediately and receive fresh exact-head CI; the authoritative final-head checks remain https://github.com/unbraind/pm-ts-starter/pull/154/checks. All tracker writes precede final CI verification; the PR description and final report will carry the new run URL and measured completion counts within the owner-authorized 45-minute limit. Implementation delta from round-14 head: product/docs/tests +302/-201 (net +101), including new property coverage; sdk-contracts.ts removes inherited identity machinery and is 501 bytes smaller. Including tracker evidence: +376/-206 (net +170) before this handoff. Changelog regeneration/check passed. Keep this item open, blocked for full gates and independent review; no merge or publication."
   "2026-10-28T20:22:06.311Z",codex-agent,"Main advanced during the bounded final-head CI wait. At the cutoff, run 40755672226 still had 0/4 full release gates complete (npm running on Node 22/26, Bun pending); health and committed-output checks passed 2/2 each and CodeQL 40755672133 passed. Merge main f79d245, including its Dependabot-owned toolchain pins and startup-refusal tests, without modifying imported pm-ts-starter-vgd7 records. Both parent history prefixes remain intact. Reinstalled exact main dependencies with lifecycle scripts disabled (0 audit vulnerabilities). Rechecking the single-copy review/ordinary controls and both upstream startup-refusal cases before the integration push. No further full-gate wait will be claimed after the 45-minute limit; final integration CI remains authoritative and pending."
   "2026-10-28T20:28:20.793Z",codex-agent,"Integration verification with main f79d245 and its pinned pm-cli 2026.10.25: linked focused tests passed 4/4 (vendored-wrapper review, ordinary native diagnostics, both read-only startup refusals). Source/test typecheck, lint, build, duplication (0/11084 lines, 42 sources), 53/53 docstrings, changelog regeneration/check and strict tracker health pass. Initial concurrent duplication scan hit transient tracker lock cleanup ENOENT; the sequential rerun passes unchanged thresholds. Both original and imported histories preserve all available parent prefixes; imported pm-ts-starter-vgd7 is unchanged. SDK implementation remains SHA256 8b1f2559694960c06fc507315ff02c3c1a03e8fd54301a4183aa61c057604e8e, so the recorded function-only revert proofs still cover this implementation. New sealed integration package: 29 files, 79291 bytes, SHA256 764db8e735f181f8c8cf5bebc43fa0f1e9183fd97af44ae62184d895bb2f4cc6; every byte and tracked dist inventory verified, ignored-file mutation detected. Original artifact retained separately; neither is tracked or published. At the 45-minute CI cutoff, pre-merge run 40755672226 had 0/4 full gates complete; it was canceled for the mandatory main integration. Its Node 26 log confirms real packed npm/Bun acceptance and the 144/144 differential matrix (60 drift, 84 clean) passed, with no test failure marker in available logs. These are partial older-head receipts, not full or final-head gates. Final merged-head CI at https://github.com/unbraind/pm-ts-starter/pull/154/checks remains pending and will be linked in the PR description/final report; no additional full-gate wait beyond the owner limit. Keep the item open and blocked for exact-head release gates and independent review; release only this claim."
-files[32]{path,scope}:
+  "2026-10-29T18:11:30.787Z",codex-agent,"Owner review round: pulled the PR branch and merged origin/main before changes. Collected all review threads/comments with pagination receipts: one unresolved CodeQL thread PRRT_kwDOSZpwFM6w4fMI; no CodeRabbit review body exists. Verify Node-code fixture warning against its data flow. Fix compiler help/docs to describe realpath-contained TypeScript entries and symlinks accurately, with executable external-wrapper refusal controls. Close the contract class across SDK, CLI help, JSON/TOON and packed npm/Bun non-git consumers. Prior head CI passed 533 tests in each lane but failed 100% branch coverage (sdk-contracts 99.56%, aggregate 99.89%); retain thresholds and cover the missing branches. Record behavioral revert evidence, full serial npm/Bun gates, artifact checks and final head; leave tracker open."
+  "2026-10-29T18:17:29.932Z",codex-agent,"CodeQL thread PRRT_kwDOSZpwFM6w4fMI is not an exploitable injection finding: removed is constructed exclusively from the fixed methods array in test/sdk-api-boundary.test.ts; JSON.stringify serializes only those method names into a disposable CommonJS file, executed by Node. There is no untrusted value, HTML document or script-tag sink. The reported CodeQL rule explains an HTML closing-script scenario, which cannot occur here. Package-wide inspection of generated runtime and test-worker code confirms Node/CommonJS execution rather than HTML emission; caller sources are compiled and never executed. Keep this thread unresolved per owner instructions and report the evidence-backed refusal. The compiler-help contract is valid and will be fixed across registered help, SDK JSDoc/remedies, README and packed outputs. An initial test link used the default codex author; subsequent tracker writes explicitly use codex-agent."
+  "2026-10-29T18:21:20.671Z",codex-agent,"Behavioral revert proof: in a disposable copy, restored only the registered compiler-help description to its pre-fix value from 73f8d0b. node --test --test-concurrency=1 --test-name-pattern=\"compiler entry contract\" test/sdk-compiler-entry.test.ts failed 1/1 as expected because shell-shim support was advertised. Restoring the fixed description passes 1/1; the working checkout was never mutated. The SDK property control passes 2/2 together with the help test on the original focused run: three contained/symlink entry forms accepted, fifteen executable external wrappers refused, inputs unchanged. One concurrent PM-run repetition hit the existing 90-second compiler-worker deadline under heavy host load; the standalone run passed unchanged, and the clean Node 26 retry includes the additional foreign-installation symlink control. Lint, source/test typecheck, build and unchanged zero-duplication gate pass. New tests are retained; no threshold or runtime deadline changed."
+  "2026-10-29T18:23:34.252Z",codex-agent,"Hostile whole-diff review found another instance of the native-path identity class: parent-side containment treated backslash as a separator on POSIX, unlike the compiler worker and rehearsal paths. A legitimate local symlink into a directory named with literal dot-dot-backslash bytes was refused. Use the platform separator consistently in the shared SDK containment helper. Add an eight-name generated native-oracle corpus that must accept those local symlinks at both bounds while still refusing a real external symlink; preserve original snapshots. Search confirms the worker and rehearsal containment already use their native separator. Record a separate one-function revert proof for this correction."
+  "2026-10-29T18:26:39.002Z",codex-agent,"Native containment behavioral revert proof: copied the package into disposable storage and restored only inside(root, file) in sdk-contracts.ts to its 73f8d0b implementation. node --test --test-concurrency=1 --test-name-pattern=\"native containment property\" test/sdk-path-transport.test.ts fails 1/1 with an incorrect isolation_refused for the generated local backslash-named symlink corpus. Restoring the fixed helper passes 1/1, including eight generated local names, two SDK-bound rows, independent native diagnostics and a must-refuse real external link; source snapshots remain unchanged. Repeated the help-only revert in the same disposable run: fails 1/1 reverted and passes 1/1 restored. Neither experiment mutates the working checkout. Existing single-copy and project-reference enforcement remains intact."
+  "2026-10-29T18:30:43.915Z",codex-agent,"The native-separator sweep also found inlineConsumer splitting both slash styles and reconstructing with slash. On POSIX, an otherwise valid compiler installation beneath a literal backslash-node_modules-backslash directory was misidentified. Use the platform separator for both splitting and reconstruction, as for containment and worker paths. The entry property now includes this must-allow installation alias, in addition to normal package files, a .bin symlink, external executable-wrapper refusals and a foreign-installation alias refusal. Add a separate inlineConsumer-only revert proof, preserving all existing tests and thresholds."
+  "2026-10-29T18:33:36.102Z",codex-agent,"Completed the separator class audit across authored modules, compiler worker, CLI, generators and path transports: inline compiler selection now identifies the last actual node_modules directory component rather than matching separator-like filename bytes or overlapping textual delimiters. This also handles adjacent node_modules/node_modules containers. The generated installation property uses eight seeded literal delimiter-bearing path components plus an adjacent-container installation. The two pre-existing reference/multiple-copy refusal contracts remain unchanged. Initial packed acceptance hit npm ETIMEDOUT during independent SDK provisioning under host load; retrying unchanged timeouts and retaining the failure receipt."
+  "2026-10-29T18:36:59.920Z",codex-agent,"Inline compiler selection behavioral revert proof: in a disposable copy restored only inlineConsumer to its 73f8d0b implementation. node --test --test-concurrency=1 --test-name-pattern=\"compiler installation property\" test/sdk-compiler-entry.test.ts fails 1/1 (compiler_unavailable on an otherwise valid installation beneath generated literal delimiter-bearing filenames). Restoring the fixed function passes 1/1, including eight seeded native filename components and an adjacent node_modules/node_modules installation, four successful bound rows and unchanged source snapshots. This is separate from the help and containment-helper proofs. Lint and unchanged zero duplication pass. Packed acceptance has twice failed during SDK npm provisioning before executing the new assertions; diagnosing that boundary and retrying without changing suite timeouts."
+  "2026-10-29T18:57:29.334Z",codex-agent,"Ready for dedicated-runner validation: all three behavioral reverts fail and pass after restoration; source/test typecheck, lint, 0% duplication, 53 documented declarations, build, changelog, staged identity/privacy/text-only checks and append-only main-prefix checks pass. The unchanged full npm release gate is running under Node 26 with isolated HOME and global/system Git configuration; its generated npm/Bun non-git project and crash-recovery matrix cases pass so far. Dedicated CI will run both npm/Bun release gates on Node 22 and 26 concurrently with continued local validation. No full-gate success is claimed yet. Cold direct provisioning succeeded for both exact SDK bounds: minimum 131 seconds, current 102 seconds; the two packed-test attempts exceeded the existing 120-second provisioning deadline before their new assertions. Cached fixtures are reused without changing tests, limits or thresholds. Work remains in progress and the claim remains held until final results are recorded."
+files[33]{path,scope}:
   .github/workflows/ci.yml,project
   dist/index.d.ts.map,project
   dist/index.js,project
@@ -220,6 +231,7 @@ files[32]{path,scope}:
   test/sdk-api-review.test.ts,project
   test/sdk-api.test.ts,project
   test/sdk-cache.test.ts,project
+  test/sdk-compiler-entry.test.ts,project
   test/sdk-compiler-policy.test.ts,project
   test/sdk-contracts.test.ts,project
   test/sdk-delegation.test.ts,project
@@ -229,7 +241,7 @@ files[32]{path,scope}:
   test/sdk-single-copy.test.ts,project
   test/sdk-writer-boundary.test.ts,project
   test/verify-release-changelog-date.test.ts,project
-tests[61]:
+tests[65]:
   - command: node --test --experimental-test-coverage --test-coverage-include=sdk-contracts.ts test/sdk-contracts.test.ts
     scope: project
     timeout_seconds: 3600
@@ -716,6 +728,40 @@ tests[61]:
     provenance:
       author: codex-agent
       created_at: "2026-10-28T20:22:18.717Z"
+      source_kind: local_mutation
+      source_ref: fix/min-sdk-drift-check
+  - command: node --test --test-concurrency=1 test/sdk-compiler-entry.test.ts
+    scope: project
+    timeout_seconds: 1200
+    provenance:
+      author: codex
+      created_at: "2026-10-29T18:15:37.965Z"
+      source_kind: local_mutation
+      source_ref: fix/min-sdk-drift-check
+    updated_by: codex-agent
+    updated_at: "2026-10-29T18:17:08.825Z"
+  - command: "node --test --test-concurrency=1 --test-name-pattern=native\\ containment\\ property test/sdk-path-transport.test.ts"
+    scope: project
+    timeout_seconds: 600
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-29T18:26:09.817Z"
+      source_kind: local_mutation
+      source_ref: fix/min-sdk-drift-check
+  - command: "node --test --test-concurrency=1 --test-name-pattern=compiler\\ entry\\ contract test/sdk-compiler-entry.test.ts"
+    scope: project
+    timeout_seconds: 300
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-29T18:26:31.761Z"
+      source_kind: local_mutation
+      source_ref: fix/min-sdk-drift-check
+  - command: "node --test --test-concurrency=1 --test-name-pattern=compiler\\ installation\\ property test/sdk-compiler-entry.test.ts"
+    scope: project
+    timeout_seconds: 1200
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-29T18:33:21.004Z"
       source_kind: local_mutation
       source_ref: fix/min-sdk-drift-check
 docs[17]{path,scope}:
