@@ -498,7 +498,7 @@ const sdkContractsCommand = defineCommand({
       const version = ctx.options["currentVersion"] ?? ctx.options["current-version"];
       const compiler = ctx.options["compiler"], examples = ctx.options["examples"], consumer = ctx.options["consumer"];
       if (typeof minimum !== "string" || typeof current !== "string" || typeof version !== "string" ||
-        (consumer !== undefined && typeof consumer !== "string") || (compiler !== undefined && typeof compiler !== "string") || (examples !== undefined && typeof examples !== "string")) throw new SdkContractRefusal("invalid_input", "Provide --minimum-sdk, --current-sdk and --current-version; optional --compiler and --examples take file names.");
+        (consumer !== undefined && typeof consumer !== "string") || (compiler !== undefined && typeof compiler !== "string") || (examples !== undefined && typeof examples !== "string")) throw new SdkContractRefusal("invalid_input", "Provide --minimum-sdk, --current-sdk and --current-version; optional --compiler and --examples take file names, or --consumer takes a project directory.");
       const matrix = await checkSdkContracts({ minimum: { root: minimum, version: SDK_TARGET }, current: { root: current, version }, compiler, consumer,
         examples: examples === undefined ? undefined : parseSdkConsumerExamples(JSON.parse(readFileSync(examples, "utf8"))) });
       // Preserve the full typed matrix on stdout while making drift fail automation.

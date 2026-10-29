@@ -235,6 +235,8 @@ test("registered command supports both flag forms, typed refusals and nonzero dr
     await assert.rejects(async () => handler.run({ ...base, options: patch }), error => error instanceof Error && error.name === "PmCliError" && "code" in error);
   }
   await assert.rejects(async () => handler.run({ ...base, options: null as unknown as typeof base.options }), error => error instanceof Error && error.name === "PmCliError");
+  // A malformed --consumer gets a remedy that names the flag and its directory value.
+  await assert.rejects(async () => handler.run({ ...base, options: { ...options, consumer: true } }), error => error instanceof Error && /--consumer takes a project directory/.test(error.message));
   const { compiler: _compiler, ...withoutCompiler } = options;
   await assert.rejects(async () => handler.run({...base, options: withoutCompiler}), error => error instanceof Error && error.message.includes("createProgram"));
   await assert.rejects(async () => handler.run({ ...base, args: ["extra"] }), error => error instanceof Error && error.name === "PmCliError");
