@@ -321,7 +321,8 @@ if(!['createProgram','getPreEmitDiagnostics','getParsedCommandLineOfConfigFile']
    else if(sdkFiles.has(file)&&!inside(installed,file))sdkRoots.add(owner?.root??path.dirname(file));
   }
   if(sdkRoots.size>1){
-   const roots=[...sdkRoots].map(root=>(path.relative(project,root)||'.').split(path.sep).join('/')).sort();
+   // Roots outside the private copy are external links: name only their directory, never a path through the caller's filesystem.
+   const roots=[...sdkRoots].map(root=>(label(root)||'.').split(path.sep).join('/')).sort();
    throw {refusal:'unsupported_project_shape',reason:'multiple_sdk_copies',roots,remedy:'multiple_sdk_copies: SDK declaration roots '+JSON.stringify(roots)+'. Dedupe to one @unbrained/pm-cli package and resolve SDK imports to the selected root.'};
   }
   for(const {file} of files)if(!inside(project,file)&&!closestRoot(file,roots))refused(file);

@@ -8,6 +8,10 @@ import {devNull, tmpdir} from "node:os";
 import {after, type TestContext} from "node:test";
 import {checkSdkContracts, SdkContractRefusal, type SdkContractOptions, type SdkContractDiagnostic} from "../sdk-contracts.ts";
 
+const configuredInstallTimeout = Number(process.env.PM_TS_STARTER_INSTALL_TIMEOUT_MS);
+/** Ceiling for registry installs in tests: cold caches took 102-131 s, so 10 minutes unless PM_TS_STARTER_INSTALL_TIMEOUT_MS sets positive milliseconds. */
+export const INSTALL_TIMEOUT_MS = Number.isInteger(configuredInstallTimeout) && configuredInstallTimeout > 0 ? configuredInstallTimeout : 600_000;
+
 /** Write a dependency exactly where the consumer installed it, independent of its metadata name. */
 export function dependencyEntry(root: string, installed: string, actual: string, declarations = 'export declare const value: "selected";'): void {
   const directory = join(root, installed);
@@ -48,7 +52,7 @@ export function boundaryRandom(seed: number): () => number {
 /** Provision an exact unmodified public compiler without lifecycle scripts or user credentials. */
 export function installTestCompiler(directory: string, version: string): void {
   const result = spawnSync("npm", ["install", "--prefer-offline", "--prefix", directory, "--ignore-scripts", "--no-package-lock", "--no-audit", "--no-fund", `typescript@${version}`], {
-    encoding: "utf8", timeout: 120000, env: {...Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toLowerCase() !== "npm_config_allow_scripts")), NPM_CONFIG_USERCONFIG: devNull, npm_config_userconfig: devNull},
+    encoding: "utf8", timeout: INSTALL_TIMEOUT_MS, env: {...Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toLowerCase() !== "npm_config_allow_scripts")), NPM_CONFIG_USERCONFIG: devNull, npm_config_userconfig: devNull},
   });
   assert.equal(result.status, 0, `npm install typescript@${version} failed (status ${result.status}, signal ${result.signal}, error ${result.error?.message ?? "none"}): ${result.stderr}`);
 }

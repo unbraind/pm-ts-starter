@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import {mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
-import {dirname, join, resolve, sep} from "node:path";
+import {basename, dirname, join, resolve, sep} from "node:path";
 import test from "node:test";
 import {checkSdkContracts, SdkContractRefusal} from "../sdk-contracts.ts";
 import {apiConsumer, boundaryRandom, dependencyBound, dependencyEntry, filesystemSnapshot, installTestCompiler, testCompiler, directApiDiagnostics} from "./dependency-fixtures.ts";
@@ -88,6 +88,8 @@ for (const version of ["shared 5.9.3", "5.9.3", "6.0.3"]) {
       const foreignBefore = filesystemSnapshot(root);
       const refusal = await isolationFailure({consumer: project, minimum, current});
       assert.ok(refusal.roots?.some(root => root.split("/").includes(name)), "structured refusal roots retain the complete directory component");
+      assert.ok(refusal.roots?.every(root => !root.split("/").includes("..")), `external roots never become parent paths: ${JSON.stringify(refusal.roots)}`);
+      assert.ok(!refusal.message.includes(basename(root)), "the remedy names no caller directory outside the SDK root");
       assert.equal(filesystemSnapshot(root), foreignBefore);
       rmSync(join(project, "node_modules/foreign-sdk"));
     }

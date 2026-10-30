@@ -8,7 +8,7 @@ import { pathToFileURL } from "node:url";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import test, { after, type TestContext } from "node:test";
 import { Worker } from "node:worker_threads";
-import {dependencyEntry, testCompiler, directApiDiagnostics, dependencyBound, filesystemSnapshot, boundaryRandom} from "./dependency-fixtures.ts";
+import {dependencyEntry, testCompiler, directApiDiagnostics, dependencyBound, filesystemSnapshot, boundaryRandom, INSTALL_TIMEOUT_MS} from "./dependency-fixtures.ts";
 import { PmClient } from "@unbrained/pm-cli/sdk";
 import { createExtensionTestHarness } from "@unbrained/pm-cli/sdk/testing";
 import extension from "../index.ts";
@@ -40,7 +40,7 @@ function publishedSdks(): { root: string; minimum: string; current: string } {
   const root = mkdtempSync(join(tmpdir(), "sdk-published-test-"));
   published = { root, minimum: join(root, "minimum/node_modules/@unbrained/pm-cli"), current: join(root, "current/node_modules/@unbrained/pm-cli") };
   for (const [name, version] of [["minimum", minimumVersion], ["current", currentVersion]]) {
-    const install = spawnSync("npm", ["install", "--prefer-offline", "--prefix", join(root, name!), "--ignore-scripts", "--no-package-lock", "--no-audit", "--no-fund", `@unbrained/pm-cli@${version}`], { encoding: "utf8", timeout: 120000, env: installationEnv() });
+    const install = spawnSync("npm", ["install", "--prefer-offline", "--prefix", join(root, name!), "--ignore-scripts", "--no-package-lock", "--no-audit", "--no-fund", `@unbrained/pm-cli@${version}`], { encoding: "utf8", timeout: INSTALL_TIMEOUT_MS, env: installationEnv() });
     assert.equal(install.status, 0, install.stderr || install.stdout || install.error?.message || "Package installation failed.");
   }
   return published;
@@ -265,7 +265,7 @@ test("packed npm and Bun consumers resolve each exact SDK bound and compile emit
     t.after(() => { for (const name of ["authoring.ts", "complete-read.ts", "emitted-consumer.ts", "consumer.mjs", "tsconfig.json", "tracker"]) rmSync(join(project, name), {recursive: true, force: true}); });
     const install = spawnSync(runtime, runtime === "npm"
       ? ["install", "--prefer-offline", "--ignore-scripts", "--no-audit", "--no-fund", "--no-package-lock", tarball]
-      : ["add", "--ignore-scripts", tarball], { cwd: project, encoding: "utf8", timeout: 120000, env: installationEnv() });
+      : ["add", "--ignore-scripts", tarball], { cwd: project, encoding: "utf8", timeout: INSTALL_TIMEOUT_MS, env: installationEnv() });
     assert.equal(install.status, 0, install.stderr || install.stdout || install.error?.message || "Package installation failed.");
     const emitted = join(project, "node_modules/pm-ts-starter/dist/index.js").replaceAll("\\", "/");
     const ownMinimum = join(installedConsumer(runtime as "npm" | "bun", "minimum"), "node_modules/@unbrained/pm-cli");
@@ -350,7 +350,7 @@ function installedConsumer(runtime: "npm" | "bun", bound: "minimum" | "current")
   writeFileSync(join(root, "package.json"), JSON.stringify({ private: true, type: "module" }));
   const packages = [`@unbrained/pm-cli@${version}`, "typescript@5.9.3", "@types/node@26.6.5"];
   const result = spawnSync(runtime, runtime === "npm" ? ["install", "--save-exact", "--prefer-offline", "--ignore-scripts", "--no-audit", "--no-fund", ...packages]
-    : ["add", "--exact", "--ignore-scripts", ...packages], { cwd: root, encoding: "utf8", timeout: 120000, env: installationEnv() });
+    : ["add", "--exact", "--ignore-scripts", ...packages], { cwd: root, encoding: "utf8", timeout: INSTALL_TIMEOUT_MS, env: installationEnv() });
   assert.ifError(result.error);
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const verify = spawnSync(runtime === "npm" ? process.execPath : "bun", ["--input-type=module", "-e", `
