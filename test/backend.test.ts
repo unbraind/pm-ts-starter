@@ -115,8 +115,9 @@ function lookupBun(env: NodeJS.ProcessEnv, platform: NodeJS.Platform = process.p
   const names = platform === "win32" ? ["bun.exe"] : ["bun"];
   for (const directory of (env.PATH ?? "").split(delimiter).filter(Boolean)) {
     for (const name of names) {
-      // Append without normalizing: `link/../bin` must keep resolving through the link, as the shell would.
-      const candidate = /[\\/]$/.test(directory) ? directory + name : directory + sep + name;
+      // Append without normalizing: `link/../bin` must keep resolving through the link, as the shell would. Only `/`
+      // ends a POSIX directory; a trailing backslash there is part of the name.
+      const candidate = (platform === "win32" ? /[\\/]$/ : /\/$/).test(directory) ? directory + name : directory + sep + name;
       try {
         accessSync(candidate, constants.X_OK);
         if (statSync(candidate).isFile()) return { status: 0, stdout: JSON.stringify(candidate) };
@@ -336,6 +337,16 @@ test("the Windows Bun lookup selects bun.exe and skips cmd and bat wrappers a sh
   const env = { PATH: [wrappers, native].join(delimiter), PATHEXT: ".CMD;.BAT;.EXE" };
   assert.deepEqual(lookupBun(env, "win32"), { status: 0, stdout: JSON.stringify(executable) });
   assert.deepEqual(lookupBun({ ...env, PATH: wrappers }, "win32"), { status: 1, stdout: null });
+});
+
+test("the POSIX Bun lookup treats a trailing backslash as part of the PATH directory name", { skip: process.platform === "win32" ? "a backslash is a separator on Windows" : false }, (t) => {
+  const root = mkdtempSync(join(tmpdir(), "bun-backslash-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const directory = join(root, "bin\\"); mkdirSync(directory);
+  const bun = join(directory, "bun"); writeFileSync(bun, "", { mode: 0o755 });
+  // Joining without a separator would select this sibling file instead.
+  writeFileSync(join(root, "bin\\bun"), "", { mode: 0o755 });
+  assert.deepEqual(lookupBun({ PATH: directory }, "linux"), { status: 0, stdout: JSON.stringify(bun) });
 });
 
 test("the Bun lookup keeps a PATH entry that walks through a symlink unnormalized", { skip: process.platform === "win32" ? "Windows normalizes link/.. lexically before following the junction" : false }, (t) => {

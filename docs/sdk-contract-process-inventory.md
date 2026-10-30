@@ -59,4 +59,4 @@ Path-transport audit (authored modules, scripts, tests and emitted starter code)
 | Test receipts | JSON/JSONL strings escape embedded path delimiters before framing. |
 | Remaining newline/whitespace parsers | Source-content audits, INI syntax, release headings, identity records, option/version labels and messages; none supplies filesystem path identity. Path-component splitting uses the platform separator. |
 
-There are no separate generator templates in this package. Build output is regenerated from the audited authored modules. The consumer compiler API supplies diagnostics and resolution identities directly; no textual diagnostic or package-ancestor ownership parser remains.
+There are no separate generator templates in this package. Build output is regenerated from the audited authored modules. The consumer compiler API supplies diagnostics and resolution identities directly; no textual diagnostic parser remains. Package ownership comes from each loaded file's nearest named package.json, read as JSON metadata, never from path text.
