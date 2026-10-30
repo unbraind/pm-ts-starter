@@ -369,7 +369,8 @@ export function runCoverageGate(
       `--test-coverage-functions=${config.thresholds.functions}`,
       "--test-reporter=spec",
       "--test-reporter-destination=stdout",
-      `--test-reporter=${fileURLToPath(new URL("./coverage-json-reporter.ts", import.meta.url))}`,
+      // A file: URL, not a drive-letter path: the ESM loader resolves custom reporters and rejects bare Windows paths.
+      `--test-reporter=${new URL("./coverage-json-reporter.ts", import.meta.url).href}`,
       `--test-reporter-destination=${reportPath}`,
       ...config.tests,
     ],

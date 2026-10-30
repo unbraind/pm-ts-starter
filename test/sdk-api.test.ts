@@ -5,7 +5,7 @@ import {tmpdir} from "node:os";
 import {dirname, join} from "node:path";
 import test from "node:test";
 import {checkSdkContracts, SdkContractRefusal} from "../sdk-contracts.ts";
-import {boundaryRandom, directApiDiagnostics as direct, dependencyBound, dependencyEntry, filesystemSnapshot, installTestCompiler, linkForeignSdk, assertForeignSdk} from "./dependency-fixtures.ts";
+import {boundaryRandom, directApiDiagnostics as direct, dependencyBound, dependencyEntry, filesystemSnapshot, versionedCompiler, linkForeignSdk, assertForeignSdk} from "./dependency-fixtures.ts";
 
 /** Compare complete structured rows and preserve every original project/dependency byte. */
 async function agrees(project: string, bound: ReturnType<typeof dependencyBound>): Promise<void> {
@@ -22,9 +22,8 @@ async function agrees(project: string, bound: ReturnType<typeof dependencyBound>
 for (const version of ["5.9.3", "6.0.3"]) test(`structured compiler API layouts TypeScript ${version}`, async t => {
   const root = mkdtempSync(join(tmpdir(), "sdk-api-layouts-"));
   t.after(() => rmSync(root, {recursive: true, force: true}));
-  installTestCompiler(join(root, "tool"), version);
   const project = join(root, "consumer"); mkdirSync(join(project, "node_modules"), {recursive: true});
-  symlinkSync(join(root, "tool/node_modules/typescript"), join(project, "node_modules/typescript"), "junction");
+  symlinkSync(versionedCompiler(version), join(project, "node_modules/typescript"), "junction");
   writeFileSync(join(project, "package.json"), '{"type":"module"}');
   const bound = dependencyBound(project), options = {types: [], lib: ["ES5"], module: "NodeNext"};
   const config = (file: string): void => writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions: options, files: [file]}));

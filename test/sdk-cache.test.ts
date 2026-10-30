@@ -4,24 +4,10 @@ import {spawnSync} from "node:child_process";
 import {cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join, relative, sep} from "node:path";
-import test, {after} from "node:test";
+import test from "node:test";
 import {checkSdkContracts, type SdkContractMatrix} from "../sdk-contracts.ts";
-import {dependencyBound, filesystemSnapshot, installTestCompiler, directApiDiagnostics} from "./dependency-fixtures.ts";
+import {dependencyBound, filesystemSnapshot, versionedCompiler, directApiDiagnostics} from "./dependency-fixtures.ts";
 
-const tools = new Map<string, string>();
-after(() => { for (const root of tools.values()) rmSync(root, {recursive: true, force: true}); });
-/** Install an unchanged stock compiler once per version, outside every consumer copy. */
-function compiler(version: string): string {
-  let root = tools.get(version);
-  if (!root) {
-    // Register the compiler only after its install succeeds, so a failed install is never reused.
-    const directory = mkdtempSync(join(tmpdir(), "sdk-cache-compiler-"));
-    try { installTestCompiler(directory, version); }
-    catch (error) { rmSync(directory, {recursive: true, force: true}); throw error; }
-    tools.set(version, directory); root = directory;
-  }
-  return join(root, "node_modules/typescript");
-}
 /** Invoke the real compiler directly; no checker parsing or synthetic compiler diagnostics. */
 function plain(entry: string, project: string): {ok: boolean; codes: string[]} {
   const result = spawnSync(process.execPath, [entry, "--project", "tsconfig.json", "--noEmit", "--pretty", "false"], {cwd: project, encoding: "utf8", timeout: 30000});
@@ -41,7 +27,7 @@ function cacheBounds(root: string) {
 for (const version of ["5.9.3", "6.0.3"]) for (const mode of ["project", "composite project"] as const) for (const custom of [false, true]) {
   test(`cache-free TypeScript ${version}: ${mode}, ${custom ? "custom target" : "tsbuildinfo"}`, async t => {
     const composite = mode === "composite project";
-    const tool = compiler(version), entry = join(tool, "bin/tsc"), root = mkdtempSync(join(tmpdir(), "sdk-warm-cache-"));
+    const tool = versionedCompiler(version), entry = join(tool, "bin/tsc"), root = mkdtempSync(join(tmpdir(), "sdk-warm-cache-"));
     t.after(() => rmSync(root, {recursive: true, force: true}));
     const project = join(root, "warm"), sandbox = join(root, "sandbox"); mkdirSync(sandbox);
     const {minimum, current} = cacheBounds(root);
@@ -102,7 +88,7 @@ for (const version of ["5.9.3", "6.0.3"]) for (const composite of [false, true])
     const {minimum, current} = cacheBounds(root);
     mkdirSync(join(project, "node_modules"), {recursive: true});
     cpSync(current.root, join(project, "node_modules/@unbrained/pm-cli"), {recursive: true});
-    symlinkSync(join(compiler(version)), join(project, "node_modules/typescript"), "junction");
+    symlinkSync(join(versionedCompiler(version)), join(project, "node_modules/typescript"), "junction");
     writeFileSync(join(project, "package.json"), '{"type":"module"}');
     writeFileSync(join(project, "consumer.ts"), 'import {sdk} from "@unbrained/pm-cli"; export const value: "current" = sdk;');
     writeFileSync(join(project, "another.ts"), "export const valid = 1;");

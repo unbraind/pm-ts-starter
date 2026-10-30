@@ -5,7 +5,7 @@ import {tmpdir} from "node:os";
 import {basename, dirname, join, resolve, sep} from "node:path";
 import test from "node:test";
 import {checkSdkContracts, SdkContractRefusal} from "../sdk-contracts.ts";
-import {apiConsumer, boundaryRandom, dependencyBound, dependencyEntry, filesystemSnapshot, installTestCompiler, testCompiler, directApiDiagnostics} from "./dependency-fixtures.ts";
+import {apiConsumer, boundaryRandom, dependencyBound, dependencyEntry, filesystemSnapshot, versionedCompiler, testCompiler, directApiDiagnostics} from "./dependency-fixtures.ts";
 
 const unusual = ["\n", "\r", "\t", " ", "--leading", "'", '"', "é漢字"];
 
@@ -59,8 +59,7 @@ for (const version of ["shared 5.9.3", "5.9.3", "6.0.3"]) {
   test(`path transport property on stock TypeScript ${version}`, async t => {
     const root = mkdtempSync(join(tmpdir(), "sdk-path-transport-"));
     t.after(() => rmSync(root, {recursive: true, force: true}));
-    const tool = version === "shared 5.9.3" ? dirname(dirname(testCompiler())) : join(root, "tool/node_modules/typescript");
-    if (version !== "shared 5.9.3") installTestCompiler(join(root, "tool"), version);
+    const tool = version === "shared 5.9.3" ? dirname(dirname(testCompiler())) : versionedCompiler(version);
     const project = consumerDirectory(root, tool);
     writeFileSync(join(project, "package.json"), '{"type":"module"}');
     writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions: {types: [], lib: ["ES5"], module: "NodeNext", strict: true}, files: ["consumer.ts"]}));

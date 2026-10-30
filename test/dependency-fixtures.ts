@@ -65,6 +65,23 @@ export function installTestCompiler(directory: string, version: string): void {
   assert.equal(result.status, 0, `npm install typescript@${version} failed (status ${result.status}, signal ${result.signal}, error ${result.error?.message ?? "none"}): ${result.stderr}`);
 }
 
+const versionedCompilers = new Map<string, string>();
+after(() => { for (const directory of versionedCompilers.values()) rmSync(directory, {recursive: true, force: true}); });
+/**
+ * Install stock `typescript@version` once per test process and return its package directory. Callers link it read-only
+ * (tests that alter a compiler copy it first); a failed install is never cached, so the next caller reports it again.
+ */
+export function versionedCompiler(version: string): string {
+  let directory = versionedCompilers.get(version);
+  if (!directory) {
+    const fresh = mkdtempSync(join(tmpdir(), "sdk-versioned-compiler-"));
+    try { installTestCompiler(fresh, version); }
+    catch (error) { rmSync(fresh, {recursive: true, force: true}); throw error; }
+    versionedCompilers.set(version, directory = fresh);
+  }
+  return join(directory, "node_modules/typescript");
+}
+
 /** Lazily install a classic consumer API without changing the repository build compiler pin. */
 export function testCompiler(): string {
   if (!compilerTool) {
@@ -112,8 +129,7 @@ export function testDirectory(t: TestContext, prefix: string): string {
 export function apiConsumer(t: TestContext, version?: string): {root: string; project: string; bound: ReturnType<typeof dependencyBound>} {
   const root = testDirectory(t, "sdk-api-review-"), project = join(root, "consumer");
   mkdirSync(join(project, "node_modules"), {recursive: true});
-  if (version) installTestCompiler(join(root, "tool"), version);
-  symlinkSync(version ? join(root, "tool/node_modules/typescript") : dirname(dirname(testCompiler())), join(project, "node_modules/typescript"), "junction");
+  symlinkSync(version ? versionedCompiler(version) : dirname(dirname(testCompiler())), join(project, "node_modules/typescript"), "junction");
   writeFileSync(join(project, "package.json"), '{"type":"module"}');
   writeFileSync(join(project, "consumer.ts"), "export const value: string = 1;");
   writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions: {types: [], lib: ["ES5"], module: "NodeNext"}, files: ["consumer.ts"]}));
