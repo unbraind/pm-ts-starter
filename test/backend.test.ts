@@ -323,7 +323,7 @@ test("the Bun lookup returns the PATH entry itself, so a wrapper on PATH stays s
   assert.throws(() => requireBunExecutable({ PATH: empty }), /Bun is required for generated consumer checks/);
 });
 
-test("the Bun lookup keeps a PATH entry that walks through a symlink unnormalized", (t) => {
+test("the Bun lookup keeps a PATH entry that walks through a symlink unnormalized", { skip: process.platform === "win32" ? "Windows normalizes link/.. lexically before following the junction" : false }, (t) => {
   const root = mkdtempSync(join(tmpdir(), "bun-path-link-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(join(root, "real", "sub"), { recursive: true }); mkdirSync(join(root, "real", "bin"));

@@ -68,11 +68,11 @@ function targetRoot(target) {
         throw new SdkContractRefusal("sdk_unavailable", "Install the exact declared SDK versions in separate directories and pass their package roots; package name and version must match. Registry provenance remains the provisioner's responsibility.");
     }
 }
-/** Copy installed names and bytes without writes to caller files; rebase internal links into the copy. */
 /** Windows link type for a target: a junction (no symlink privilege needed) for directories, else a file link. */
 function linkType(target) {
     return existsSync(target) && statSync(target).isDirectory() ? "junction" : "file";
 }
+/** Copy installed names and bytes without writes to caller files; rebase internal links into the copy. */
 function copyConsumer(source, destination, dependency = false) {
     source = realpathSync(source);
     const installed = dependency ? [] : [...dependencyRoots(source)].filter(root => root !== source && inside(source, root));
@@ -255,7 +255,9 @@ if(!['createProgram','getPreEmitDiagnostics','getParsedCommandLineOfConfigFile']
    if(!data||typeof data!=='object'||Array.isArray(data))throw new Error('Invalid metadata');
    if(typeof data.name==='string'&&data.name)owner={root:canonical(directory),name:data.name};
   }}catch{throw {refusal:'isolation_refused',remedy:'Provide readable package metadata at '+JSON.stringify(label(metadata))+'.'};}
-  const parent=path.dirname(directory);owner??=parent===directory?undefined:packageOwner(parent);owners.set(directory,owner);return owner;
+  // Ownership lives inside the private copy and the installed dependency roots: never read metadata above them
+  // (shared ancestors such as the temp directory could forge an SDK identity or fail every run).
+  const parent=path.dirname(directory);owner??=parent===directory||directory===project||roots.has(directory)?undefined:packageOwner(parent);owners.set(directory,owner);return owner;
  }
  const isSdk=name=>name==='@unbrained/pm-cli'||name.startsWith('@unbrained/pm-cli/');
  const record=d=>{if(d.category!==ts.DiagnosticCategory.Error)return;const location=d.file&&d.start!==undefined?d.file.getLineAndCharacterOfPosition(d.start):undefined;
@@ -376,6 +378,9 @@ export async function checkSdkContracts(options) {
     const targets = { minimum: { ...options.minimum, root: targetRoot(options.minimum) }, current: { ...options.current, root: targetRoot(options.current) } };
     const compiler = options.compiler ?? (options.consumer === undefined ? resolveSdkContractCompiler() : "");
     const scratch = realpathSync(mkdtempSync(join(tmpdir(), "pm-sdk-contract-")));
+    // Node resolves every module against its nearest parent package.json; this boundary keeps metadata in shared
+    // ancestors such as the temp directory (malformed or forged) out of the worker and the copied consumer.
+    writeFileSync(join(scratch, "package.json"), "{\"private\":true}\n");
     const rows = [];
     try {
         options.onProgress?.("allocated");

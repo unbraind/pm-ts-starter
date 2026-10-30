@@ -79,3 +79,15 @@ test("SDK-specifier declarations outside the selected root name the consumer roo
   assert.deepEqual(directApiDiagnostics(project), []);
   await assertProjectShapeRefusal(project, bound, error => {assert.equal(error.reason, "multiple_sdk_copies"); assert.ok(error.roots?.includes("."));});
 });
+
+for (const [name, metadata] of [["an SDK-named", '{"name":"@unbrained/pm-cli","version":"9.9.9"}'], ["a malformed", "{ not json"]] as const) {
+  test(`${name} package.json above the scratch copy never joins SDK ownership`, async t => {
+    const {root, project, bound} = apiConsumer(t);
+    // The checker's scratch copy lives under TMPDIR; plant decoy metadata in that shared ancestor.
+    const decoy = join(root, "shared-tmp"); mkdirSync(decoy); writeFileSync(join(decoy, "package.json"), metadata);
+    const previous = process.env.TMPDIR; process.env.TMPDIR = decoy;
+    t.after(() => { if (previous === undefined) delete process.env.TMPDIR; else process.env.TMPDIR = previous; });
+    writeFileSync(join(project, "consumer.ts"), "export const value = 1;");
+    await assertApiMatrix(project, bound, []);
+  });
+}
