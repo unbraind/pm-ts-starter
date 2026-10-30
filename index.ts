@@ -506,7 +506,9 @@ const sdkContractsCommand = defineCommand({
       return matrix;
     } catch (error) {
       const refusal = error instanceof SdkContractRefusal ? error : new SdkContractRefusal("invalid_input", "Provide readable JSON examples and accessible SDK installations; retry with the documented flags.");
-      throw createPmCliExpectedError(refusal.remedy, { context: { code: refusal.code, required: refusal.remedy, nextSteps: [refusal.remedy] } });
+      // The host's text rendering prints only the message (truncated), not context.code; lead with the code so text-mode
+      // callers can branch on it as JSON callers do.
+      throw createPmCliExpectedError(`${refusal.code}: ${refusal.remedy}`, { context: { code: refusal.code, required: refusal.remedy, nextSteps: [refusal.remedy] } });
     }
   },
 });

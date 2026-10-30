@@ -12,6 +12,14 @@ const configuredInstallTimeout = Number(process.env.PM_TS_STARTER_INSTALL_TIMEOU
 /** Ceiling for registry installs in tests: cold caches took 102-131 s, so 10 minutes unless PM_TS_STARTER_INSTALL_TIMEOUT_MS sets positive milliseconds. */
 export const INSTALL_TIMEOUT_MS = Number.isInteger(configuredInstallTimeout) && configuredInstallTimeout > 0 ? configuredInstallTimeout : 600_000;
 
+/** Resolve the Bun executable without a preload script (it runs before -e and may write to stdout); name Bun on failure. */
+export function bunExecutable(): string {
+  const { BUN_INSPECT_PRELOAD: _preload, ...env } = process.env;
+  const found = spawnSync("bun", ["-e", "process.stdout.write(JSON.stringify(process.execPath))"], { encoding: "utf8", env, timeout: 10_000 });
+  assert.ok(found.status === 0 && !found.error && found.stdout, `Bun lookup failed (install Bun for the packed Bun checks): ${found.error?.message ?? found.stderr}`);
+  return JSON.parse(found.stdout) as string;
+}
+
 /** Write a dependency exactly where the consumer installed it, independent of its metadata name. */
 export function dependencyEntry(root: string, installed: string, actual: string, declarations = 'export declare const value: "selected";'): void {
   const directory = join(root, installed);

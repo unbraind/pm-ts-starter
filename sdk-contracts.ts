@@ -384,7 +384,7 @@ function inlineConsumer(project: string, compiler: string): void {
   const parts = dirname(entry).split(sep), lastModules = parts.lastIndexOf("node_modules");
   const modules = lastModules >= 0 ? parts.slice(0, lastModules + 1).join(sep) : dirname(dirname(dirname(resolveSdkContractCompiler())));
   const artifact = join(modules, "typescript");
-  if (!existsSync(artifact) || !inside(realpathSync(artifact), realpathSync(entry))) throw new SdkContractRefusal("compiler_unavailable", "Select a file inside node_modules/typescript or a symlink into it; external shell/JavaScript wrappers are rejected. The package's JavaScript API checks inline examples; the entry is never executed.");
+  if (!existsSync(artifact) || !inside(realpathSync(artifact), realpathSync(entry))) throw new SdkContractRefusal("compiler_unavailable", "Select a file inside node_modules/typescript or a symlink into it; external shell/JavaScript wrappers are rejected. The package's JavaScript API checks inline examples; the selected file is never run as a command.");
   const ambient = existsSync(join(modules, "@types")) ? readdirSync(join(modules, "@types")).map(name => "@types/" + name) : [];
   const native = existsSync(join(modules, "@typescript")) ? readdirSync(join(modules, "@typescript")).map(name => "@typescript/" + name) : [];
   materializeInlineDependencies(project, modules, ["typescript", "undici-types", ...ambient, ...native]);

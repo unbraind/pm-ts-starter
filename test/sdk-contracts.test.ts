@@ -8,11 +8,15 @@ import { pathToFileURL } from "node:url";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import test, { after, type TestContext } from "node:test";
 import { Worker } from "node:worker_threads";
-import {dependencyEntry, testCompiler, directApiDiagnostics, dependencyBound, filesystemSnapshot, boundaryRandom, INSTALL_TIMEOUT_MS} from "./dependency-fixtures.ts";
+import {dependencyEntry, testCompiler, directApiDiagnostics, dependencyBound, filesystemSnapshot, boundaryRandom, INSTALL_TIMEOUT_MS, bunExecutable} from "./dependency-fixtures.ts";
 import { PmClient } from "@unbrained/pm-cli/sdk";
 import { createExtensionTestHarness } from "@unbrained/pm-cli/sdk/testing";
 import extension from "../index.ts";
 import { checkSdkContracts as compileSdkContracts, parseSdkConsumerExamples, resolveSdkContractCompiler, SDK_CONSUMER_EXAMPLES, SdkContractRefusal, type SdkContractOptions, type SdkContractMatrix } from "../sdk-contracts.ts";
+
+// Bun runs a preload script before every -e program and entry, and it may write to stdout; this suite parses Bun's
+// stdout as JSON in several places, so no child process inherits one.
+delete process.env.BUN_INSPECT_PRELOAD;
 
 const repo = resolve(import.meta.dirname, "..");
 const sdk = join(repo, "node_modules/@unbrained/pm-cli");
@@ -293,7 +297,7 @@ const resolved = require.resolve('@unbrained/pm-cli/package.json');
 const sdkVersion = JSON.parse(readFileSync(resolved, 'utf8')).version;
 const sdkEntry = require.resolve('@unbrained/pm-cli/sdk');
 console.log(JSON.stringify({sdkVersion, resolved, sdkEntry, matrix: await checkSdkContracts(${JSON.stringify(options)})}));`);
-    const executable = runtime === "npm" ? process.execPath : JSON.parse(spawnSync("bun", ["-e", "process.stdout.write(JSON.stringify(process.execPath))"], { encoding: "utf8" }).stdout) as string;
+    const executable = runtime === "npm" ? process.execPath : bunExecutable();
     const run = spawnSync(executable, [entry], { cwd: project, encoding: "utf8", timeout: 120000, env: { ...process.env, GIT_CEILING_DIRECTORIES: root } });
     assert.equal(run.status, 0, `${runtime} ${bound}: ${run.error?.message ?? run.stderr}`);
     const receipt = JSON.parse(run.stdout) as { sdkVersion: string; resolved: string; sdkEntry: string; matrix: { ok: boolean; checks: number; rows: { sdk: string; target: string }[] } };

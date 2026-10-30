@@ -258,8 +258,8 @@ Disposable project prefixes are normalized in those messages. `invalid_input`, `
 `node_modules/typescript` package through a file inside it (for example
 `typescript/bin/tsc` or `typescript/lib/typescript.js`), or a symlink whose real
 path is inside that package (including a symlink at `node_modules/.bin/tsc`).
-The checker loads that package's JavaScript API; it never executes the selected
-file. Regular shell, JavaScript and Windows command wrappers outside the package
+The checker loads that package's JavaScript API and never runs the selected file
+as a command; selecting `lib/typescript.js` loads that module like any API import. Regular shell, JavaScript and Windows command wrappers outside the package
 are rejected with `compiler_unavailable`, even when executable. For a wrapper at
 `node_modules/.bin/tsc`, pass `node_modules/typescript/bin/tsc` instead.
 The package must expose the classic compiler APIs described below. With
