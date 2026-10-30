@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Compile packed contracts against each exact selected SDK bound ([pm-ts-starter-min-sdk-drift](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-min-sdk-drift.toon))
+
 ## 2026.10.29 - 2026-10-29
 
 ### Changed
