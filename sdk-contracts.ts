@@ -144,6 +144,10 @@ function targetRoot(target: SdkContractTarget): string {
   }
 }
 /** Copy installed names and bytes without writes to caller files; rebase internal links into the copy. */
+/** Windows link type for a target: a junction (no symlink privilege needed) for directories, else a file link. */
+function linkType(target: string): "junction" | "file" {
+  return existsSync(target) && statSync(target).isDirectory() ? "junction" : "file";
+}
 function copyConsumer(source: string, destination: string, dependency = false): void {
   source = realpathSync(source);
   const installed = dependency ? [] : [...dependencyRoots(source)].filter(root => root !== source && inside(source, root));
@@ -157,8 +161,9 @@ function copyConsumer(source: string, destination: string, dependency = false): 
       const linked = existsSync(file) ? realpathSync(file) : resolve(dirname(file), readlinkSync(file));
       if (!dependencyPath && !inside(source, linked)) throw new SdkContractRefusal("isolation_refused", "Materialize non-dependency symlinks whose targets leave the consumer root before retrying; external targets must remain read-only.");
       mkdirSync(dirname(copied), {recursive: true});
-      if (inside(source, linked)) symlinkSync(resolve(destination, relative(source, linked)), copied);
-      else symlinkSync(linked, copied);
+      // The source target `linked` exists for both branches even when the copied target does not yet; Node ignores the type off Windows.
+      if (inside(source, linked)) symlinkSync(resolve(destination, relative(source, linked)), copied, linkType(linked));
+      else symlinkSync(linked, copied, linkType(linked));
       return false;
     } });
 }
@@ -172,7 +177,7 @@ function privateDirectory(project: string, path: string): void {
   unlinkSync(path); mkdirSync(path, {recursive: true});
   if (source) for (const name of readdirSync(source)) {
     const entry = join(source, name);
-    symlinkSync(entry, join(path, name), existsSync(entry) && statSync(entry).isDirectory() ? "junction" : "file");
+    symlinkSync(entry, join(path, name), linkType(entry));
   }
 }
 /** Give every child private homes, caches and temporary storage with no inherited npm execution settings. */

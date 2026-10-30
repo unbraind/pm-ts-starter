@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { accessSync, constants, mkdtempSync, rmSync, mkdirSync, readFileSync, statSync, writeFileSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, join } from "node:path";
+import { delimiter, dirname, join, sep } from "node:path";
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import test, { type TestContext } from "node:test";
 import { PmClient } from "@unbrained/pm-cli/sdk";
@@ -112,7 +112,8 @@ function lookupBun(env: NodeJS.ProcessEnv): ToolLookup {
   const names = process.platform === "win32" ? (env.PATHEXT ?? ".EXE;.CMD;.BAT").split(";").filter(Boolean).map((extension) => `bun${extension.toLowerCase()}`) : ["bun"];
   for (const directory of (env.PATH ?? "").split(delimiter).filter(Boolean)) {
     for (const name of names) {
-      const candidate = join(directory, name);
+      // Append without normalizing: `link/../bin` must keep resolving through the link, as the shell would.
+      const candidate = /[\\/]$/.test(directory) ? directory + name : directory + sep + name;
       try {
         accessSync(candidate, constants.X_OK);
         if (statSync(candidate).isFile()) return { status: 0, stdout: JSON.stringify(candidate) };
@@ -320,4 +321,16 @@ test("the Bun lookup returns the PATH entry itself, so a wrapper on PATH stays s
   writeFileSync(wrapper, "#!/bin/sh\nexport HTTPS_PROXY=http://proxy.example.invalid\nexec /nonexistent/real-bun \"$@\"\n", { mode: 0o755 });
   assert.equal(requireBunExecutable({ PATH: [empty, wrapped].join(delimiter), PATHEXT: ".CMD" }), wrapper);
   assert.throws(() => requireBunExecutable({ PATH: empty }), /Bun is required for generated consumer checks/);
+});
+
+test("the Bun lookup keeps a PATH entry that walks through a symlink unnormalized", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "bun-path-link-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(join(root, "real", "sub"), { recursive: true }); mkdirSync(join(root, "real", "bin"));
+  const name = process.platform === "win32" ? "bun.cmd" : "bun";
+  writeFileSync(join(root, "real", "bin", name), "#!/bin/sh\n", { mode: 0o755 });
+  symlinkSync(join(root, "real", "sub"), join(root, "link"), "junction");
+  // `link/../bin` is real/bin through the link; lexical normalization would turn it into root/bin, which does not exist.
+  const entry = `${root}/link/../bin`;
+  assert.equal(requireBunExecutable({ PATH: entry, PATHEXT: ".CMD" }), `${entry}${process.platform === "win32" ? "\\" : "/"}${name}`);
 });
