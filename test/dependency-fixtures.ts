@@ -109,7 +109,7 @@ function check(file){const errors=[],config=ts.getParsedCommandLineOfConfigFile(
 if(!config){diagnostics.push(...errors);return;}
 diagnostics.push(...ts.getPreEmitDiagnostics(ts.createProgram({rootNames:config.fileNames,options:config.options,projectReferences:config.projectReferences,configFileParsingDiagnostics:config.errors})));}
 check(path.join(root,'tsconfig.json'));
-process.stdout.write(JSON.stringify(diagnostics.filter(d=>d.category===ts.DiagnosticCategory.Error).map(d=>{const pos=d.file&&d.start!==undefined?d.file.getLineAndCharacterOfPosition(d.start):undefined;return {code:'TS'+d.code,file:d.file?location(d.file.fileName):'<config>',message:ts.flattenDiagnosticMessageText(d.messageText,'\\n').replaceAll(root,'.'),line:pos?pos.line+1:0,column:pos?pos.character+1:0};})));`;
+process.stdout.write(JSON.stringify(diagnostics.filter(d=>d.category===ts.DiagnosticCategory.Error).map(d=>{const pos=d.file&&d.start!==undefined?d.file.getLineAndCharacterOfPosition(d.start):undefined;return {code:'TS'+d.code,file:d.file?location(d.file.fileName):'<config>',message:ts.flattenDiagnosticMessageText(d.messageText,'\\n').replaceAll(root,'.').replaceAll(root.split(path.sep).join('/'),'.'),line:pos?pos.line+1:0,column:pos?pos.character+1:0};})));`;
   const run = spawnSync(process.execPath, ["-e", script, project], {encoding: "utf8", timeout: 30000,
     env: {...Object.fromEntries(Object.entries(process.env).filter(([key]) => !/NODE_OPTIONS|NODE_PATH|NODE_V8_COVERAGE|NODE_COMPILE_CACHE|BUN_RUNTIME_TRANSPILER_CACHE_PATH|TOKEN|SECRET|PASSWORD|CREDENTIAL|NPM_MEDIA_SERVER/i.test(key))), NODE_V8_COVERAGE: ""},
   });

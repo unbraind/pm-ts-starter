@@ -331,7 +331,9 @@ Every loaded file is classified through its own nearest named package.json;
 format-only unnamed metadata does not hide its owning package. Canonical realpaths
 merge aliases to the same root. Vendored, nested, relative and symlinked SDK copies
 receive `unsupported_project_shape` with reason `multiple_sdk_copies`, a list of
-repo-relative roots and a remedy to dedupe to one SDK. SDK-specifier targets must
+roots and a remedy to dedupe to one SDK. Roots inside the project are listed
+repo-relative; a linked root outside it is listed by its directory name only, so
+no machine path is disclosed, and the name alone may not locate that copy. SDK-specifier targets must
 also belong to the selected root. No importing package can lend its identity to
 another package. Ordinary local packages and single-copy typesVersions resolutions
 use the native compiler verdict. Project references are the other refused shape;

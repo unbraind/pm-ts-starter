@@ -307,7 +307,7 @@ if(!['createProgram','getPreEmitDiagnostics','getParsedCommandLineOfConfigFile']
  }
  const isSdk=name=>name==='@unbrained/pm-cli'||name.startsWith('@unbrained/pm-cli/');
  const record=d=>{if(d.category!==ts.DiagnosticCategory.Error)return;const location=d.file&&d.start!==undefined?d.file.getLineAndCharacterOfPosition(d.start):undefined;
- diagnostics.push({code:'TS'+d.code,file:d.file?(inside(project,canonical(d.file.fileName))?path.relative(project,canonical(d.file.fileName)).split(path.sep).join('/'):'<external>'):'<config>',message:ts.flattenDiagnosticMessageText(d.messageText,'\\n').replaceAll(project,'.'),line:location?location.line+1:0,column:location?location.character+1:0});};
+ diagnostics.push({code:'TS'+d.code,file:d.file?(inside(project,canonical(d.file.fileName))?path.relative(project,canonical(d.file.fileName)).split(path.sep).join('/'):'<external>'):'<config>',message:ts.flattenDiagnosticMessageText(d.messageText,'\\n').replaceAll(project,'.').replaceAll(project.split(path.sep).join('/'),'.'),line:location?location.line+1:0,column:location?location.character+1:0});};
  function collectImports(program,source,file){
   if(Array.isArray(source.imports)&&!source.imports.some(specifier=>isSdk(specifier.text)))return;
   const accept=(result,name)=>{if(isSdk(name)&&result?.resolvedModule)sdkFiles.add(canonical(result.resolvedModule.resolvedFileName));};
