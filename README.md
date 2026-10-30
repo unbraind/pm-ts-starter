@@ -279,7 +279,10 @@ package manager, re-resolves manifests or lockfiles, executes lifecycle scripts,
 or derives an installation name from package metadata. Lockfiles can describe a
 different installation from the one actually being checked, so the installed tree
 is authoritative. Internal links are rebased into the copy; external link targets
-remain symlinks to their installed read-only targets. Compiler libraries and native companions retain
+remain symlinks to their installed targets. The checker treats those targets as
+read-only but cannot protect them from writes: the consumer's TypeScript module
+loads with the caller's filesystem permissions, so run untrusted compilers inside
+an OS sandbox. Compiler libraries and native companions retain
 their original bytes, including files excluded by npm pack rules. Only the SDK
 package at the selected bound is replaced in each cloned project. Its canonical
 identity is captured before compilation, preserving internal module-root and SDK

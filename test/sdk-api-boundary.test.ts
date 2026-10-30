@@ -1,6 +1,6 @@
 /** Compiler API failure and result boundaries never trust subprocess text. */
 import assert from "node:assert/strict";
-import {cpSync, readFileSync, unlinkSync, writeFileSync} from "node:fs";
+import {cpSync, readFileSync, symlinkSync, unlinkSync, writeFileSync} from "node:fs";
 import {dirname, join} from "node:path";
 import test, {type TestContext} from "node:test";
 import {checkSdkContracts, SdkContractRefusal} from "../sdk-contracts.ts";
@@ -61,4 +61,12 @@ test("generated inline examples use Node libraries while supplied DOM config rem
   writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions: {types: [], lib: ["ES2022", "DOM"]}, files: ["consumer.ts"]}));
   const snapshot = filesystemSnapshot(project), supplied = await checkSdkContracts({consumer: project, minimum: bound, current: bound});
   assert.equal(supplied.ok, true); assert.equal(filesystemSnapshot(project), snapshot);
+});
+
+test("API entry linked outside the installed compiler package is refused before it loads", async t => {
+  const {root, project, bound, artifact} = mutableApi(t);
+  symlinkSync(join(dirname(dirname(testCompiler())), "lib/typescript.js"), join(artifact, "boundary.cjs"));
+  const before = filesystemSnapshot(root);
+  await assert.rejects(checkSdkContracts({consumer: project, minimum: bound, current: bound}), error => error instanceof SdkContractRefusal && error.code === "compiler_unavailable" && /consumer TypeScript JavaScript compiler API/.test(error.remedy));
+  assert.equal(filesystemSnapshot(root), before);
 });
