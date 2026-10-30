@@ -39,8 +39,9 @@ the checker children enumerated above.
 
 ## Test-only subprocesses
 
-Tests provision exact public SDK/compiler packages, run independent compiler API
-programs and real cache-warming CLI builds, exercise isolated PM trackers, and host
+Tests provision exact public SDK/compiler packages, run plain tsc, instrumented
+compiler API programs (which record the checker's own Program, not an independent
+one) and real cache-warming CLI builds, exercise isolated PM trackers, and host
 a synthetic authenticated registry. Generated dependency properties use at most
 two workers. Diagnostic oracles consume objects rather than rendered headers.
 Test-owned API modules may write explicit private receipts without changing config.

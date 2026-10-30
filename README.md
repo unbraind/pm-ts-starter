@@ -389,8 +389,13 @@ consumer tree. The alias-fixture/actual-fixture review case has a dedicated regr
 The differential suite covers node16, nodenext and bundler resolution, ESM imports
 and CJS requires, exports types conditions, versioned types conditions and
 typesVersions, at both SDK bounds. Single-copy typesVersions resolutions retain their native diagnostics. npm and Bun consumers install their own exact
-SDKs and compilers and verify resolution at runtime. Each isolated copy also runs
-an independent compiler API program, comparing the matrix verdicts and diagnostics,
+SDKs and compilers and verify resolution at runtime. In each isolated copy an
+instrumented compiler API records the diagnostics of the checker's own Program, so
+the test compares the matrix verdicts and codes with what the API returned, the
+bound's own SDK installation and the unchanged tsconfig and sources. That Program
+is not independent: it cannot expose a configuration or resolution error the
+checker shares. Resolution is instead checked against verdicts derived from the
+declaration fixtures, whose layouts make each resolution rule distinguishable,
 including the review's TS2339/TS2305 cases. Another 64 differential rows retain
 all 16 hostile specifiers in consumer and external declarations at both bounds.
 Consumer source and tsconfig bytes must match the originals. The existing eight

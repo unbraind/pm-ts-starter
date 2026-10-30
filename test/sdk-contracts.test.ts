@@ -376,7 +376,7 @@ function assertLeaseDrift(matrix: SdkContractMatrix): void {
   assert.deepEqual(matrix.rows.map(row => [row.target, row.ok, row.codes]), [["minimum", false, ["TS2551"]], ["current", true, []]]);
 }
 
-/** Record independent diagnostics from the real consumer API, with no compiler text transport. */
+/** Record the diagnostics of the checker's own Program through the real consumer API, with no compiler text transport. */
 function instrumentOracle(project: string, receipt: string, t: TestContext): void {
   const directory = join(project, "node_modules/typescript"), metadataFile = join(directory, "package.json"), original = readFileSync(metadataFile, "utf8");
   const metadata = JSON.parse(original) as {main: string};
