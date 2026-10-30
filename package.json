@@ -18,15 +18,19 @@
     "manifest.json",
     "README.md",
     "CHANGELOG.md",
+    "ARCHITECTURE.md",
     "backend.ts",
+    "docs/backend-conformance.md",
     "docs/schema-migration-rehearsal.md",
+    "docs/sdk-contract-api-compatibility.md",
+    "docs/sdk-contract-process-inventory.md",
     "docs/examples/schema-migration.json",
     "docs/examples/sdk-contracts.json"
   ],
   "scripts": {
     "build": "tsc",
     "build:test": "tsc -p tsconfig.test.json",
-    "test": "npm run build && npm run build:test && node --test test/*.test.ts",
+    "test": "npm run build && npm run build:test && node --test --test-concurrency=1 test/*.test.ts",
     "prepack": "npm run build",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck",
@@ -117,6 +121,7 @@
     "sources": [
       ".",
       "scripts/coverage-gate.ts",
+      "scripts/coverage-json-reporter.ts",
       "scripts/prepare-merge-driver.ts",
       "scripts/docstring-gate.ts",
       "scripts/main-invocation.ts"

@@ -22,12 +22,14 @@ export interface SdkContractOptions {
     current: SdkContractTarget;
     /** Author-controlled public API usage, or the shipped starter examples. */
     examples?: readonly SdkConsumerExample[];
-    /** TypeScript's executable JS entry; defaults to the locally installed compiler. */
+    /** Self-contained consumer directory, including its own tsconfig and installed TypeScript. */
+    consumer?: string;
+    /** Inline-only file whose realpath is inside node_modules/typescript; external wrappers are rejected. The package's JavaScript API is loaded, never the entry. */
     compiler?: string;
     /** Optional progress observer, also useful when checking overlapping callers. */
     onProgress?: (phase: SdkContractPhase) => void;
 }
-/** A compact row; diagnostics retain codes rather than potentially private source text. */
+/** One compiler verdict with complete diagnostics and a compact code sample. */
 export interface SdkContractRow {
     /** Which declared endpoint was checked. */
     target: "minimum" | "current";
@@ -35,18 +37,35 @@ export interface SdkContractRow {
     sdk: string;
     /** Consumer identity from the input. */
     example: string;
-    /** True only when the real compiler exits successfully. */
+    /** True only when the consumer compiler reports no errors. */
     ok: boolean;
-    /** Full diagnostic count, including diagnostics omitted from the sample. */
+    /** Compiler API status: zero for success, one when error diagnostics exist. */
+    exit_code: number;
+    /** Full number of diagnostics returned by the compiler. */
     diagnostic_count: number;
     /** At most three compiler diagnostic codes. */
     codes: string[];
+    /** Compiler diagnostics with project-relative locations and original messages. */
+    diagnostics: SdkContractDiagnostic[];
 }
-/** Native TOON/JSON-compatible matrix with no paths, source text or tracker content. */
+/** One structured diagnostic returned by the consumer compiler API. */
+export interface SdkContractDiagnostic {
+    /** TypeScript diagnostic code. */
+    code: string;
+    /** Project-relative source file, or a safe external/configuration marker. */
+    file: string;
+    /** Compiler message with the disposable project prefix normalized. */
+    message: string;
+    /** One-based source line; zero for configuration errors. */
+    line: number;
+    /** One-based source column; zero for configuration errors. */
+    column: number;
+}
+/** Native TOON/JSON-compatible matrix containing compiler results for each bound. */
 export interface SdkContractMatrix {
     /** Artifact schema version. */
     version: 1;
-    /** All real compiler invocations succeeded. */
+    /** All selected-target consumer compilations succeeded. */
     ok: boolean;
     /** Number of independent target/example compilations. */
     checks: number;
@@ -60,11 +79,18 @@ export interface SdkContractMatrix {
 /** Actionable input/tooling refusals, distinct from a valid matrix with API drift. */
 export declare class SdkContractRefusal extends Error {
     /** Stable refusal discriminator. */
-    readonly code: "invalid_input" | "sdk_unavailable" | "compiler_unavailable";
+    readonly code: "invalid_input" | "sdk_unavailable" | "compiler_unavailable" | "compiler_api_unavailable" | "unsupported_project_shape" | "isolation_refused";
     /** Safe retry guidance without raw tool output or machine paths. */
     readonly remedy: string;
+    /** Stable explanation for the single-SDK-copy project-shape refusal. */
+    readonly reason: "multiple_sdk_copies" | undefined;
+    /** Canonical SDK declaration roots expressed relative to the prepared consumer. */
+    readonly roots: readonly string[] | undefined;
     /** Construct a typed boundary failure with a safe operator remedy. */
-    constructor(code: SdkContractRefusal["code"], remedy: string);
+    constructor(code: SdkContractRefusal["code"], remedy: string, details?: {
+        reason: "multiple_sdk_copies";
+        roots: string[];
+    });
 }
 /** Public authoring and certified all-status read examples, with checked return semantics. */
 export declare const SDK_CONSUMER_EXAMPLES: readonly SdkConsumerExample[];
@@ -72,6 +98,6 @@ export declare const SDK_CONSUMER_EXAMPLES: readonly SdkConsumerExample[];
 export declare function parseSdkConsumerExamples(value: unknown): readonly SdkConsumerExample[];
 /** Locate a compiler only when the caller did not supply one; omit-dev installs get a remedy. */
 export declare function resolveSdkContractCompiler(from?: string): string;
-/** Compile real declarations in exclusive per-call scratch storage; never touch a tracker. */
+/** Compile real declarations with original option values and disposable output/cache storage. */
 export declare function checkSdkContracts(options: SdkContractOptions): Promise<SdkContractMatrix>;
 //# sourceMappingURL=sdk-contracts.d.ts.map

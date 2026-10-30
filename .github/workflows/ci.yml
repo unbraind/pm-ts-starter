@@ -87,9 +87,12 @@ jobs:
           echo "Committed dist/ matches a fresh build."
 
       - name: Full npm release gate
+        id: npm_release
         run: npm run release:check
 
       - name: Full Bun release gate
+        # Retain both gate receipts; an npm failure still fails the job.
+        if: ${{ !cancelled() && (steps.npm_release.outcome == 'success' || steps.npm_release.outcome == 'failure') }}
         run: bun run release:check
 
       - name: Verify Bun can install the package graph
