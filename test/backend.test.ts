@@ -1,8 +1,8 @@
 /** Behavioral contracts use real trackers and untrusted transport envelopes. */
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, mkdirSync, readFileSync, writeFileSync, symlinkSync } from "node:fs";
+import { accessSync, constants, mkdtempSync, rmSync, mkdirSync, readFileSync, statSync, writeFileSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import test, { type TestContext } from "node:test";
 import { PmClient } from "@unbrained/pm-cli/sdk";
@@ -82,7 +82,7 @@ function commandText(run: SpawnSyncReturns<string>): string {
  * empty lookup fails closed; it is not treated as an absent optional tool.
  *
  * @param env - Environment that may override the lookup with `BUN_EXE`.
- * @param lookup - Injected search, defaulting to a bounded Bun invocation with JSON output.
+ * @param lookup - Injected search, defaulting to the first `bun` entry on PATH (JSON-encoded).
  * @returns The Bun executable path.
  */
 function requireBunExecutable(
@@ -102,15 +102,24 @@ function requireBunExecutable(
 }
 
 /**
- * Find Bun on PATH with a short ceiling.
+ * Find the first `bun` entry on PATH, like `which bun`, without starting Bun: no preload or wrapper output can corrupt
+ * the result, and a wrapper script on PATH (which may export settings before exec) stays the selected executable.
  *
- * @param env - Environment whose PATH is searched.
- * @returns The lookup result, including a null stdout when Bun cannot start.
+ * @param env - Environment whose PATH (and PATHEXT on Windows) is searched.
+ * @returns The JSON-encoded path with status 0, or status 1 and a null stdout when no executable entry exists.
  */
 function lookupBun(env: NodeJS.ProcessEnv): ToolLookup {
-  // A preload script runs before -e and may write to stdout, so the lookup starts Bun without one.
-  const { BUN_INSPECT_PRELOAD: _preload, ...lookupEnv } = env;
-  return runBoundedCommand("bun", ["-e", "process.stdout.write(JSON.stringify(process.execPath))"], { env: lookupEnv, timeoutMs: 10_000 });
+  const names = process.platform === "win32" ? (env.PATHEXT ?? ".EXE;.CMD;.BAT").split(";").filter(Boolean).map((extension) => `bun${extension.toLowerCase()}`) : ["bun"];
+  for (const directory of (env.PATH ?? "").split(delimiter).filter(Boolean)) {
+    for (const name of names) {
+      const candidate = join(directory, name);
+      try {
+        accessSync(candidate, constants.X_OK);
+        if (statSync(candidate).isFile()) return { status: 0, stdout: JSON.stringify(candidate) };
+      } catch { /* not here; keep searching PATH */ }
+    }
+  }
+  return { status: 1, stdout: null };
 }
 
 test("a leading option is a flag, not the generated CLI tracker path", () => {
@@ -300,4 +309,15 @@ test("generated npm and Bun projects build and execute contracts with Git absent
   const reverted = runBoundedCommand(process.execPath, ["--test", "test/backend.test.ts"], { cwd: project, env });
   assert.notEqual(reverted.status, 0, "contract must fail when receipt certification is removed");
   assert.match(commandText(reverted), /must be load-bearing/);
+});
+
+test("the Bun lookup returns the PATH entry itself, so a wrapper on PATH stays selected", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "bun-wrapper-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const empty = join(root, "empty"), wrapped = join(root, "wrapped");
+  mkdirSync(empty); mkdirSync(wrapped);
+  const wrapper = join(wrapped, process.platform === "win32" ? "bun.cmd" : "bun");
+  writeFileSync(wrapper, "#!/bin/sh\nexport HTTPS_PROXY=http://proxy.example.invalid\nexec /nonexistent/real-bun \"$@\"\n", { mode: 0o755 });
+  assert.equal(requireBunExecutable({ PATH: [empty, wrapped].join(delimiter), PATHEXT: ".CMD" }), wrapper);
+  assert.throws(() => requireBunExecutable({ PATH: empty }), /Bun is required for generated consumer checks/);
 });

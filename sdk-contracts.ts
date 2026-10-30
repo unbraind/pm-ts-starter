@@ -333,7 +333,7 @@ if(!['createProgram','getPreEmitDiagnostics','getParsedCommandLineOfConfigFile']
   if(!parsed){fatal.forEach(record);return;}
   if(parsed.projectReferences?.length){
    const reference=ts.resolveProjectReferencePath(parsed.projectReferences[0]);
-   throw {refusal:'unsupported_project_shape',remedy:'Project references are unsupported: '+JSON.stringify(path.relative(project,config))+' references '+JSON.stringify(path.relative(project,reference))+'. Check each referenced project separately as its own root, or flatten the references; referenced declarations must be regenerated for each SDK bound.'};
+   throw {refusal:'unsupported_project_shape',remedy:'Project references are unsupported: '+JSON.stringify(label(config))+' references '+JSON.stringify(label(reference))+'. Check each referenced project separately as its own root, or flatten the references; referenced declarations must be regenerated for each SDK bound.'};
   }
   const options=parsed.options;options.noEmit=true;options.generateTrace=undefined;options.generateCpuProfile=undefined;options.pprofDir=undefined;
   const program=ts.createProgram({rootNames:parsed.fileNames,options,configFileParsingDiagnostics:parsed.errors});

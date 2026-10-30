@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import {spawnSync} from "node:child_process";
 import {cpSync, mkdirSync, readFileSync, rmSync, writeFileSync} from "node:fs";
-import {join} from "node:path";
+import {basename, join} from "node:path";
 import test from "node:test";
 import {checkSdkContracts, SdkContractRefusal} from "../sdk-contracts.ts";
 import {apiConsumer, boundaryRandom, directApiDiagnostics, assertProjectShapeRefusal, assertApiMatrix} from "./dependency-fixtures.ts";
@@ -79,4 +79,17 @@ for (const version of ["5.9.3", "6.0.3"]) test(`reference graph refusal property
     rmSync(nested, {recursive: true});
   }
   t.diagnostic("24 generated graphs with cycles, depth 1–3, nested foreign SDKs and relative imports; paired reference-free controls");
+});
+
+test("reference refusal names an external referenced config by file name only", async t => {
+  const {root, project, bound} = apiConsumer(t), external = join(root, "outside-library"); mkdirSync(external);
+  writeFileSync(join(external, "index.d.ts"), "export declare const shared: 1;");
+  writeFileSync(join(external, "tsconfig.json"), JSON.stringify({compilerOptions: {types: [], lib: ["ES5"], composite: true}, files: ["index.d.ts"]}));
+  writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions: {types: [], lib: ["ES5"], module: "NodeNext"}, files: ["consumer.ts"], references: [{path: external}]}));
+  await assertProjectShapeRefusal(project, bound, error => {
+    // The private copy's relative path to an external config would walk the caller's filesystem ("../../…").
+    assert.ok(!error.remedy.includes(".."), error.remedy);
+    assert.ok(!error.remedy.includes(basename(root)) && !error.remedy.includes("outside-library"), error.remedy);
+    assert.ok(error.remedy.includes('"tsconfig.json" references "tsconfig.json"'), error.remedy);
+  });
 });

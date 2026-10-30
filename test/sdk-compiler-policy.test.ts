@@ -1,18 +1,16 @@
 /** Real compiler compatibility and writer-boundary regression controls. */
 import assert from "node:assert/strict";
 import {spawnSync} from "node:child_process";
-import {mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync} from "node:fs";
-import {tmpdir} from "node:os";
+import {mkdirSync, readFileSync, symlinkSync, writeFileSync} from "node:fs";
 import {dirname, join, resolve} from "node:path";
 import test, {type TestContext} from "node:test";
 import {checkSdkContracts, SdkContractRefusal} from "../sdk-contracts.ts";
-import {dependencyBound, filesystemSnapshot, installTestCompiler, testCompiler, directApiDiagnostics} from "./dependency-fixtures.ts";
+import {dependencyBound, filesystemSnapshot, installTestCompiler, testCompiler, testDirectory, directApiDiagnostics} from "./dependency-fixtures.ts";
 
 const pinnedCompiler = testCompiler();
 /** Allocate a non-git consumer and independently provision its exact stock compiler. */
 function consumer(t: TestContext, version?: string): {root: string; project: string; bound: ReturnType<typeof dependencyBound>} {
-  const root = mkdtempSync(join(tmpdir(), "sdk-writer-test-"));
-  t.after(() => rmSync(root, {recursive: true, force: true}));
+  const root = testDirectory(t, "sdk-writer-test-");
   const project = join(root, "consumer");
   mkdirSync(join(project, "node_modules"), {recursive: true});
   if (version) installTestCompiler(project, version); else symlinkSync(dirname(dirname(pinnedCompiler)), join(project, "node_modules/typescript"), "junction");
