@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { cpSync, truncateSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
 import { join, resolve } from "node:path";
 import test, { type TestContext } from "node:test";
 import { PmClient, acquireLock, readSettings, readLocatedItem, resolveItemTypeRegistry, serializeItemDocument } from "@unbrained/pm-cli/sdk";
@@ -369,7 +370,7 @@ test("checked-in old/new trackers demonstrate lossless fixture evolution", async
   cpSync(new URL("./fixtures/rehearsal-old", import.meta.url), options.source, { recursive: true });
   const result = await rehearseSchemaMigration({ ...options, plan });
   assert.equal(result.affected, 4);
-  const actualRoot = join(options.workDir, "tracker"), expectedRoot = new URL("./fixtures/rehearsal-new", import.meta.url).pathname;
+  const actualRoot = join(options.workDir, "tracker"), expectedRoot = fileURLToPath(new URL("./fixtures/rehearsal-new", import.meta.url));
   const actual = await readSettings(actualRoot), expected = await readSettings(expectedRoot);
   for (const id of ["fixture-active", "fixture-done"]) {
     const documents = await Promise.all([[actualRoot, actual], [expectedRoot, expected]].map(async ([root, settings]) => {

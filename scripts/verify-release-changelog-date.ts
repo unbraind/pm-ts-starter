@@ -320,11 +320,10 @@ export function generateHeading(bin: string, args: string[], cwd: string): Headi
 export function verify(root: string, today: string): VerifierResult {
   const tracked = execFileSync(
     "git",
-    ["ls-files", "--", "package.json", ".github/workflows/*.yml", ".github/workflows/*.yaml"],
+    ["ls-files", "-z", "--", "package.json", ".github/workflows/*.yml", ".github/workflows/*.yaml"],
     { cwd: root, encoding: "utf-8", maxBuffer: 64 * 1024 * 1024 },
   )
-    .trimEnd()
-    .split("\n")
+    .split("\0")
     .filter((file) => file.length > 0 && existsSync(resolve(root, file)));
   const sources = tracked.map((file) => ({ file, text: readFileSync(resolve(root, file), "utf-8") }));
   const statics = auditInvocations(sources);

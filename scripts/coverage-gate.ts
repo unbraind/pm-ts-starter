@@ -35,8 +35,8 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync } from "node:fs";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync } from "node:fs";
+import { join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /**
@@ -229,7 +229,7 @@ function collectSources(rootDir: string, target: string, skipDirs: Set<string>):
  * Runs the coverage gate against a package root.
  *
  * Reads `package.json#coverageGate`, walks the configured sources, runs the
- * test command with V8 coverage, parses the lcov report, and reconciles the
+ * test command with V8 coverage, parses native JSON reports, and reconciles the
  * reported files against the required set. Returns 0 when the gate passes and a
  * non-zero code when it fails — the same contract `process.exit` honoured in the
  * prior top-level script form, now callable from tests without terminating the
@@ -337,12 +337,9 @@ export function runCoverageGate(
     return 1;
   }
 
-  const lcovPath = join(rootDir, "coverage", "lcov.info");
   mkdirSync(join(rootDir, "coverage"), { recursive: true });
-  // Delete any previous report first. If this run writes none, a leftover file
-  // from an earlier, broader run would satisfy the presence check on stale data —
-  // the gate would pass by reading history rather than by measuring anything.
-  rmSync(lcovPath, { force: true });
+  // JSON coverage records preserve every path byte; an exclusive directory cannot reuse stale reports.
+  const reportRoot = mkdtempSync(join(rootDir, "coverage", "json-")), reportPath = join(reportRoot, "summary.json");
 
   // Strip `NODE_TEST_CONTEXT` / `NODE_TEST_WORKER_ID`: when the gate is
   // driven from a test (this script's own test suite), the parent `node
@@ -359,6 +356,8 @@ export function runCoverageGate(
     [
       ...runner.args,
       "--test",
+      // A property test owns up to two compiler workers; avoid overlapping files.
+      "--test-concurrency=1",
       "--experimental-test-coverage",
       // Scope the report to exactly the files the presence check requires.
       // Passing the enumerated paths rather than a directory glob keeps the two
@@ -370,8 +369,9 @@ export function runCoverageGate(
       `--test-coverage-functions=${config.thresholds.functions}`,
       "--test-reporter=spec",
       "--test-reporter-destination=stdout",
-      "--test-reporter=lcov",
-      `--test-reporter-destination=${lcovPath}`,
+      // A file: URL, not a drive-letter path: the ESM loader resolves custom reporters and rejects bare Windows paths.
+      `--test-reporter=${new URL("./coverage-json-reporter.ts", import.meta.url).href}`,
+      `--test-reporter-destination=${reportPath}`,
       ...config.tests,
     ],
     {
@@ -389,44 +389,37 @@ export function runCoverageGate(
   );
 
   if (result.error) {
+    rmSync(reportRoot, { recursive: true, force: true });
     console.error(`coverage-gate: failed to start the test runner: ${result.error.message}`);
     return 1;
   }
 
   // Surface a runner failure before touching the report at all. A failing
   // suite, an unmet threshold, or a test file that will not load can each leave
-  // the lcov output absent or incomplete, and every diagnostic below would then
+  // the JSON output absent or incomplete, and every diagnostic below would then
   // describe a coverage-configuration problem the author does not have —
   // burying the test failure they need to act on.
   if (result.status !== 0) {
+    rmSync(reportRoot, { recursive: true, force: true });
     return result.status ?? 1;
   }
 
   /**
-   * Source files the run actually reported on, read back from the lcov output.
-   *
-   * `SF:` paths are normalised to repository-relative POSIX form so they can be
-   * compared against the walk. The lcov reporter emits them relative to the
-   * working directory on Linux, but that is not contractual and Windows runners
-   * have been seen to emit absolute paths; without normalising, the presence
-   * check would invert into a permanently red build that blames every source
-   * file for never loading.
+   * Compare real paths on both sides of the native JSON report; never trim or split paths.
    */
   const reported = new Set<string>();
   try {
-    statSync(lcovPath);
-    for (const line of readFileSync(lcovPath, "utf8").split("\n")) {
-      if (!line.startsWith("SF:")) continue;
-      const raw = line.slice(3).trim();
-      const abs = isAbsolute(raw) ? raw : join(rootDir, raw);
-      reported.add(relative(rootDir, abs).split(sep).join("/"));
-    }
+    const reports = JSON.parse(readFileSync(reportPath, "utf8")) as {summary: {files: {path: string}[]}}[];
+    if (!reports.length) throw new Error("missing report");
+    for (const report of reports) for (const file of report.summary.files) reported.add(realpathSync(file.path));
   } catch {
-    console.error(`coverage-gate: no coverage report was written to ${relative(rootDir, lcovPath)}.`);
+    console.error(`coverage-gate: no coverage report was written to ${JSON.stringify(relative(rootDir, reportRoot))}, or its JSON file paths could not be resolved.`);
     return 1;
+  } finally {
+    rmSync(reportRoot, { recursive: true, force: true });
   }
 
-  const missing = required.filter((file) => !reported.has(file));
+  const missing = required.filter((file) => !reported.has(realpathSync(join(rootDir, file))));
 
   if (missing.length > 0) {
     console.error(

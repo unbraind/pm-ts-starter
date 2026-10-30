@@ -1,0 +1,13 @@
+id: pm-ts-starter-tqmv
+title: Copy the sdk-contracts consumer once per bound instead of through a template
+description: "CodeRabbit on #154 (PRRT_kwDOSZpwFM6xyGXo): consumer mode copies the consumer into template, then template into each bound, so node_modules is written three times when FICLONE falls back to byte copies (ext4/NTFS). Internal links are rewritten as absolute paths into each destination, so renaming template into the last bound is unsafe. Measure on a realistic consumer without clone support, then copy straight into each bound (validateDependencies + registryConfiguration per copy) or skip outDir/declarationDir/tsBuildInfo outside the parsed file list. Correctness is unaffected."
+type: Task
+status: open
+priority: 2
+tags[2]: performance,sdk-contracts
+created_at: "2026-10-30T05:26:41.158Z"
+updated_at: "2026-10-30T05:26:41.158Z"
+author: codex
+dependencies[1]{id,kind,created_at,author,source_kind,author_source}:
+  pm-ts-starter-min-sdk-drift,related,"2026-10-30T05:26:41.158Z",codex,"cli:create:dep",detected
+body: ""

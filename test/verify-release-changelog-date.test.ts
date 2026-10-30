@@ -9,6 +9,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -281,4 +282,24 @@ test("an unquoted trailing comment cannot supply the flag the command is missing
   assert.equal(stripComment("cmd --flag 'a # b'"), "cmd --flag 'a # b'");
   assert.equal(stripComment("cmd --flag\\# not-a-comment"), "cmd --flag\\# not-a-comment");
   assert.equal(stripComment("#leading"), "");
+});
+
+
+test("tracked workflow filenames use NUL records for every unusual component", t => {
+  const root = mkdtempSync(join(tmpdir(), "release-paths-"));
+  t.after(() => rmSync(root, {recursive: true, force: true}));
+  execFileSync("git", ["init", "-q"], {cwd: root});
+  mkdirSync(join(root, ".github/workflows"), {recursive: true}); mkdirSync(join(root, "dist"));
+  writeFileSync(join(root, "dist/cli.js"), "console.log(process.argv.includes('--date-from-version') ? '## 2026.1.2 - 2026-01-02' : '## 2026.1.2 - 2030-12-31');");
+  // Windows cannot create file names containing control characters or double quotes.
+  const names = ["plain", "line\nfeed", "carriage\rreturn", "tab\tname", " spaced ", "--leading", "single'quote", 'double"quote', "é漢字"]
+    .filter(name => process.platform !== "win32" || !/[\n\r\t"]/.test(name));
+  for (const name of names) {
+    const file = `.github/workflows/${name}.yml`;
+    writeFileSync(join(root, file), "run: pm-changelog --release-version-from-package");
+    execFileSync("git", ["add", "--", file], {cwd: root});
+  }
+  const result = verify(root, "2030-12-31");
+  assert.equal(result.failures.length, names.length, result.failures.join("\n"));
+  for (const name of names) assert.ok(result.failures.some(failure => failure.includes(`.github/workflows/${name}.yml`)));
 });

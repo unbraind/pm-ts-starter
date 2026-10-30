@@ -1,8 +1,8 @@
 /** Behavioral contracts use real trackers and untrusted transport envelopes. */
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, mkdirSync, readFileSync, writeFileSync, symlinkSync } from "node:fs";
+import { accessSync, constants, mkdtempSync, rmSync, mkdirSync, readFileSync, statSync, writeFileSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { delimiter, dirname, join, sep } from "node:path";
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import test, { type TestContext } from "node:test";
 import { PmClient } from "@unbrained/pm-cli/sdk";
@@ -82,32 +82,49 @@ function commandText(run: SpawnSyncReturns<string>): string {
  * empty lookup fails closed; it is not treated as an absent optional tool.
  *
  * @param env - Environment that may override the lookup with `BUN_EXE`.
- * @param lookup - Injected search, defaulting to a bounded `which bun`.
+ * @param lookup - Injected search, defaulting to the first `bun` entry on PATH (JSON-encoded).
  * @returns The Bun executable path.
  */
 function requireBunExecutable(
   env: NodeJS.ProcessEnv,
   lookup: (env: NodeJS.ProcessEnv) => ToolLookup = lookupBun,
 ): string {
-  const override = env.BUN_EXE?.trim();
+  const override = env.BUN_EXE;
   if (override) return override;
   const found = lookup(env);
   if ((found.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT") {
     throw new Error("Timed out while locating Bun. Refusing to skip consumer checks.");
   }
-  const path = found.stdout?.trim();
-  if (found.status !== 0 || found.error || !path) throw new Error("Bun is required for generated consumer checks. Install Bun or set BUN_EXE.");
+  let path: unknown;
+  try { path = JSON.parse(found.stdout ?? "null"); } catch { path = undefined; }
+  if (found.status !== 0 || found.error || typeof path !== "string" || !path) throw new Error("Bun is required for generated consumer checks. Install Bun or set BUN_EXE.");
   return path;
 }
 
 /**
- * Find Bun on PATH with a short ceiling.
+ * Find the first `bun` entry on PATH, like `which bun`, without starting Bun: no preload or wrapper output can corrupt
+ * the result, and a POSIX wrapper script on PATH (which may export settings before exec) stays the selected executable.
+ * On Windows only `bun.exe` qualifies: the consumer runner spawns without a shell, which cannot start `.cmd`/`.bat`
+ * wrappers, so those are skipped (set BUN_EXE to select a different executable).
  *
  * @param env - Environment whose PATH is searched.
- * @returns The lookup result, including a null stdout when `which` fails.
+ * @param platform - Platform whose executable naming applies.
+ * @returns The JSON-encoded path with status 0, or status 1 and a null stdout when no executable entry exists.
  */
-function lookupBun(env: NodeJS.ProcessEnv): ToolLookup {
-  return runBoundedCommand("which", ["bun"], { env, timeoutMs: 10_000 });
+function lookupBun(env: NodeJS.ProcessEnv, platform: NodeJS.Platform = process.platform): ToolLookup {
+  const names = platform === "win32" ? ["bun.exe"] : ["bun"];
+  for (const directory of (env.PATH ?? "").split(delimiter).filter(Boolean)) {
+    for (const name of names) {
+      // Append without normalizing: `link/../bin` must keep resolving through the link, as the shell would. Only `/`
+      // ends a POSIX directory; a trailing backslash there is part of the name.
+      const candidate = (platform === "win32" ? /[\\/]$/ : /\/$/).test(directory) ? directory + name : directory + sep + name;
+      try {
+        accessSync(candidate, constants.X_OK);
+        if (statSync(candidate).isFile()) return { status: 0, stdout: JSON.stringify(candidate) };
+      } catch { /* not here; keep searching PATH */ }
+    }
+  }
+  return { status: 1, stdout: null };
 }
 
 test("a leading option is a flag, not the generated CLI tracker path", () => {
@@ -144,13 +161,13 @@ test("generated project commands stop at their ceiling and keep failed exits", (
 test("Bun lookup failures stay prerequisites instead of skipped coverage", () => {
   assert.equal(requireBunExecutable({ BUN_EXE: "  /opt/bun  " }, () => {
     throw new Error("override must not search");
-  }), "/opt/bun");
+  }), "  /opt/bun  ");
   assert.throws(() => requireBunExecutable({}, () => ({ status: 1, stdout: null })), /Bun is required for generated consumer checks/);
   assert.throws(() => requireBunExecutable({}, () => ({ status: 1, stdout: "  " })), /Bun is required for generated consumer checks/);
   assert.throws(() => requireBunExecutable({}, () => ({ status: 1, stdout: "/invalid/bun" })), /Bun is required for generated consumer checks/);
   assert.throws(() => requireBunExecutable({}, () => ({ status: 0, stdout: "/invalid/bun", error: new Error("lookup failed") })), /Bun is required for generated consumer checks/);
-  assert.equal(requireBunExecutable({}, () => ({ status: 0, stdout: "/usr/bin/bun\n" })), "/usr/bin/bun");
-  const timedOut = Object.assign(new Error("spawnSync which ETIMEDOUT"), { code: "ETIMEDOUT" });
+  assert.equal(requireBunExecutable({}, () => ({ status: 0, stdout: JSON.stringify("/usr/bin/bun\n") })), "/usr/bin/bun\n");
+  const timedOut = Object.assign(new Error("spawnSync bun ETIMEDOUT"), { code: "ETIMEDOUT" });
   assert.throws(() => requireBunExecutable({}, () => ({ status: null, stdout: "", error: timedOut })), /Timed out while locating Bun/);
 });
 
@@ -297,4 +314,49 @@ test("generated npm and Bun projects build and execute contracts with Git absent
   const reverted = runBoundedCommand(process.execPath, ["--test", "test/backend.test.ts"], { cwd: project, env });
   assert.notEqual(reverted.status, 0, "contract must fail when receipt certification is removed");
   assert.match(commandText(reverted), /must be load-bearing/);
+});
+
+test("the Bun lookup returns the PATH entry itself, so a wrapper on PATH stays selected", { skip: process.platform === "win32" ? "Windows selects only bun.exe; wrappers need a shell" : false }, (t) => {
+  const root = mkdtempSync(join(tmpdir(), "bun-wrapper-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const empty = join(root, "empty"), wrapped = join(root, "wrapped");
+  mkdirSync(empty); mkdirSync(wrapped);
+  const wrapper = join(wrapped, "bun");
+  writeFileSync(wrapper, "#!/bin/sh\nexport HTTPS_PROXY=http://proxy.example.invalid\nexec /nonexistent/real-bun \"$@\"\n", { mode: 0o755 });
+  assert.equal(requireBunExecutable({ PATH: [empty, wrapped].join(delimiter) }), wrapper);
+  assert.throws(() => requireBunExecutable({ PATH: empty }), /Bun is required for generated consumer checks/);
+});
+
+test("the Windows Bun lookup selects bun.exe and skips cmd and bat wrappers a shell-less spawn cannot start", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "bun-windows-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const wrappers = join(root, "wrappers"), native = join(root, "native");
+  mkdirSync(wrappers); mkdirSync(native);
+  for (const name of ["bun.cmd", "bun.bat", "bun"]) writeFileSync(join(wrappers, name), "@echo off\r\n", { mode: 0o755 });
+  const executable = join(native, "bun.exe"); writeFileSync(executable, "", { mode: 0o755 });
+  const env = { PATH: [wrappers, native].join(delimiter), PATHEXT: ".CMD;.BAT;.EXE" };
+  assert.deepEqual(lookupBun(env, "win32"), { status: 0, stdout: JSON.stringify(executable) });
+  assert.deepEqual(lookupBun({ ...env, PATH: wrappers }, "win32"), { status: 1, stdout: null });
+});
+
+test("the POSIX Bun lookup treats a trailing backslash as part of the PATH directory name", { skip: process.platform === "win32" ? "a backslash is a separator on Windows" : false }, (t) => {
+  const root = mkdtempSync(join(tmpdir(), "bun-backslash-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const directory = join(root, "bin\\"); mkdirSync(directory);
+  const bun = join(directory, "bun"); writeFileSync(bun, "", { mode: 0o755 });
+  // Joining without a separator would select this sibling file instead.
+  writeFileSync(join(root, "bin\\bun"), "", { mode: 0o755 });
+  assert.deepEqual(lookupBun({ PATH: directory }, "linux"), { status: 0, stdout: JSON.stringify(bun) });
+});
+
+test("the Bun lookup keeps a PATH entry that walks through a symlink unnormalized", { skip: process.platform === "win32" ? "Windows normalizes link/.. lexically before following the junction" : false }, (t) => {
+  const root = mkdtempSync(join(tmpdir(), "bun-path-link-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(join(root, "real", "sub"), { recursive: true }); mkdirSync(join(root, "real", "bin"));
+  const name = process.platform === "win32" ? "bun.cmd" : "bun";
+  writeFileSync(join(root, "real", "bin", name), "#!/bin/sh\n", { mode: 0o755 });
+  symlinkSync(join(root, "real", "sub"), join(root, "link"), "junction");
+  // `link/../bin` is real/bin through the link; lexical normalization would turn it into root/bin, which does not exist.
+  const entry = `${root}/link/../bin`;
+  assert.equal(requireBunExecutable({ PATH: entry, PATHEXT: ".CMD" }), `${entry}${process.platform === "win32" ? "\\" : "/"}${name}`);
 });
