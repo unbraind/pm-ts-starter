@@ -9,6 +9,8 @@ import {checkSdkContracts, SdkContractRefusal} from "../sdk-contracts.ts";
 import {dependencyBound, dependencyEntry, filesystemSnapshot, testCompiler, directApiDiagnostics} from "./dependency-fixtures.ts";
 
 const compiler = testCompiler();
+// TypeScript 7 installs only the native companion for the host platform.
+const companion = `typescript-${process.platform}-${process.arch}`;
 
 /** Compare structured consumer API diagnostics rather than rendered compiler headers. */
 function oracle(project: string): {ok: boolean; exit_code: number; codes: string[]; diagnostics: ReturnType<typeof directApiDiagnostics>} {
@@ -43,7 +45,7 @@ for (const shape of ["mutual external symlinks", "fatal emitDeclarationOnly", "n
       Object.assign(options, {pretty: true, traceResolution: true, explainFiles: true, diagnostics: true, extendedDiagnostics: true, listFiles: true, listEmittedFiles: true});
     } else if (shape === "uninstalled compiler companion") {
       options.resolveJsonModule = true;
-      source = 'import metadata from "@typescript/typescript-linux-x64/package.json" with {type: "json"}; export const name = metadata.name;';
+      source = `import metadata from "@typescript/${companion}/package.json" with {type: "json"}; export const name = metadata.name;`;
     } else if (shape === "unicode diagnostic") { options.noUncheckedSideEffectImports = true; source = `import ${JSON.stringify("missing\r\u2028module")};`; }
     else options.noLib = true;
     writeFileSync(join(project, "consumer.mts"), source);
@@ -53,7 +55,7 @@ for (const shape of ["mutual external symlinks", "fatal emitDeclarationOnly", "n
     for (const present of shape === "uninstalled compiler companion" ? [false, true] : [false]) {
       if (present) {
         mkdirSync(join(project, "node_modules/@typescript"));
-        symlinkSync(resolve(import.meta.dirname, "../node_modules/@typescript/typescript-linux-x64"), join(project, "node_modules/@typescript/typescript-linux-x64"), "junction");
+        symlinkSync(resolve(import.meta.dirname, `../node_modules/@typescript/${companion}`), join(project, `node_modules/@typescript/${companion}`), "junction");
       }
       const expected = oracle(project), before = filesystemSnapshot(root);
       const expectedCodes = shape === "mutual external symlinks" || present ? [] : shape === "fatal emitDeclarationOnly" ? ["TS2322", "TS5069"] : shape === "multiline type error" ? ["TS2322"] : shape === "uninstalled compiler companion" ? ["TS2307"] : Array<string>(8).fill("TS2318");

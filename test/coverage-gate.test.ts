@@ -655,7 +655,9 @@ test("coverage gate normalises absolute file paths in the JSON report", async (t
 });
 
 test("coverage JSON preserves unusual source names without trimming or line splitting", async t => {
-  for (const sourceName of ["line\nfeed", "carriage\rreturn", "tab\tname", " spaced ", "--leading", "single'quote", 'double"quote', "é漢字"]) {
+  const names = ["line\nfeed", "carriage\rreturn", "tab\tname", " spaced ", "--leading", "single'quote", 'double"quote', "é漢字"];
+  // Windows refuses control characters, double quotes and trailing spaces in filenames; POSIX hosts keep covering those names.
+  for (const sourceName of process.platform === "win32" ? names.filter(name => !/[\x00-\x1f"]|\s$/.test(name)) : names) {
     const dir = createGateFixture(t, "cg-paths-", {sourceName});
     const result = await runGate(dir);
     assert.equal(result.code, 0, `${JSON.stringify(sourceName)}: ${result.stderr}`);

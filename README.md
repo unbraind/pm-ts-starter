@@ -238,11 +238,13 @@ receipts), then pass their package roots:
 ```sh
 npm install --prefix ./sdk-min --ignore-scripts --no-package-lock @unbrained/pm-cli@2026.10.17
 npm install --prefix ./sdk-current --ignore-scripts --no-package-lock @unbrained/pm-cli@2026.10.24
+# A classic-API compiler with Node ambient types beside it (TypeScript 7 has no Program API; see below).
+npm install --prefix ./tsc-api --ignore-scripts --no-package-lock typescript@6.0.3 @types/node
 pm ts-starter sdk-contracts \
   --minimum-sdk ./sdk-min/node_modules/@unbrained/pm-cli \
   --current-sdk ./sdk-current/node_modules/@unbrained/pm-cli \
   --current-version 2026.10.24 \
-  --compiler ./node_modules/typescript/bin/tsc --json
+  --compiler ./tsc-api/node_modules/typescript/bin/tsc --json
 ```
 
 Omit `--json` for native compact TOON. The result has `ok`, `checks`, `failed`,
@@ -294,8 +296,10 @@ See [compiler API compatibility](docs/sdk-contract-api-compatibility.md) and the
 The default inline examples exercise typed authoring composition and certified
 complete tracker reads. Use `--examples docs/examples/sdk-contracts.json` for a
 JSON array of `{id, source}` consumers (1–16 examples, each at most 64 KiB).
-Inline mode creates a strict NodeNext consumer with ES2022 libraries and Node ambient types and copies
-the installed compiler artifact selected by `--compiler`. Consumer code is compiled
+Inline mode creates a strict NodeNext consumer with ES2022 libraries and `types: ["node"]` and copies
+the installed compiler artifact selected by `--compiler`, together with the `@types` packages installed
+beside it. The checker does not supply `@types/node`: install it in the same `node_modules` as the selected
+TypeScript, or both bounds report TS2688. Consumer code is compiled
 without executing it; imports outside the prepared project/dependency layout are refused.
 
 The checker loads the consumer's own `typescript` JavaScript API in a confined
@@ -303,8 +307,10 @@ child. `getParsedCommandLineOfConfigFile` follows the complete extends chain;
 `createProgram` and `getPreEmitDiagnostics` supply structured diagnostics. The
 original compiler-options object retains TypeScript's configuration metadata.
 Project references are refused before Program creation as `unsupported_project_shape`,
-naming the referencing and referenced configs. Existing declarations may be stale for
-the selected SDK; check each project separately as its own root or flatten references.
+naming the referencing and referenced configs. Flattening the references gives a complete check.
+Checking each referenced project as its own root is partial: the referencing project is not
+checked while its `references` remain, and declarations it consumes from referenced projects must
+be regenerated against each SDK bound before they say anything about that bound.
 TypeScript's logical config paths retain their relative origins through symlinks. No language service,
 compiler-output parser, formatted diagnostic matcher or diagnostic-phase emulation
 is used. Compiler options pass through without a classification allowlist.
@@ -398,7 +404,7 @@ import { checkSdkContracts, type SdkContractMatrix } from "pm-ts-starter";
 const matrix: SdkContractMatrix = await checkSdkContracts({
   minimum: { root: "./sdk-min/node_modules/@unbrained/pm-cli", version: "2026.10.17" },
   current: { root: "./sdk-current/node_modules/@unbrained/pm-cli", version: "2026.10.24" },
-  compiler: "./node_modules/typescript/bin/tsc",
+  compiler: "./tsc-api/node_modules/typescript/bin/tsc",
 });
 if (!matrix.ok) process.exitCode = 1;
 ```

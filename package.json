@@ -18,8 +18,12 @@
     "manifest.json",
     "README.md",
     "CHANGELOG.md",
+    "ARCHITECTURE.md",
     "backend.ts",
+    "docs/backend-conformance.md",
     "docs/schema-migration-rehearsal.md",
+    "docs/sdk-contract-api-compatibility.md",
+    "docs/sdk-contract-process-inventory.md",
     "docs/examples/schema-migration.json",
     "docs/examples/sdk-contracts.json"
   ],

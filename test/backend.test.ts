@@ -108,7 +108,9 @@ function requireBunExecutable(
  * @returns The lookup result, including a null stdout when Bun cannot start.
  */
 function lookupBun(env: NodeJS.ProcessEnv): ToolLookup {
-  return runBoundedCommand("bun", ["-e", "process.stdout.write(JSON.stringify(process.execPath))"], { env, timeoutMs: 10_000 });
+  // A preload script runs before -e and may write to stdout, so the lookup starts Bun without one.
+  const { BUN_INSPECT_PRELOAD: _preload, ...lookupEnv } = env;
+  return runBoundedCommand("bun", ["-e", "process.stdout.write(JSON.stringify(process.execPath))"], { env: lookupEnv, timeoutMs: 10_000 });
 }
 
 test("a leading option is a flag, not the generated CLI tracker path", () => {
