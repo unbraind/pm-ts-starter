@@ -3,14 +3,18 @@ title: Compile packed contracts against each exact selected SDK bound
 description: "Follow-up to PR 153: packed declarations resolved SDK imports from a current-only consumer installation, leaving the minimum bound untested. Isolate each runtime and bound, verify the installed resolution, and regress a current-only public SDK API."
 type: Issue
 pm_format_version: 2
-status: blocked
+status: closed
 priority: 1
 tags[1]: "gh:unbraind/pm-ts-starter#154"
 created_at: "2026-10-24T13:07:42.652Z"
-updated_at: "2026-10-30T16:11:31.678Z"
+updated_at: "2026-10-30T20:43:43.409Z"
+closed_at: "2026-10-30T20:43:42.287Z"
+completed_at: "2026-10-30T20:42:27.000Z"
 author: codex-agent
 acceptance_criteria: Exact manifest minimum and explicit current SDK resolve inside separate packed npm and Bun consumers; a newer-only public API passes current and fails minimum; reverting only consumer provisioning fails the regression.
-blocked_reason: Exact-head full npm/Bun release gates are pending; local packed SDK provisioning timed out.
+resolution: "Delivered by PR #154 (5b5fbcd): fix: check SDK bounds with one canonical SDK copy"
+expected_result: Exact manifest minimum and explicit current SDK resolve inside separate packed npm and Bun consumers; a newer-only public API passes current and fails minimum; reverting only consumer provisioning fails the regression.
+actual_result: "PR #154 merged at 2026-10-30T20:42:27Z as 5b5fbcd; required CI passed on the merged head."
 comments[206]{created_at,author,text}:
   "2026-10-24T13:07:46.558Z",codex-agent,"Scope: correct the packed-consumer compatibility gate added by PR 153. Use separate npm and Bun consumer installations per bound, select the minimum from manifest.json and current release 2026.10.24, and prove the actual resolver result from each consumer. Add a real newer-only SDK API use through emitted declarations, retaining the fixed compiler examples and no-git checks. Repository dependency pins remain unchanged; full npm and Bun release gates will run locally and in CI."
   "2026-10-24T13:07:47.361Z",codex-agent,"Implementation: each compiler project maps the selected SDK public type exports through TypeScript paths, including imports reached through absolute external declarations. Unexported SDK subpaths resolve to an empty declaration rather than falling through to a foreign installation. Packed acceptance now installs npm and Bun consumers separately for each exact bound and verifies package metadata and SDK entry resolution at runtime. Regression uses real acquireLockLease, absent in the manifest minimum and present in 2026.10.24. Typecheck, test typecheck, lint, docstring gate and zero-duplication gate passed."
@@ -838,4 +842,5 @@ docs[17]{path,scope}:
   "https://github.com/unbraind/pm-ts-starter/actions/runs/40755279900",project
   "https://github.com/unbraind/pm-ts-starter/pull/154/checks",project
   README.md,project
+close_reason: "Delivered by PR #154 (5b5fbcd): fix: check SDK bounds with one canonical SDK copy"
 body: ""

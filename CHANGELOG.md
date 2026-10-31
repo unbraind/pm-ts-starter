@@ -1,10 +1,26 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Compile packed contracts against each exact selected SDK bound ([pm-ts-starter-min-sdk-drift](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-min-sdk-drift.toon))
+
 ## 2026.10.29 - 2026-10-29
+
+### Changed
+
+- Update startup refusal tests for the read-only SDK startup contract ([pm-ts-starter-vgd7](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-vgd7.toon))
 
 ### Other
 
 - Make the 2026.10.23 pm toolchain bump pass: refresh SDK-inferred declarations and generated changelog ([pm-ts-starter-tc1023](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-tc1023.toon))
+
+## 2026.10.26 - 2026-10-26
+
+### Other
+
+- Point the npm homepage at the package catalog and link the author ([pm-ts-starter-y488](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-y488.toon))
 
 ## 2026.10.25 - 2026-10-25
 
