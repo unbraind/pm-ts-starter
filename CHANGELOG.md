@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Closed
+
+- Closed: Update rehearsal startup characterization for the SDK 2026.10.25 read-only fix ([pm-ts-starter-github-38a2e98e983e-169](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-github-38a2e98e983e-169.toon))
+
 ## 2026.10.31 - 2026-10-31
 
 ### Fixed
@@ -18,9 +24,9 @@
 
 ## 2026.10.26 - 2026-10-26
 
-### Other
+### Fixed
 
-- Point the npm homepage at the package catalog and link the author ([pm-ts-starter-y488](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-y488.toon))
+- Point the npm homepage at the package's website and link the author ([pm-ts-starter-y488](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-y488.toon))
 
 ## 2026.10.25 - 2026-10-25
 
@@ -46,7 +52,6 @@
 ### Fixed
 
 - Propagate the docstring gate entry guard fix ([pm-ts-starter-dcep](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-dcep.toon))
-- plan-demo forwards a nested pm usage error instead of validating its required id, unlike its sibling demos ([pm-ts-starter-github-38a2e98e983e-61](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-github-38a2e98e983e-61.toon))
 - The changelog gate stamps an untagged version with the current date, so its verdict flips every midnight with no commit ([pm-ts-starter-ov68](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-ov68.toon))
 - The release job authenticated with a stored npm token that expired, so publishing stopped while every other gate stayed green ([pm-ts-starter-epz5](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-epz5.toon))
 - A release run bumped and committed a new version every night while publishing was impossible, because the only externally-failable step runs last ([pm-ts-starter-2l5j](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-2l5j.toon))
@@ -99,6 +104,12 @@
 ### Other
 
 - Certify pm CLI 2026.9.10 and pick up the canonical auditor fixes the lockfile was holding back ([pm-ts-starter-it5u](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-it5u.toon))
+
+## 2026.9.9 - 2026-09-09
+
+### Closed
+
+- Closed: plan-demo forwards a nested pm usage error instead of validating its required id, unlike its sibling demos ([pm-ts-starter-github-38a2e98e983e-61](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-github-38a2e98e983e-61.toon))
 
 ## 2026.9.8 - 2026-09-08
 
