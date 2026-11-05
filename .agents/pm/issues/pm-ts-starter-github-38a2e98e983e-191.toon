@@ -1,0 +1,21 @@
+id: pm-ts-starter-github-38a2e98e983e-191
+title: Release timeout reports stale workflow approval after automatic approval succeeded
+description: "GH issue #191: https://github.com/unbraind/pm-ts-starter/issues/191 · author @unbraind · created 2026-11-04T16:42:10Z · updated 2026-11-04T16:42:10Z"
+type: Issue
+status: open
+priority: 2
+tags[2]: "gh:unbraind/pm-ts-starter#191","github_author:unbraind"
+created_at: "2026-11-04T16:42:10Z"
+updated_at: "2026-11-05T12:35:46.810Z"
+author: pm-github
+github_close_reason: ""
+github_closed_at: ""
+github_created_at: "2026-11-04T16:42:10Z"
+github_link_only: false
+github_number: 191
+github_release: ""
+github_state: open
+github_state_reason: unspecified
+github_updated_at: "2026-11-04T16:42:10Z"
+github_url: "https://github.com/unbraind/pm-ts-starter/issues/191"
+body: "## Observed defect\nAt default commit `0ee4ae7eaa813388eb8ae7c2d290d3a4247e7029`, the [release wait](https://github.com/unbraind/pm-ts-starter/blob/0ee4ae7eaa813388eb8ae7c2d290d3a4247e7029/.github/workflows/release.yml#L378-L490) initializes `awaiting_approval=0` once, sets it to 1 after any pending approval observation, and never resets it on later polls. The deadline therefore reports a historical approval requirement as a current one.\n\n## Hosted evidence and bounded reproduction\n[Release job](https://github.com/unbraind/pm-ts-starter/actions/runs/41839958113/job/126608610836), 2026-11-04, successfully approved runs 41856786239, 41856786161 and 41856786414 at 15:21:22–23 UTC. Later polls reported Node22/26 checks in progress and no failing checks. At 15:51:06 UTC it nevertheless told the maintainer the run was awaiting approval and to approve it once. [Release PR190](https://github.com/unbraind/pm-ts-starter/pull/190) remains open; the observed job explicitly says nothing was published or tagged.\n\nAn isolated Bash probe using the exact initialization, assignment and timeout conditional reproduces that message after modeling one approved pending run followed by an empty pending-runs poll. This is a diagnostic-branch test, not a full workflow or provider test. No approvals, reruns, merges or publication were performed.\n\n## Expected and actual\nExpected: the final diagnostic distinguishes currently pending approval from running/missing/failed required checks or review requirements, based on the latest observation.\nActual: any earlier pending approval permanently selects the approval-specific timeout message. This sends maintainers toward an action that may already have succeeded and hides the actual remaining blockers. The fail-closed merge/publication behavior is intact.\n\n## Source goal and duplicate check\nCanonical [pm-ts-starter-8xyb](https://github.com/unbraind/pm-ts-starter/blob/0ee4ae7eaa813388eb8ae7c2d290d3a4247e7029/.agents/pm/issues/pm-ts-starter-8xyb.toon) explicitly says the wait separates awaiting approval from failed checks to keep the wait diagnosable. All 190 issue/PR entries and 95 canonical TOON records were checked; no existing item specifically owns this stale flag. This is separate from closed issues169/171 and the original protected-PR publication-ordering work.\n\n## Acceptance and regression criteria\n- Recompute current approval state on every poll and at timeout; preserve prior approval attempts as history, not current state.\n- After successful approval followed by running checks, report running/unsettled checks without instructing another approval.\n- Still report genuine current approval requirements with verified run links.\n- Cover no approval needed, approval persists, approval succeeds, and mixed pending approval/check states.\n- Preserve branch protection and all fail-closed no-merge/no-publication behavior."
