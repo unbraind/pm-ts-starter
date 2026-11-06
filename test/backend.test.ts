@@ -1,7 +1,7 @@
 /** Behavioral contracts use real trackers and untrusted transport envelopes. */
 import assert from "node:assert/strict";
-import { accessSync, constants, mkdtempSync, rmSync, mkdirSync, readFileSync, statSync, writeFileSync, symlinkSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { accessSync, constants, existsSync, mkdtempSync, rmSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync, symlinkSync } from "node:fs";
+import { devNull, tmpdir } from "node:os";
 import { delimiter, dirname, join, sep } from "node:path";
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import test, { type TestContext } from "node:test";
@@ -260,6 +260,8 @@ test("generated npm and Bun projects build and execute contracts with Git absent
   const root = scratch(t);
   const project = join(root, "project");
   assert.equal(generateBackendProject(project, "pm-contract").ok, true);
+  const generatedManifest = JSON.parse(readFileSync(join(project, "package.json"), "utf8"));
+  assert.equal(Object.hasOwn(generatedManifest.dependencies ?? {}, "@toon-format/toon"), false, "host owns the codec dependency");
   const bunPath = requireBunExecutable(process.env);
   const bin = join(root, "bin");
   mkdirSync(bin);
@@ -269,12 +271,22 @@ test("generated npm and Bun projects build and execute contracts with Git absent
   }
   symlinkSync("/bin/sh", join(bin, "sh"));
   const { NODE_TEST_CONTEXT: _context, NODE_TEST_WORKER_ID: _worker, ...cleanEnv } = process.env;
-  const env = { ...cleanEnv, PATH: bin, GIT_CEILING_DIRECTORIES: dirname(root) };
+  const env = { ...cleanEnv, PATH: bin, GIT_CEILING_DIRECTORIES: dirname(root), NPM_CONFIG_USERCONFIG: devNull, npm_config_userconfig: devNull };
+  for (const key of Object.keys(env)) {
+    if (key.toLowerCase() === "npm_config_allow_scripts" || ["NPM_MEDIA_SERVER", "NPM_TOKEN", "NODE_AUTH_TOKEN"].includes(key)) Reflect.deleteProperty(env, key);
+  }
   for (const [command, args] of [["npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund"]], ["bun", ["install", "--ignore-scripts", "--no-save"]], ["npm", ["run", "build"]], ["npm", ["test"]], ["bun", ["run", "build"]], ["bun", ["run", "test:bun"]]] as const) {
     const run = runBoundedCommand(join(bin, command), args, { cwd: project, env });
     assert.equal(run.status, 0, commandText(run));
     if ((args as readonly string[]).includes("test")) assert.match(commandText(run), /tests 1/);
     if ((args as readonly string[]).includes("test:bun")) assert.match(commandText(run), /1 pass/);
+  }
+  // A valid nested install must not expose the host's private codec to consumers.
+  const hoistedCodec = join(project, "node_modules/@toon-format/toon");
+  if (existsSync(hoistedCodec)) {
+    const hostCodec = join(project, "node_modules/@unbrained/pm-cli/node_modules/@toon-format");
+    mkdirSync(hostCodec, { recursive: true });
+    renameSync(hoistedCodec, join(hostCodec, "toon"));
   }
   const client = await tracker(root);
   const cli = runBoundedCommand(process.execPath, ["dist/cli.js", "inspect", join(root, "tracker"), "--json"], { cwd: project, env });
@@ -299,12 +311,13 @@ test("generated npm and Bun projects build and execute contracts with Git absent
     import assert from "node:assert/strict";
     import extension from "./dist/index.js";
     import { createExtensionTestHarness } from "@unbrained/pm-cli/sdk/testing";
-    import { decode } from "@toon-format/toon";
+    import { decodeToon, encodeToon } from "@unbrained/pm-cli/sdk";
     const harness = await createExtensionTestHarness(extension, { name: "pm-contract", capabilities: ["commands"] });
     assert.deepEqual(harness.activation.failed, []);
     const result = await harness.runCommand({ command: "pm-contract inspect", pmRoot: process.env.CONTRACT_TRACKER });
     assert.equal(result.result.item_count, 2);
-    assert.equal(decode(process.env.CONTRACT_TOON).item_count, 2);
+    assert.deepEqual(decodeToon(process.env.CONTRACT_TOON), result.result);
+    assert.equal(process.env.CONTRACT_TOON, encodeToon(result.result) + "\\n");
     await assert.rejects(harness.runCommand({ command: "pm-contract inspect", pmRoot: "missing-tracker" }), { name: "PmCliError", exitCode: 2 });
   `], { cwd: project, env: { ...env, CONTRACT_TRACKER: join(root, "tracker"), CONTRACT_TOON: toon.stdout } });
   assert.equal(hostCheck.status, 0, commandText(hostCheck));

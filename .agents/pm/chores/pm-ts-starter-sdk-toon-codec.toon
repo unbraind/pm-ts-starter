@@ -1,0 +1,25 @@
+id: pm-ts-starter-sdk-toon-codec
+title: Use public SDK TOON codecs in generated backend projects
+description: Replace generated standalone CLI direct codec dependency with public SDK codecs; preserve certified read-only receipts and document the supported host contract.
+type: Chore
+status: in_progress
+priority: 2
+tags[2]: sdk-adoption,template
+created_at: "2026-11-06T18:46:27.416Z"
+updated_at: "2026-11-06T18:51:00.094Z"
+assignee: codex-sol
+claim_principal: codex-sol
+author: codex-sol
+acceptance_criteria: Generated imports and manifests agree on a supported SDK floor; real non-git tracker JSON/TOON round trips preserve representation and source state; regression tests fail on behavioral revert; document SDK codec pattern
+comments[2]{created_at,author,text}:
+  "2026-11-06T18:46:39.844Z",codex-sol,"Scope: companion pm-cli-website-25wb and adoption audit S1. Inventory: backend-project.ts generates one direct production encode call and a direct codec manifest dependency; test/backend.test.ts directly decodes the generated CLI output. The package itself has no direct codec dependency. Replace these with public SDK codecs, retain read-only adapter policy and complete-list certification, and verify real non-git tracker output, inertness and generated SDK floor. Companion tracker remains read-only."
+  "2026-11-06T18:51:00.094Z",codex-sol,"Public codec exports are present at exact generated floor 2026.10.17; peer range, dev pin and manifest remain aligned without a toolchain bump. Updated generated CLI and test imports to encodeToon/decodeToon from the public SDK, removed the generated direct codec dependency, and documented why application read-only/refusal/certification policy remains. Real non-git npm/Bun consumers and SDK harness pass 13/13 targeted tests. Disposable-copy behavioral reverts: restoring buildBackendProjectFiles alone fails host-owns-codec dependency contract; restoring cliSource alone fails generated build with TS2307 for the unsupported direct codec import. Fixed implementation rerun passes 13/13. Linked-test execution exposed inherited npm_config_allow_scripts causing EALLOWSCRIPTS in nested installs; consumer child environment now removes that setting and npm credential variables."
+files[2]{path,scope}:
+  backend-project.ts,project
+  test/backend.test.ts,project
+tests[1]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
+  node --test --test-concurrency=1 test/backend.test.ts,project,codex-sol,"2026-11-06T18:49:45.691Z",local_mutation,ts-starter-sdk-toon-codec
+docs[2]{path,scope}:
+  docs/backend-conformance.md,project
+  README.md,project
+body: ""

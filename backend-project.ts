@@ -36,7 +36,6 @@ export function buildBackendProjectFiles(name: string): Record<string, string> {
     bin: { [name]: "dist/cli.js" }, files: ["dist", "manifest.json", "README.md"],
     engines: { node: ">=22.18.0" },
     scripts: { build: "tsc", typecheck: "tsc --noEmit", test: "node --test test/*.test.ts", "test:bun": "bun test test/*.test.ts", prepack: "npm run build" },
-    dependencies: { "@toon-format/toon": "4.1.1" },
     peerDependencies: { "@unbrained/pm-cli": ">=2026.10.17" },
     devDependencies: { "@unbrained/pm-cli": "2026.10.17", "@types/node": "26.6.5", typescript: "7.0.2" },
     pm: { extensions: ["."] },
@@ -49,7 +48,7 @@ export function buildBackendProjectFiles(name: string): Record<string, string> {
     "src/index.ts": extensionSource(name),
     "src/cli.ts": cliSource,
     "test/backend.test.ts": contractTests,
-    "README.md": `# ${name}\n\nRead-only production pm extension. Run npm install, npm run build and npm test (or bun install, bun run build and bun run test:bun). Install the built package with pm package install.\n\nUse pm ${name} inspect, or node dist/cli.js inspect [tracker-root] [--json]. A leading --json uses the default .agents/pm tracker. TOON is the default. create/update/delete return nonzero typed refusals with remedies. SDK consumers import createDirectoryAdapter or createRemoteAdapter.\n\nRemoteReader.listAllComplete must return an unmodified SDK complete-list envelope. Supply your authenticated MCP/HTTP transport and enforce request timeouts and cancellation there. No network access or credentials are configured by this project. Contract tests use a real directory tracker and pass its receipts through the remote boundary. This proves adapter conformance, not acceptance of a deployed remote service.\n\n## Without git\n\nGeneration, builds, reads, refusals and contract tests work in plain directories with Git absent from PATH. No operation in this project requires Git. Reads suppress extension activation and return certified counts only; writes are unsupported. The SDK can maintain disposable read caches; use a copy for archival inputs.\n`,
+    "README.md": `# ${name}\n\nRead-only production pm extension. Run npm install, npm run build and npm test (or bun install, bun run build and bun run test:bun). Install the built package with pm package install.\n\nUse pm ${name} inspect, or node dist/cli.js inspect [tracker-root] [--json]. A leading --json uses the default .agents/pm tracker. TOON is the default. create/update/delete return nonzero typed refusals with remedies. SDK consumers import createDirectoryAdapter or createRemoteAdapter.\n\nRemoteReader.listAllComplete must return an unmodified SDK complete-list envelope. Supply your authenticated MCP/HTTP transport and enforce request timeouts and cancellation there. No network access or credentials are configured by this project. Contract tests use a real directory tracker and pass its receipts through the remote boundary. Use encodeToon/decodeToon from @unbrained/pm-cli/sdk for standalone structured output and round-trip assertions; the host owns the codec version. The peer, development dependency and manifest agree on SDK floor 2026.10.17. The read-only operation policy and compact receipt shape are package rules, not codec behavior. This proves adapter conformance, not acceptance of a deployed remote service.\n\n## Without git\n\nGeneration, builds, reads, refusals and contract tests work in plain directories with Git absent from PATH. No operation in this project requires Git. Reads suppress extension activation and return certified counts only; writes are unsupported. The SDK can maintain disposable read caches; use a copy for archival inputs.\n`,
     ".gitignore": "node_modules/\ndist/\n*.tgz\n",
   };
 }
@@ -82,24 +81,24 @@ export default defineExtension({
 
 const cliSource = `#!/usr/bin/env node
 import { createDirectoryAdapter, parseCliInvocation, type BackendOperation } from "./backend.js";
-import { encode } from "@toon-format/toon";
+import { encodeToon } from "@unbrained/pm-cli/sdk";
 const { operation, tracker, flags } = parseCliInvocation(process.argv.slice(2));
 if (!["inspect", "create", "update", "delete"].includes(operation) || flags.some(flag => flag !== "--json")) {
   console.log(JSON.stringify({ ok: false, code: "invalid_arguments", remedy: "Use inspect|create|update|delete [tracker-root] [--json]. A leading --json uses .agents/pm." }));
   process.exitCode = 2;
 } else {
   const receipt = await createDirectoryAdapter(tracker).execute(operation as BackendOperation);
-  console.log(flags.includes("--json") ? JSON.stringify(receipt) : encode(receipt));
+  console.log(flags.includes("--json") ? JSON.stringify(receipt) : encodeToon(receipt));
   if (!receipt.ok) process.exitCode = 2;
 }
 `;
 
 const contractTests = `import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { PmClient } from "@unbrained/pm-cli/sdk";
+import { PmClient, encodeToon, decodeToon } from "@unbrained/pm-cli/sdk";
 import { createDirectoryAdapter, createRemoteAdapter } from "../src/backend.ts";
 
 test("directory and remote certify real receipts without Git", async (t) => {
@@ -124,6 +123,18 @@ test("directory and remote certify real receipts without Git", async (t) => {
       assert.ok(refused.remedy);
     }
   }
+  // SDK codecs own representation; application policy still owns certification and refusals.
+  const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  assert.equal(Object.hasOwn(manifest.dependencies ?? {}, "@toon-format/toon"), false);
+  assert.equal(manifest.peerDependencies["@unbrained/pm-cli"], ">=" + manifest.devDependencies["@unbrained/pm-cli"]);
+  assert.equal(JSON.parse(readFileSync(new URL("../manifest.json", import.meta.url), "utf8")).pm_min_version, manifest.devDependencies["@unbrained/pm-cli"]);
+  const trackerRoot = join(root, "tracker");
+  const paths = readdirSync(trackerRoot, { recursive: true, encoding: "utf8" }).filter(path => /\\.(toon|jsonl)$/.test(path)).sort();
+  const before = paths.map(path => readFileSync(join(trackerRoot, path), "utf8"));
+  const receipt = await readers[0].execute("inspect");
+  const representation = { receipt, strings: ["true", "null", "001", "colon: value", "[brackets]", "Grüße 🌍", "line\\nnext", "tab\\tvalue", "quote\\"slash\\\\"], empty: [], nested: { flag: false, count: 0, absent: null } };
+  assert.deepEqual(decodeToon(encodeToon(representation)), JSON.parse(JSON.stringify(representation)));
+  assert.deepEqual(paths.map(path => readFileSync(join(trackerRoot, path), "utf8")), before, "encoding and reads preserve source items and history");
   for (const field of ["read_output", "omission_receipt"] as const) {
     const broken = { ...envelope };
     Reflect.deleteProperty(broken, field);
