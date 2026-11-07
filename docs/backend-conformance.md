@@ -69,6 +69,11 @@ unchanged. The package suite also runs the built CLI with npm and Bun consumers,
 compares default TOON with the SDK encoding and decoded JSON receipt, and activates
 the generated extension through `createExtensionTestHarness`.
 
+Generated-consumer tests require direct access to the public npm registry. They
+install only public packages, use an isolated home for npm and Bun, and discard
+inherited registry settings and credentials. Both package managers install a fresh
+dependency graph, including when the caller configures an authenticated mirror.
+
 Keep the application's read-only operation policy, compact receipt shape and
 complete-list certification. Codecs serialize values; they do not choose supported
 operations, certify a full source read or redact transport failures. No raw-string

@@ -76,6 +76,20 @@ function commandText(run: SpawnSyncReturns<string>): string {
 }
 
 /**
+ * Install public generated fixtures independently of host registries and credentials.
+ * Both package managers receive an empty home; npm also ignores user/global config
+ * and inherited scoped registries. Preserve ordinary OS settings for tool wrappers.
+ */
+function generatedProjectEnv(source: NodeJS.ProcessEnv, root: string, bin: string): NodeJS.ProcessEnv {
+  const clean = Object.fromEntries(Object.entries(source).filter(([key]) =>
+    /^(PATH|PATHEXT|SYSTEMROOT|WINDIR|COMSPEC|TEMP|TMP|TMPDIR|LANG|LC_[A-Z_]+|TZ|TERM|CI)$/i.test(key)));
+  return { ...clean, PATH: bin, HOME: root, USERPROFILE: root, XDG_CONFIG_HOME: join(root, ".config"),
+    GIT_CEILING_DIRECTORIES: dirname(root), NPM_CONFIG_USERCONFIG: devNull, npm_config_userconfig: devNull,
+    NPM_CONFIG_GLOBALCONFIG: join(root, "empty-global-npmrc"), npm_config_globalconfig: join(root, "empty-global-npmrc"),
+    NPM_CONFIG_REGISTRY: "https://registry.npmjs.org", npm_config_registry: "https://registry.npmjs.org" };
+}
+
+/**
  * Locate Bun for the generated consumer checks.
  *
  * Bun is a prerequisite of this contract, including outside CI. A timed-out or
@@ -256,6 +270,26 @@ test("registered CLI generates projects and returns actionable expected refusals
   assert.equal((result.result as { ok: boolean }).ok, true);
 });
 
+test("generated consumers select the public registry without inheriting scoped registries or credentials", (t) => {
+  const root = scratch(t);
+  const source = { ...process.env, npm_config_registry: "http://127.0.0.1:9",
+    NPM_CONFIG_REGISTRY: "http://127.0.0.1:9", "npm_config_@unbrained:registry": "http://127.0.0.1:9",
+    NPM_CONFIG_USERCONFIG: join(root, "unrelated-config"), npm_config_allow_scripts: "false",
+    NPM_TOKEN: "synthetic", NODE_AUTH_TOKEN: "synthetic", NPM_MEDIA_SERVER: "synthetic",
+    service_password: "synthetic", Custom_Credential: "synthetic", SERVICE_API_KEY: "synthetic",
+    BUN_INSPECT_PRELOAD: "unrelated-preload" };
+  const env = generatedProjectEnv(source, root, process.env.PATH ?? "");
+  for (const [key, expected] of [["registry", "https://registry.npmjs.org"], ["@unbrained:registry", "undefined"]]) {
+    const run = runBoundedCommand("npm", ["config", "get", key], { cwd: root, env });
+    assert.equal(run.status, 0, commandText(run));
+    assert.equal(run.stdout.trim(), expected);
+  }
+  for (const [key, value] of Object.entries(source)) {
+    if (value === "synthetic" || key === "npm_config_allow_scripts" || key === "BUN_INSPECT_PRELOAD") assert.equal(Object.hasOwn(env, key), false, key);
+  }
+  assert.equal(source.npm_config_registry, "http://127.0.0.1:9", "the parent configuration is unchanged");
+});
+
 test("generated npm and Bun projects build and execute contracts with Git absent", async (t) => {
   const root = scratch(t);
   const project = join(root, "project");
@@ -270,12 +304,19 @@ test("generated npm and Bun projects build and execute contracts with Git absent
     symlinkSync(path, join(bin, name));
   }
   symlinkSync("/bin/sh", join(bin, "sh"));
-  const { NODE_TEST_CONTEXT: _context, NODE_TEST_WORKER_ID: _worker, ...cleanEnv } = process.env;
-  const env = { ...cleanEnv, PATH: bin, GIT_CEILING_DIRECTORIES: dirname(root), NPM_CONFIG_USERCONFIG: devNull, npm_config_userconfig: devNull };
-  for (const key of Object.keys(env)) {
-    if (key.toLowerCase() === "npm_config_allow_scripts" || ["NPM_MEDIA_SERVER", "NPM_TOKEN", "NODE_AUTH_TOKEN"].includes(key)) Reflect.deleteProperty(env, key);
-  }
+  // Synthetic host configuration must never select an authenticated mirror for public fixtures.
+  const host = join(root, "host"); mkdirSync(host);
+  writeFileSync(join(host, ".npmrc"), "registry=http://127.0.0.1:9\n@unbrained:registry=http://127.0.0.1:9\n");
+  writeFileSync(join(host, ".bunfig.toml"), '[install]\nregistry = "http://127.0.0.1:9"\n');
+  const env = generatedProjectEnv({ ...process.env, HOME: host, USERPROFILE: host,
+    NPM_CONFIG_REGISTRY: "http://127.0.0.1:9", npm_config_registry: "http://127.0.0.1:9",
+    "npm_config_@unbrained:registry": "http://127.0.0.1:9" }, root, bin);
   for (const [command, args] of [["npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund"]], ["bun", ["install", "--ignore-scripts", "--no-save"]], ["npm", ["run", "build"]], ["npm", ["test"]], ["bun", ["run", "build"]], ["bun", ["run", "test:bun"]]] as const) {
+    if (command === "bun" && args[0] === "install") {
+      // Make Bun prove its own registry access instead of reusing npm's installed graph/lockfile.
+      rmSync(join(project, "node_modules"), { recursive: true, force: true });
+      rmSync(join(project, "package-lock.json"), { force: true });
+    }
     const run = runBoundedCommand(join(bin, command), args, { cwd: project, env });
     assert.equal(run.status, 0, commandText(run));
     if ((args as readonly string[]).includes("test")) assert.match(commandText(run), /tests 1/);
@@ -286,7 +327,9 @@ test("generated npm and Bun projects build and execute contracts with Git absent
   if (existsSync(hoistedCodec)) {
     const hostCodec = join(project, "node_modules/@unbrained/pm-cli/node_modules/@toon-format");
     mkdirSync(hostCodec, { recursive: true });
-    renameSync(hoistedCodec, join(hostCodec, "toon"));
+    // Bun can already install the host's own copy alongside another hoisted version.
+    if (existsSync(join(hostCodec, "toon"))) rmSync(hoistedCodec, { recursive: true, force: true });
+    else renameSync(hoistedCodec, join(hostCodec, "toon"));
   }
   const client = await tracker(root);
   const cli = runBoundedCommand(process.execPath, ["dist/cli.js", "inspect", join(root, "tracker"), "--json"], { cwd: project, env });
