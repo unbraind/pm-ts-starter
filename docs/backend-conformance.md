@@ -72,7 +72,11 @@ the generated extension through `createExtensionTestHarness`.
 Generated-consumer tests require direct access to the public npm registry. They
 install only public packages, use an isolated home for npm and Bun, and discard
 inherited registry settings and credentials. Both package managers install a fresh
-dependency graph, including when the caller configures an authenticated mirror.
+dependency graph in separate projects, including when the caller configures an
+authenticated mirror. Each project completes its own build, contracts, built CLI
+JSON/TOON and refusal checks, SDK activation and receipt-certification negative
+control before acceptance. An adversarial command-boundary matrix rejects skipped
+stages, reused graphs and failures at every install/build/contract/acceptance step.
 
 Keep the application's read-only operation policy, compact receipt shape and
 complete-list certification. Codecs serialize values; they do not choose supported
