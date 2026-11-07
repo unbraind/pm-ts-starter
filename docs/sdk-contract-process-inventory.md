@@ -46,6 +46,14 @@ a synthetic authenticated registry. Generated dependency properties use at most
 two workers. Diagnostic oracles consume objects rather than rendered headers.
 Test-owned API modules may write explicit private receipts without changing config.
 
+Consumer acceptance belongs to the installed graph being checked. Generated npm
+and Bun projects use separate directories and complete all build, contract,
+CLI JSON/TOON and SDK checks in each project. Packed consumers retain separate
+npm/Bun installations at both SDK bounds; a complete receipt matrix requires SDK
+reads, no-git reads, CLI JSON/TOON and both refusal representations in all four.
+CI finishes the npm gate, replaces its dependency tree with a fresh Bun install,
+and runs the Bun gate only after that installation succeeds.
+
 Path-transport audit (authored modules, scripts, tests and emitted starter code):
 
 | Boundary | Lossless representation |
