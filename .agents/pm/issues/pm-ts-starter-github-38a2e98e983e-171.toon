@@ -6,17 +6,18 @@ status: canceled
 priority: 2
 tags[2]: "gh:unbraind/pm-ts-starter#171","github_author:unbraind"
 created_at: "2026-10-28T10:49:29Z"
-updated_at: "2026-11-02T13:23:59.928Z"
+updated_at: "2026-11-08T11:18:40.780Z"
 closed_at: "2026-11-02T09:27:02Z"
 completed_at: "2026-11-02T09:27:02Z"
 author: pm-github
+release: v2026.11.07
 close_reason: "Closed on GitHub as not_planned on 2026-11-02T09:27:02Z"
 github_close_reason: "Closed on GitHub as not_planned on 2026-11-02T09:27:02Z"
 github_closed_at: "2026-11-02T09:27:02Z"
 github_created_at: "2026-10-28T10:49:29Z"
 github_link_only: false
 github_number: 171
-github_release: ""
+github_release: v2026.11.07
 github_state: closed
 github_state_reason: not_planned
 github_updated_at: "2026-11-02T09:27:02Z"
