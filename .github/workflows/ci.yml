@@ -90,10 +90,15 @@ jobs:
         id: npm_release
         run: npm run release:check
 
+      - name: Verify Bun can install the package graph
+        id: bun_install
+        # Finish npm acceptance before replacing its graph, even if its gate failed.
+        if: ${{ !cancelled() && (steps.npm_release.outcome == 'success' || steps.npm_release.outcome == 'failure') }}
+        run: |
+          rm -rf node_modules
+          bun install --no-save
+
       - name: Full Bun release gate
         # Retain both gate receipts; an npm failure still fails the job.
-        if: ${{ !cancelled() && (steps.npm_release.outcome == 'success' || steps.npm_release.outcome == 'failure') }}
+        if: ${{ !cancelled() && steps.bun_install.outcome == 'success' }}
         run: bun run release:check
-
-      - name: Verify Bun can install the package graph
-        run: bun install --no-save

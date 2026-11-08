@@ -1,7 +1,7 @@
 /** Behavioral contracts use real trackers and untrusted transport envelopes. */
 import assert from "node:assert/strict";
-import { accessSync, constants, mkdtempSync, rmSync, mkdirSync, readFileSync, statSync, writeFileSync, symlinkSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { accessSync, constants, existsSync, mkdtempSync, rmSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync, symlinkSync } from "node:fs";
+import { devNull, tmpdir } from "node:os";
 import { delimiter, dirname, join, sep } from "node:path";
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import test, { type TestContext } from "node:test";
@@ -74,6 +74,84 @@ function runBoundedCommand(
 function commandText(run: SpawnSyncReturns<string>): string {
   return `${run.error?.message ?? ""}\n${run.stdout ?? ""}${run.stderr ?? ""}`;
 }
+
+/**
+ * Install public generated fixtures independently of host registries and credentials.
+ * Both package managers receive an empty home; npm also ignores user/global config
+ * and inherited scoped registries. Preserve ordinary OS settings for tool wrappers.
+ */
+function generatedProjectEnv(source: NodeJS.ProcessEnv, root: string, bin: string): NodeJS.ProcessEnv {
+  const clean = Object.fromEntries(Object.entries(source).filter(([key]) =>
+    /^(PATH|PATHEXT|SYSTEMROOT|WINDIR|COMSPEC|TEMP|TMP|TMPDIR|LANG|LC_[A-Z_]+|TZ|TERM|CI)$/i.test(key)));
+  return { ...clean, PATH: bin, HOME: root, USERPROFILE: root, XDG_CONFIG_HOME: join(root, ".config"),
+    GIT_CEILING_DIRECTORIES: dirname(root), NPM_CONFIG_USERCONFIG: devNull, npm_config_userconfig: devNull,
+    NPM_CONFIG_GLOBALCONFIG: join(root, "empty-global-npmrc"), npm_config_globalconfig: join(root, "empty-global-npmrc"),
+    NPM_CONFIG_REGISTRY: "https://registry.npmjs.org", npm_config_registry: "https://registry.npmjs.org" };
+}
+
+/** Package manager whose installed graph owns one complete acceptance run. */
+type ConsumerRuntime = "npm" | "bun";
+
+/**
+ * Build and test each fresh installation before certifying its CLI and SDK.
+ * Separate project directories keep every acceptance path on its own graph;
+ * the command boundary is injectable for adversarial ownership/failure tests.
+ */
+async function verifyGeneratedConsumers(
+  root: string, bin: string, env: NodeJS.ProcessEnv,
+  verify: (project: string, runtime: ConsumerRuntime) => Promise<void>,
+  run: typeof runBoundedCommand = runBoundedCommand,
+): Promise<void> {
+  for (const runtime of ["npm", "bun"] as const) {
+    const project = join(root, runtime);
+    assert.equal(generateBackendProject(project, "pm-contract").ok, true);
+    const manifest = JSON.parse(readFileSync(join(project, "package.json"), "utf8"));
+    assert.equal(Object.hasOwn(manifest.dependencies ?? {}, "@toon-format/toon"), false, "host owns the codec dependency");
+    const commands = runtime === "npm"
+      ? [["install", "--ignore-scripts", "--no-audit", "--no-fund"], ["run", "build"], ["test"]]
+      : [["install", "--ignore-scripts", "--no-save"], ["run", "build"], ["run", "test:bun"]];
+    for (const args of commands) {
+      const result = run(join(bin, runtime), args, { cwd: project, env });
+      assert.equal(result.status, 0, `${runtime}: ${commandText(result)}`);
+      if (args.includes("test")) assert.match(commandText(result), /tests 1/);
+      if (args.includes("test:bun")) assert.match(commandText(result), /1 pass/);
+    }
+    await verify(project, runtime);
+  }
+}
+
+test("consumer graph ownership and every install/build/contract/acceptance failure are load-bearing", async (t) => {
+  const success = runBoundedCommand(process.execPath, ["-e", 'console.log("tests 1\\n1 pass")']);
+  const failure = runBoundedCommand(process.execPath, ["-e", 'console.error("injected consumer failure"); process.exit(23)']);
+  const required = ["npm/install", "npm/build", "npm/contracts", "npm/acceptance", "bun/install", "bun/build", "bun/contracts", "bun/acceptance"];
+  for (const fault of [undefined, ...required]) await t.test(fault ?? "healthy independent graphs", async () => {
+    const root = scratch(t), bin = join(root, "bin"), seen: string[] = [], projects = new Map<ConsumerRuntime, string>();
+    const run: typeof runBoundedCommand = (command, args, options) => {
+      const runtime = command === join(bin, "npm") ? "npm" : "bun";
+      const phase = args[0] === "install" ? "install" : args.includes("build") ? "build" : "contracts";
+      const project = options?.cwd; assert.ok(project);
+      const marker = join(project, "node_modules", "installed-by");
+      if (phase === "install") {
+        assert.equal(existsSync(join(project, "node_modules")), false, "each installer gets an empty graph");
+        mkdirSync(join(project, "node_modules")); writeFileSync(marker, runtime); projects.set(runtime, project);
+      }
+      assert.equal(readFileSync(marker, "utf8"), runtime, "every command checks its installer's graph");
+      seen.push(`${runtime}/${phase}`);
+      return fault === `${runtime}/${phase}` ? failure : success;
+    };
+    const check = () => verifyGeneratedConsumers(root, bin, {}, async (project, runtime) => {
+      assert.equal(readFileSync(join(project, "node_modules/installed-by"), "utf8"), runtime, "CLI/SDK acceptance keeps its installer graph");
+      seen.push(`${runtime}/acceptance`);
+      if (fault === `${runtime}/acceptance`) throw new Error("injected consumer failure");
+    }, run);
+    if (fault) await assert.rejects(check, /injected consumer failure/, fault);
+    else {
+      await check(); assert.deepEqual(seen, required, "neither graph may omit an acceptance stage");
+      assert.notEqual(projects.get("npm"), projects.get("bun"));
+      for (const [runtime, project] of projects) assert.equal(readFileSync(join(project, "node_modules/installed-by"), "utf8"), runtime);
+    }
+  });
+});
 
 /**
  * Locate Bun for the generated consumer checks.
@@ -256,10 +334,28 @@ test("registered CLI generates projects and returns actionable expected refusals
   assert.equal((result.result as { ok: boolean }).ok, true);
 });
 
+test("generated consumers select the public registry without inheriting scoped registries or credentials", (t) => {
+  const root = scratch(t);
+  const source = { ...process.env, npm_config_registry: "http://127.0.0.1:9",
+    NPM_CONFIG_REGISTRY: "http://127.0.0.1:9", "npm_config_@unbrained:registry": "http://127.0.0.1:9",
+    NPM_CONFIG_USERCONFIG: join(root, "unrelated-config"), npm_config_allow_scripts: "false",
+    NPM_TOKEN: "synthetic", NODE_AUTH_TOKEN: "synthetic", NPM_MEDIA_SERVER: "synthetic",
+    service_password: "synthetic", Custom_Credential: "synthetic", SERVICE_API_KEY: "synthetic",
+    BUN_INSPECT_PRELOAD: "unrelated-preload" };
+  const env = generatedProjectEnv(source, root, process.env.PATH ?? "");
+  for (const [key, expected] of [["registry", "https://registry.npmjs.org"], ["@unbrained:registry", "undefined"]]) {
+    const run = runBoundedCommand("npm", ["config", "get", key], { cwd: root, env });
+    assert.equal(run.status, 0, commandText(run));
+    assert.equal(run.stdout.trim(), expected);
+  }
+  for (const [key, value] of Object.entries(source)) {
+    if (value === "synthetic" || key === "npm_config_allow_scripts" || key === "BUN_INSPECT_PRELOAD") assert.equal(Object.hasOwn(env, key), false, key);
+  }
+  assert.equal(source.npm_config_registry, "http://127.0.0.1:9", "the parent configuration is unchanged");
+});
+
 test("generated npm and Bun projects build and execute contracts with Git absent", async (t) => {
   const root = scratch(t);
-  const project = join(root, "project");
-  assert.equal(generateBackendProject(project, "pm-contract").ok, true);
   const bunPath = requireBunExecutable(process.env);
   const bin = join(root, "bin");
   mkdirSync(bin);
@@ -268,52 +364,64 @@ test("generated npm and Bun projects build and execute contracts with Git absent
     symlinkSync(path, join(bin, name));
   }
   symlinkSync("/bin/sh", join(bin, "sh"));
-  const { NODE_TEST_CONTEXT: _context, NODE_TEST_WORKER_ID: _worker, ...cleanEnv } = process.env;
-  const env = { ...cleanEnv, PATH: bin, GIT_CEILING_DIRECTORIES: dirname(root) };
-  for (const [command, args] of [["npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund"]], ["bun", ["install", "--ignore-scripts", "--no-save"]], ["npm", ["run", "build"]], ["npm", ["test"]], ["bun", ["run", "build"]], ["bun", ["run", "test:bun"]]] as const) {
-    const run = runBoundedCommand(join(bin, command), args, { cwd: project, env });
-    assert.equal(run.status, 0, commandText(run));
-    if ((args as readonly string[]).includes("test")) assert.match(commandText(run), /tests 1/);
-    if ((args as readonly string[]).includes("test:bun")) assert.match(commandText(run), /1 pass/);
-  }
+  // Synthetic host configuration must never select an authenticated mirror for public fixtures.
+  const host = join(root, "host"); mkdirSync(host);
+  writeFileSync(join(host, ".npmrc"), "registry=http://127.0.0.1:9\n@unbrained:registry=http://127.0.0.1:9\n");
+  writeFileSync(join(host, ".bunfig.toml"), '[install]\nregistry = "http://127.0.0.1:9"\n');
+  const env = generatedProjectEnv({ ...process.env, HOME: host, USERPROFILE: host,
+    NPM_CONFIG_REGISTRY: "http://127.0.0.1:9", npm_config_registry: "http://127.0.0.1:9",
+    "npm_config_@unbrained:registry": "http://127.0.0.1:9" }, root, bin);
   const client = await tracker(root);
-  const cli = runBoundedCommand(process.execPath, ["dist/cli.js", "inspect", join(root, "tracker"), "--json"], { cwd: project, env });
-  assert.equal(cli.status, 0, commandText(cli));
-  assert.equal(JSON.parse(cli.stdout).item_count, 2);
-  mkdirSync(join(project, ".agents"));
-  symlinkSync(join(root, "tracker"), join(project, ".agents", "pm"));
-  const defaultJson = runBoundedCommand(process.execPath, ["dist/cli.js", "inspect", "--json"], { cwd: project, env });
-  assert.equal(defaultJson.status, 0, commandText(defaultJson));
-  assert.equal(JSON.parse(defaultJson.stdout).ok, true);
-  assert.equal(JSON.parse(defaultJson.stdout).item_count, 2);
-  for (const args of [["delete", join(root, "tracker"), "--json"], ["unknown"], ["inspect", "tracker", "--bad"], ["inspect", "--bad"]]) {
-    const refusal = runBoundedCommand(process.execPath, ["dist/cli.js", ...args], { cwd: project, env });
-    assert.equal(refusal.status, 2, commandText(refusal));
-    assert.equal(JSON.parse(refusal.stdout).ok, false);
-  }
-  const toon = runBoundedCommand(process.execPath, ["dist/cli.js", "inspect", join(root, "tracker")], { cwd: project, env });
-  assert.equal(toon.status, 0, commandText(toon));
-  assert.match(toon.stdout, /item_count: 2/);
-  assert.equal((await client.listAllComplete()).items.length, 2);
-  const hostCheck = runBoundedCommand(process.execPath, ["--input-type=module", "-e", `
-    import assert from "node:assert/strict";
-    import extension from "./dist/index.js";
-    import { createExtensionTestHarness } from "@unbrained/pm-cli/sdk/testing";
-    import { decode } from "@toon-format/toon";
-    const harness = await createExtensionTestHarness(extension, { name: "pm-contract", capabilities: ["commands"] });
-    assert.deepEqual(harness.activation.failed, []);
-    const result = await harness.runCommand({ command: "pm-contract inspect", pmRoot: process.env.CONTRACT_TRACKER });
-    assert.equal(result.result.item_count, 2);
-    assert.equal(decode(process.env.CONTRACT_TOON).item_count, 2);
-    await assert.rejects(harness.runCommand({ command: "pm-contract inspect", pmRoot: "missing-tracker" }), { name: "PmCliError", exitCode: 2 });
-  `], { cwd: project, env: { ...env, CONTRACT_TRACKER: join(root, "tracker"), CONTRACT_TOON: toon.stdout } });
-  assert.equal(hostCheck.status, 0, commandText(hostCheck));
-  // Behavioral revert: removing only adapter certification must break the emitted contract suite.
-  const source = join(project, "src/backend.ts");
-  writeFileSync(source, readFileSync(source, "utf8").replace("certifyCompleteListResult(await reader.listAllComplete())", "(await reader.listAllComplete() as Awaited<ReturnType<PmClient['listAllComplete']>>)") );
-  const reverted = runBoundedCommand(process.execPath, ["--test", "test/backend.test.ts"], { cwd: project, env });
-  assert.notEqual(reverted.status, 0, "contract must fail when receipt certification is removed");
-  assert.match(commandText(reverted), /must be load-bearing/);
+  await verifyGeneratedConsumers(root, bin, env, async (project, runtime) => {
+    const executable = runtime === "npm" ? process.execPath : join(bin, "bun");
+    // A valid nested install must not expose the host's private codec to consumers.
+    const hoistedCodec = join(project, "node_modules/@toon-format/toon");
+    if (existsSync(hoistedCodec)) {
+      const hostCodec = join(project, "node_modules/@unbrained/pm-cli/node_modules/@toon-format");
+      mkdirSync(hostCodec, { recursive: true });
+      // Bun can already install the host's own copy alongside another hoisted version.
+      if (existsSync(join(hostCodec, "toon"))) rmSync(hoistedCodec, { recursive: true, force: true });
+      else renameSync(hoistedCodec, join(hostCodec, "toon"));
+    }
+    const cli = runBoundedCommand(executable, ["dist/cli.js", "inspect", join(root, "tracker"), "--json"], { cwd: project, env });
+    assert.equal(cli.status, 0, commandText(cli));
+    assert.equal(JSON.parse(cli.stdout).item_count, 2);
+    mkdirSync(join(project, ".agents"));
+    symlinkSync(join(root, "tracker"), join(project, ".agents", "pm"));
+    const defaultJson = runBoundedCommand(executable, ["dist/cli.js", "inspect", "--json"], { cwd: project, env });
+    assert.equal(defaultJson.status, 0, commandText(defaultJson));
+    assert.equal(JSON.parse(defaultJson.stdout).ok, true);
+    assert.equal(JSON.parse(defaultJson.stdout).item_count, 2);
+    for (const args of [["delete", join(root, "tracker"), "--json"], ["unknown"], ["inspect", "tracker", "--bad"], ["inspect", "--bad"]]) {
+      const refusal = runBoundedCommand(executable, ["dist/cli.js", ...args], { cwd: project, env });
+      assert.equal(refusal.status, 2, commandText(refusal));
+      assert.equal(JSON.parse(refusal.stdout).ok, false);
+    }
+    const toon = runBoundedCommand(executable, ["dist/cli.js", "inspect", join(root, "tracker")], { cwd: project, env });
+    assert.equal(toon.status, 0, commandText(toon));
+    assert.match(toon.stdout, /item_count: 2/);
+    assert.equal((await client.listAllComplete()).items.length, 2);
+    const hostCheck = runBoundedCommand(executable, ["--input-type=module", "-e", `
+      import assert from "node:assert/strict";
+      import extension from "./dist/index.js";
+      import { createExtensionTestHarness } from "@unbrained/pm-cli/sdk/testing";
+      import { decodeToon, encodeToon } from "@unbrained/pm-cli/sdk";
+      const harness = await createExtensionTestHarness(extension, { name: "pm-contract", capabilities: ["commands"] });
+      assert.deepEqual(harness.activation.failed, []);
+      const result = await harness.runCommand({ command: "pm-contract inspect", pmRoot: process.env.CONTRACT_TRACKER });
+      assert.equal(result.result.item_count, 2);
+      assert.deepEqual(decodeToon(process.env.CONTRACT_TOON), result.result);
+      assert.equal(process.env.CONTRACT_TOON, encodeToon(result.result) + "\\n");
+      await assert.rejects(harness.runCommand({ command: "pm-contract inspect", pmRoot: "missing-tracker" }), { name: "PmCliError", exitCode: 2 });
+    `], { cwd: project, env: { ...env, CONTRACT_TRACKER: join(root, "tracker"), CONTRACT_TOON: toon.stdout } });
+    assert.equal(hostCheck.status, 0, commandText(hostCheck));
+    // Behavioral revert: removing only adapter certification must break the emitted contract suite.
+    const source = join(project, "src/backend.ts");
+    writeFileSync(source, readFileSync(source, "utf8").replace("certifyCompleteListResult(await reader.listAllComplete())", "(await reader.listAllComplete() as Awaited<ReturnType<PmClient['listAllComplete']>>)") );
+    const reverted = runBoundedCommand(executable, [runtime === "npm" ? "--test" : "test", "test/backend.test.ts"], { cwd: project, env });
+    assert.notEqual(reverted.status, 0, "contract must fail when receipt certification is removed");
+    assert.match(commandText(reverted), /must be load-bearing/);
+  });
 });
 
 test("the Bun lookup returns the PATH entry itself, so a wrapper on PATH stays selected", { skip: process.platform === "win32" ? "Windows selects only bun.exe; wrappers need a shell" : false }, (t) => {

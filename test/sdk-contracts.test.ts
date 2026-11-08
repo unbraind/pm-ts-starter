@@ -260,9 +260,11 @@ function packedFixture(source: string, destination: string): string {
 }
 
 test("packed npm and Bun consumers resolve each exact SDK bound and compile emitted contracts without git", async t => {
-  const root = scratch(t), endpoints = publishedSdks();
+  const root = scratch(t);
   const tarball = packedFixture(repo, root);
   const noGit = join(root, "no-git"); mkdirSync(noGit);
+  const verified = new Set<string>();
+  const paths = ["sdk", "cli-json", "cli-toon", "refusal-json", "refusal-toon", "sdk-no-git"];
   for (const runtime of ["npm", "bun"]) for (const bound of ["minimum", "current"] as const) {
     const version = bound === "minimum" ? minimumVersion : currentVersion;
     const project = installedConsumer(runtime as "npm" | "bun", bound);
@@ -307,36 +309,45 @@ console.log(JSON.stringify({sdkVersion, resolved, sdkEntry, matrix: await checkS
     assert.ok(receipt.sdkEntry.startsWith(`${installedSdk}/`));
     assert.equal(receipt.matrix.ok, true, JSON.stringify(receipt.matrix)); assert.equal(receipt.matrix.checks, 2);
     assert.deepEqual(receipt.matrix.rows.map(row => row.sdk), [minimumVersion, currentVersion]);
-    if (runtime === "npm" && bound === "current") {
-      const tracker = join(project, "tracker");
-      await new PmClient({ pmRoot: tracker, noExtensions: true, author: "fixture" }).init("packed");
-      const cli = join(project, "node_modules/@unbrained/pm-cli/dist/cli.js");
-      const activated = spawnSync(process.execPath, [cli, "--pm-path", tracker, "package", "install", join(project, "node_modules/pm-ts-starter"), "--project"], { cwd: project, encoding: "utf8", timeout: 30000 });
-      assert.equal(activated.status, 0, activated.stderr);
-      const helpRun = spawnSync(process.execPath, [cli, '--pm-path', tracker, 'ts-starter', 'sdk-contracts', '--help'], {cwd: project, encoding: 'utf8', timeout: 30000});
-      assert.equal(helpRun.status, 0, helpRun.stderr);
-      assert.match(helpRun.stdout.replace(/\s+/g, ' '), /external shell\/JavaScript wrappers are rejected/);
-      for (const format of [[], ["--json"]]) {
-        const cliRun = spawnSync(process.execPath, [cli, "--pm-path", tracker, "ts-starter", "sdk-contracts", "--minimum-sdk", endpoints.minimum,
-          "--current-sdk", endpoints.current, "--current-version", currentVersion, "--compiler", compiler, ...format], {
-          cwd: project, encoding: "utf8", timeout: 120000, env: { ...process.env, PATH: noGit, npm_node_execpath: process.execPath, GIT_CEILING_DIRECTORIES: root },
-        });
-        assert.equal(cliRun.status, 0, cliRun.stderr);
-        if (format.length) assert.equal(JSON.parse(cliRun.stdout).checks, 4);
-        else assert.match(cliRun.stdout, /checks: 4/);
-        const refused = spawnSync(process.execPath, [cli, '--pm-path', tracker, 'ts-starter', 'sdk-contracts', '--minimum-sdk', endpoints.minimum, '--current-sdk', endpoints.current, '--current-version', currentVersion, '--compiler', wrapper, ...format], {cwd: project, encoding: 'utf8', timeout: 30000});
-        assert.equal(refused.status, 2, refused.stderr);
-        assert.match(refused.stdout + refused.stderr, /compiler_unavailable/);
-        assert.match(refused.stdout + refused.stderr, /wrappers are rejected/);
-      }
+    verified.add(`${runtime}/${bound}/sdk`);
+    // Keep activated extensions outside the compiler's consumer input tree.
+    const tracker = join(root, `${runtime}-${bound}-tracker`);
+    const initialized = spawnSync(executable, ["--input-type=module", "-e", `import {PmClient} from '@unbrained/pm-cli/sdk';
+await new PmClient({pmRoot:${JSON.stringify(tracker)},noExtensions:true,author:'fixture'}).init('packed');`], {cwd: project, encoding: "utf8", timeout: 30000});
+    assert.equal(initialized.status, 0, initialized.stderr);
+    const cli = join(project, "node_modules/@unbrained/pm-cli/dist/cli.js");
+    const activated = spawnSync(executable, [cli, "--pm-path", tracker, "package", "install", join(project, "node_modules/pm-ts-starter"), "--project"], { cwd: project, encoding: "utf8", timeout: 30000 });
+    assert.equal(activated.status, 0, activated.stderr);
+    const helpRun = spawnSync(executable, [cli, '--pm-path', tracker, 'ts-starter', 'sdk-contracts', '--help'], {cwd: project, encoding: 'utf8', timeout: 30000});
+    assert.equal(helpRun.status, 0, helpRun.stderr);
+    assert.match(helpRun.stdout.replace(/\s+/g, ' '), /external shell\/JavaScript wrappers are rejected/);
+    for (const format of [[], ["--json"]]) {
+      const cliRun = spawnSync(executable, [cli, "--pm-path", tracker, "ts-starter", "sdk-contracts", "--minimum-sdk", ownMinimum,
+        "--current-sdk", ownCurrent, "--current-version", currentVersion, "--compiler", compiler, ...format], {
+        cwd: project, encoding: "utf8", timeout: 120000, env: { ...process.env, PATH: noGit, npm_node_execpath: process.execPath, GIT_CEILING_DIRECTORIES: root },
+      });
+      assert.equal(cliRun.status, 0, cliRun.stderr);
+      if (format.length) assert.equal(JSON.parse(cliRun.stdout).checks, 4);
+      else assert.match(cliRun.stdout, /checks: 4/);
+      verified.add(`${runtime}/${bound}/cli-${format.length ? "json" : "toon"}`);
+      const refused = spawnSync(executable, [cli, '--pm-path', tracker, 'ts-starter', 'sdk-contracts', '--minimum-sdk', ownMinimum, '--current-sdk', ownCurrent, '--current-version', currentVersion, '--compiler', wrapper, ...format], {cwd: project, encoding: 'utf8', timeout: 30000});
+      assert.equal(refused.status, 2, refused.stderr);
+      assert.match(refused.stdout + refused.stderr, /compiler_unavailable/);
+      assert.match(refused.stdout + refused.stderr, /wrappers are rejected/);
+      verified.add(`${runtime}/${bound}/refusal-${format.length ? "json" : "toon"}`);
     }
+    const lane = `${runtime}/${bound}/`;
+    assert.deepEqual([...verified].filter(key => key.startsWith(lane)).sort(), paths.filter(path => path !== "sdk-no-git").map(path => lane + path).sort(), "every installed graph must certify every SDK/CLI representation and refusal");
     // The same packed module also works with PATH containing no git (or other tools).
     const noGitRun = spawnSync(executable, [entry], {
       cwd: project, encoding: "utf8", timeout: 120000, env: { ...process.env, PATH: noGit, npm_node_execpath: process.execPath, GIT_CEILING_DIRECTORIES: root },
     });
     assert.equal(noGitRun.status, 0, `${runtime} ${bound}: ${noGitRun.error?.message ?? noGitRun.stderr}`);
     assert.equal(JSON.parse(noGitRun.stdout).matrix.ok, true);
+    verified.add(`${runtime}/${bound}/sdk-no-git`);
   }
+  const lanes = ["npm/minimum", "npm/current", "bun/minimum", "bun/current"];
+  assert.deepEqual([...verified].sort(), lanes.flatMap(lane => paths.map(path => `${lane}/${path}`)).sort(), "every installed graph must certify every SDK/CLI representation and refusal");
 });
 
 /** Exact npm and Bun installations used as consumer-owned toolchains, without Git. */

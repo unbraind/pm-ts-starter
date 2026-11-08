@@ -176,6 +176,13 @@ option is a flag, not a tracker path.
 The target must be new; existing directories are refused. Generation emits nine
 small text files and never runs installation, Git, or network commands. The generated
 package is independent of pm-ts-starter and uses the tested SDK floor 2026.10.17.
+The standalone CLI imports `encodeToon` from `@unbrained/pm-cli/sdk`; generated
+contracts use `decodeToon` from the same entrypoint. The host owns the TOON codec
+version, so generated packages need no direct `@toon-format/toon` dependency. The
+peer range, development pin and `manifest.json` minimum all agree on 2026.10.17,
+which exports both codecs. Keep those declarations aligned when copying the template.
+See [the codec pattern](docs/backend-conformance.md#structured-output-through-the-sdk).
+
 Publish with your normal npm workflow after configuring package ownership and CI.
 
 `createDirectoryAdapter(root)` reads all statuses through the SDK with extensions
