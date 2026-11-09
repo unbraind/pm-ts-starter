@@ -1,0 +1,21 @@
+id: pm-ts-starter-github-38a2e98e983e-204
+title: Bun release gate hangs after its last test and CI jobs have no timeout (two runners held for 2+ hours)
+description: "GH issue #204: https://github.com/unbraind/pm-ts-starter/issues/204 · author @unbraind · created 2026-11-09T11:55:55Z · updated 2026-11-09T11:55:55Z"
+type: Issue
+status: open
+priority: 2
+tags[2]: "gh:unbraind/pm-ts-starter#204","github_author:unbraind"
+created_at: "2026-11-09T11:55:55Z"
+updated_at: "2026-11-09T13:49:20.117Z"
+author: pm-github
+github_close_reason: ""
+github_closed_at: ""
+github_created_at: "2026-11-09T11:55:55Z"
+github_link_only: false
+github_number: 204
+github_release: ""
+github_state: open
+github_state_reason: unspecified
+github_updated_at: "2026-11-09T11:55:55Z"
+github_url: "https://github.com/unbraind/pm-ts-starter/issues/204"
+body: "## What happened (2026-11-09)\n\nCI run 42590449630 (Dependabot pm-toolchain PR #203, head 1996b06) had `test (22)` and `test (26)` sitting in **Full Bun release gate** from 09:36Z and 09:54Z until the orchestrator cancelled them at 11:55Z. That is more than two hours with no output. The last test line before the hang was `✔ diagnostic output is bounded and never echoes source text or machine paths (8262 ms)`, so something after it never exits under Bun: a child process, an open handle, or a test that waits forever.\n\nThe CI jobs set no `timeout-minutes`, so GitHub's 6-hour default applies. On a shared free-tier account, two hung jobs starve every other repository's CI. 77 runs were queued fleet-wide while this happened.\n\n## Fix\n\n1. Find the test or teardown that keeps the Bun gate alive after the last test. For example, run `bun run release:check` locally with a timer, or with `--test-timeout` and active-handle reporting. Fix the leak, and add a regression that fails when a handle stays open.\n2. Add `timeout-minutes` to every CI job (`test`, `release gate`), sized at about twice the slowest healthy run, so a hang fails fast instead of holding runners.\n3. This repository is the starter for new packages, so carry the timeout into the template.\n\n## Acceptance\n\n- The Bun release gate exits within its normal duration on both Node lines.\n- Every job in `.github/workflows/ci.yml` has `timeout-minutes`."
