@@ -60,7 +60,7 @@
     "@types/node": "26.6.6",
     "@unbrained/pm-cli": "2026.11.7",
     "eslint": "10.14.0",
-    "jscpd": "5.4.2",
+    "jscpd": "5.4.3",
     "pm-changelog": "2026.11.6",
     "pm-ops": "2026.11.6",
     "typescript": "7.0.2"
