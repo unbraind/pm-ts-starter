@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.11.12 - 2026-11-12
+
+### Dependencies
+
+- Bump jscpd ([#209](https://github.com/unbraind/pm-ts-starter/pull/209))
+
 ## 2026.11.10 - 2026-11-10
 
 ### Dependencies
