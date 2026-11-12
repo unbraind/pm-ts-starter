@@ -1,6 +1,6 @@
 {
   "name": "pm-ts-starter",
-  "version": "2026.11.10",
+  "version": "2026.11.12",
   "description": "TypeScript reference extension for pm-cli covering all capability types",
   "repository": {
     "type": "git",
