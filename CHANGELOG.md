@@ -4,6 +4,7 @@
 
 ### Other
 
+- Close delivered pm items and reserve in progress for active work (2026-10-24) ([pm-ts-starter-ooy4](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-ooy4.toon))
 - Use public SDK TOON codecs in generated backend projects ([pm-ts-starter-sdk-toon-codec](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-sdk-toon-codec.toon))
 
 ## 2026.11.12 - 2026-11-12
