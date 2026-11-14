@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Other
+
+- Close delivered pm items and reserve in progress for active work (2026-10-24) ([pm-ts-starter-ooy4](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-ooy4.toon))
+
 ## 2026.11.12 - 2026-11-12
 
 ### Dependencies
@@ -8,13 +14,9 @@
 
 ## 2026.11.10 - 2026-11-10
 
-### Dependencies
+### Other
 
-- Bump the pm-toolchain group with 3 updates ([#206](https://github.com/unbraind/pm-ts-starter/pull/206))
-- Bump the pm-toolchain group with 3 updates ([#203](https://github.com/unbraind/pm-ts-starter/pull/203))
-- Bump unbraind/pm-github/.github/workflows/pm-github-closeout.yml ([#201](https://github.com/unbraind/pm-ts-starter/pull/201))
-- Bump unbraind/pm-github/.github/workflows/pm-github-sync.yml ([#200](https://github.com/unbraind/pm-ts-starter/pull/200))
-- Bump the codeql-action group with 2 updates ([#199](https://github.com/unbraind/pm-ts-starter/pull/199))
+- Use public SDK TOON codecs in generated backend projects ([pm-ts-starter-sdk-toon-codec](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-sdk-toon-codec.toon))
 
 ## 2026.11.7 - 2026-11-07
 
