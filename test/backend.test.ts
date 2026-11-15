@@ -85,6 +85,7 @@ function generatedProjectEnv(source: NodeJS.ProcessEnv, root: string, bin: strin
   const clean = Object.fromEntries(Object.entries(source).filter(([key]) =>
     /^(PATH|PATHEXT|SYSTEMROOT|WINDIR|COMSPEC|TEMP|TMP|TMPDIR|LANG|LC_[A-Z_]+|TZ|TERM|CI)$/i.test(key)));
   return { ...clean, PATH: bin, HOME: root, USERPROFILE: root, XDG_CONFIG_HOME: join(root, ".config"),
+    NODE_OPTIONS: "--network-family-autoselection-attempt-timeout=5000",
     PM_TEST_DEPTH: source.PM_TEST_DEPTH ?? "full", PM_TEST_TIME_SCALE: source.PM_TEST_TIME_SCALE ?? "1",
     GIT_CEILING_DIRECTORIES: dirname(root), NPM_CONFIG_USERCONFIG: devNull, npm_config_userconfig: devNull,
     NPM_CONFIG_GLOBALCONFIG: join(root, "empty-global-npmrc"), npm_config_globalconfig: join(root, "empty-global-npmrc"),
@@ -238,9 +239,18 @@ test("generator assets resolve from source and compiled package layouts", () => 
 
 test("generated project commands stop at their ceiling and keep failed exits", () => {
   assert.equal(GENERATED_COMMAND_TIMEOUT_MS, 300_000);
-  const timedOut = runBoundedCommand(process.execPath, ["-e", "setTimeout(() => {}, 2000)"], { timeoutMs: 200 });
-  assert.equal((timedOut.error as NodeJS.ErrnoException | undefined)?.code, "ETIMEDOUT");
-  assert.notEqual(timedOut.status, 0);
+  const original = process.env.PM_TEST_TIME_SCALE;
+  try {
+    for (const scale of ["1.5", "20"]) {
+      process.env.PM_TEST_TIME_SCALE = scale;
+      const timedOut = runBoundedCommand(process.execPath, ["-e", `setTimeout(() => {}, ${testTimeout(2000)})`], { timeoutMs: 200 });
+      assert.equal((timedOut.error as NodeJS.ErrnoException | undefined)?.code, "ETIMEDOUT", scale);
+      assert.notEqual(timedOut.status, 0);
+    }
+  } finally {
+    if (original === undefined) delete process.env.PM_TEST_TIME_SCALE;
+    else process.env.PM_TEST_TIME_SCALE = original;
+  }
   const failed = runBoundedCommand(process.execPath, ["-e", "process.exit(9)"], { timeoutMs: 5_000 });
   assert.equal(failed.status, 9);
   assert.equal(failed.error, undefined);
@@ -354,7 +364,7 @@ test("generated consumers select the public registry without inheriting scoped r
     NPM_CONFIG_USERCONFIG: join(root, "unrelated-config"), npm_config_allow_scripts: "false",
     NPM_TOKEN: "synthetic", NODE_AUTH_TOKEN: "synthetic", NPM_MEDIA_SERVER: "synthetic",
     service_password: "synthetic", Custom_Credential: "synthetic", SERVICE_API_KEY: "synthetic",
-    BUN_INSPECT_PRELOAD: "unrelated-preload" };
+    BUN_INSPECT_PRELOAD: "unrelated-preload", NODE_OPTIONS: "--require=unrelated-preload" };
   const env = generatedProjectEnv(source, root, process.env.PATH ?? "");
   for (const [key, expected] of [["registry", "https://registry.npmjs.org"], ["@unbrained:registry", "undefined"]]) {
     const run = runBoundedCommand("npm", ["config", "get", key], { cwd: root, env });
@@ -364,6 +374,7 @@ test("generated consumers select the public registry without inheriting scoped r
   for (const [key, value] of Object.entries(source)) {
     if (value === "synthetic" || key === "npm_config_allow_scripts" || key === "BUN_INSPECT_PRELOAD") assert.equal(Object.hasOwn(env, key), false, key);
   }
+  assert.equal(env.NODE_OPTIONS, "--network-family-autoselection-attempt-timeout=5000");
   assert.equal(source.npm_config_registry, "http://127.0.0.1:9", "the parent configuration is unchanged");
 });
 
@@ -480,4 +491,17 @@ test("the Bun lookup keeps a PATH entry that walks through a symlink unnormalize
   // `link/../bin` is real/bin through the link; lexical normalization would turn it into root/bin, which does not exist.
   const entry = `${root}/link/../bin`;
   assert.equal(requireBunExecutable({ PATH: entry, PATHEXT: ".CMD" }), `${entry}${process.platform === "win32" ? "\\" : "/"}${name}`);
+});
+
+test("invalid scale refuses a generated command before spawning", t => {
+  const marker = join(scratch(t), "spawned");
+  const original = process.env.PM_TEST_TIME_SCALE;
+  try {
+    process.env.PM_TEST_TIME_SCALE = "NaN";
+    assert.throws(() => runBoundedCommand(process.execPath, ["-e", `require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'started')`]), /PM_TEST_TIME_SCALE/);
+    assert.equal(existsSync(marker), false);
+  } finally {
+    if (original === undefined) delete process.env.PM_TEST_TIME_SCALE;
+    else process.env.PM_TEST_TIME_SCALE = original;
+  }
 });

@@ -57,7 +57,7 @@ function plain(project: string): {ok: boolean; codes: string[]} {
 }
 
 for (const version of ["shared 5.9.3", "5.9.3", "6.0.3"]) {
-  test(`path transport property on stock TypeScript ${version}`, async t => {
+  test(`path transport property on stock TypeScript ${version}`, { skip: process.platform === "win32" && "Windows forbids generated filename characters" }, async t => {
     const root = mkdtempSync(join(tmpdir(), "sdk-path-transport-"));
     t.after(() => rmSync(root, {recursive: true, force: true}));
     const tool = version === "shared 5.9.3" ? dirname(dirname(testCompiler())) : versionedCompiler(version);
@@ -97,7 +97,7 @@ for (const version of ["shared 5.9.3", "5.9.3", "6.0.3"]) {
   });
 }
 
-test("newline SDK directory review reproduction", async t => {
+test("newline SDK directory review reproduction", { skip: process.platform === "win32" && "Windows forbids newline filenames" }, async t => {
   const root = mkdtempSync(join(tmpdir(), "sdk-newline-review-")), project = consumerDirectory(root);
   t.after(() => rmSync(root, {recursive: true, force: true}));
   const bound = dependencyBound(join(root, "outside\nSDK"));
@@ -106,7 +106,7 @@ test("newline SDK directory review reproduction", async t => {
   await assert.rejects(checkSdkContracts({consumer: project, minimum: bound, current: bound}), error => error instanceof SdkContractRefusal && error.code === "unsupported_project_shape");
 });
 
-test("JSON diagnostic locations retain every unusual path component", async t => {
+test("JSON diagnostic locations retain every unusual path component", { skip: process.platform === "win32" && "Windows forbids these filename characters" }, async t => {
   const root = mkdtempSync(join(tmpdir(), "sdk-path-diagnostic-"));
   t.after(() => rmSync(root, {recursive: true, force: true}));
   const project = consumerDirectory(root);

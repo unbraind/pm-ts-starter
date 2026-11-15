@@ -6,9 +6,11 @@ status: in_progress
 priority: 2
 tags[4]: ci,"gh:unbraind/pm-ts-starter#204","github_author:unbraind",performance
 created_at: "2026-11-09T11:55:55Z"
-updated_at: "2026-11-15T14:08:32.991Z"
+updated_at: "2026-11-15T20:20:02.491Z"
+assignee: codex-sol-round-d
+claim_principal: codex-sol-round-d
 author: pm-github
-comments[7]{created_at,author,text}:
+comments[10]{created_at,author,text}:
   "2026-11-15T13:43:47.071Z",codex-sol,"Fleet CI v2; companion pm-cli-website-dyhg. Reuse the existing hung Bun gate item. Preserve required test (22) and test (26), generated-package acceptance, committed build-output checks, strict tracker health, privacy and release verifiers. Split quick hosted PR gates from exhaustive local deep gates; add bounded jobs and deterministic test depth. No release workflow or verifier changes."
   "2026-11-15T13:47:57.883Z",codex-sol,"Latest successful main run 43691008662: Node 22 npm/Bun gates 59m04s/58m43s; Node 26 75m10s/76m10s. gh run view --log returned empty; individual jobs API log supplied timings: seeded property 693.34s, discovery 636.63s, compiler matrix 505.66s, packed acceptance 269.96s. Quick retains deterministic prefixes and unchanged coverage thresholds; full remains deep. Generated projects inherit adapted workflows and the helper and now execute their own release gate under both installed graphs. Bun project paths are accepted; bunx is a separate local-bin smoke. The historical Bun handle leak is contained, not diagnosed as fixed."
   "2026-11-15T13:50:43.690Z",codex-sol,"Deep uses four Node/runtime matrix legs, each with a fresh installer graph and its own 120-minute ceiling. This preserves all four full gates without stacking the measured 75-minute npm and 76-minute Bun gates in one 120-minute job. No coverage/source threshold changes."
@@ -16,7 +18,10 @@ comments[7]{created_at,author,text}:
   "2026-11-15T13:57:34.874Z",codex-sol,Harness scale validation also rejects budgets above the portable signed 32-bit timer ceiling; positive fractional scales round upward. This prevents huge scale values from overflowing or becoming immediate timers. Depth and deep-graph invariants pass 3/3 after the guard.
   "2026-11-15T13:59:24.938Z",codex-sol,"Final generated-package/deep-graph/depth batch: PM_TEST_DEPTH=quick PM_TEST_TIME_SCALE=3 node --test test/backend.test.ts test/ci-consumer-graphs.test.ts test/depth.test.ts passes 29/29, zero failures/skips/cancellations, 124.37 seconds linked-command wall. This executes both generated installer graphs and their own release gates. A later timer-overflow guard passes the separate 3-test depth/deep smoke. Broad quick touched-file batch is still bounded to 1200 seconds."
   "2026-11-15T14:08:30.808Z",codex-sol,"Broad quick touched-file run stopped at its 1200-second harness budget: 235 passing tests, one obsolete generated-Bun audit failure, three cancelled suites. That run loaded the pre-fix generator: npm audit rejected the Bun graph because it had no npm lockfile (ENOLOCK). The committed generator now creates an audit lockfile; the fresh final generator/deep/depth batch passes 29/29 in 124.37 seconds. Remaining compiler suites are incomplete on this overloaded host; this is not a successful complete quick run. No full local depth or full quick coverage was attempted. PR CI run 43721246259 had both required checks queued at the snapshot; no completed created-to-completed wall time exists. CodeQL run 43721246139 was also queued. Final typecheck, test compilation, lint, integer-timer tests and bunx compiler smoke pass. Coverage, total quick duration and deep capacity remain unverified; no release files, variables, protection or review threads changed."
-files[25]{path,scope}:
+  "2026-11-15T19:58:36.596Z",codex-sol-round-d,"Round D: verify PR 217 findings, preserve documentation validation and privacy checks, make generated private runners opt-in, scale harness timeout fixture lifetime, and diagnose both 30-minute required-check cancellations using individual job logs. Review all six CI defect classes."
+  "2026-11-15T20:09:12.701Z",codex-sol-round-d,"Round D: all four review findings are valid. Generated and root deep workflows default to hosted Ubuntu unless PM_LOCAL_DEEP=on; generated deep jobs now separate Node x npm/Bun gates and actions are pinned. Docs tier keeps identity/privacy plus README package links, compatibility-floor and focused SDK compiler documentation tests. Harness timeout lifetime scales at 1.5 and 20; invalid scale is checked before spawn. Self-review restored executable tracker CodeQL eligibility and skips native invalid filename corpora on win32. No covered implementation source changed this round; coverage is not repeated. Required checks on prior head cancelled at 30 minutes immediately before the unbounded overlapping-peer test; its peer now has an integer scaled hard-kill timeout and explicit result exit. Focused regression is running; final CI recovery remains unverified."
+  "2026-11-15T20:20:02.490Z",codex-sol-round-d,"Round D final local results on Node 24.19.0: typecheck/build:test/lint pass (23.41 s final); workflow/depth/metadata/compatibility/release/identity batch 28 passed (7.33 s), including strict root/generated YAML; focused compiler documentation 1 passed (4.94 s); backend deadline/invalid-scale/clean-network-env regressions 3 passed (10.57 s final). Full backend/consumer-graph/depth batch passed 29 (329.65 s) before the final added invalid-scale case, which passed separately. POSIX API/path corpora passed 17 with no skips (713.78 s). Overlapping caller contract passed all six phases and observer cleanup at scale 3 (465.40 s); initial scale-1 60-second peer watchdog failed under host load (283.86 s overall) and is retained as failed diagnostic evidence, not approval. Changelog regeneration/check and strict source tracker health passed (49.34 s linked command). The 30-minute prior hosted cancellations are traced to the previously unbounded peer test; its bound/explicit result exit improves failure containment, while hosted recovery and the general Bun handle issue remain unverified. All four finding thread IDs fixed: PRRT_kwDOSZpwFM63qKb7, PRRT_kwDOSZpwFM63qkY_, PRRT_kwDOSZpwFM63qKb8, PRRT_kwDOSZpwFM63qkZB. No source coverage change or local coverage run this round; full depth and replacement-head CI remain unverified. No item closure or thread action."
+files[26]{path,scope}:
   .github/workflows/ci-deep.yml,project
   .github/workflows/ci.yml,project
   .github/workflows/codeql.yml,project
@@ -31,6 +36,7 @@ files[25]{path,scope}:
   templates/backend/.github/workflows/codeql.yml,project
   test/backend.test.ts,project
   test/ci-consumer-graphs.test.ts,project
+  test/ci-tiers.test.ts,project
   test/dependency-fixtures.ts,project
   test/dependency-property-worker.ts,project
   test/depth.test.ts,project
@@ -42,10 +48,16 @@ files[25]{path,scope}:
   test/sdk-program-graph.test.ts,project
   test/sdk-reference-refusal.test.ts,project
   test/support/depth.ts,project
-tests[3]{command,scope,timeout_seconds,provenance{author,created_at,source_kind,source_ref}}:
+tests[9]{command,scope,timeout_seconds,provenance{author,created_at,source_kind,source_ref}}:
   "npm run typecheck && npm run build:test && npm run lint",project,240,codex-sol,"2026-11-15T13:46:25.056Z",local_mutation,ci/quick-pr-tier-deep-local-tier
   PM_TEST_DEPTH=quick PM_TEST_TIME_SCALE=3 node --test --test-concurrency=2 test/backend.test.ts test/ci-consumer-graphs.test.ts test/depth.test.ts test/rehearsal.test.ts test/sdk-api.test.ts test/sdk-cache.test.ts test/sdk-contracts.test.ts test/sdk-path-transport.test.ts test/sdk-program-graph.test.ts test/sdk-reference-refusal.test.ts,project,1200,codex-sol,"2026-11-15T13:47:58.714Z",local_mutation,ci/quick-pr-tier-deep-local-tier
   PM_TEST_DEPTH=quick PM_TEST_TIME_SCALE=3 node --test test/backend.test.ts test/ci-consumer-graphs.test.ts test/depth.test.ts,project,600,codex-sol,"2026-11-15T13:54:53.171Z",local_mutation,ci/quick-pr-tier-deep-local-tier
+  PM_TEST_DEPTH=quick node --test test/ci-tiers.test.ts test/ci-consumer-graphs.test.ts test/depth.test.ts test/package-metadata.test.ts test/compatibility-floor.test.ts test/release-workflow.test.ts test/identity-audit.test.ts,project,300,codex-sol-round-d,"2026-11-15T20:05:02.783Z",local_mutation,ci/quick-pr-tier-deep-local-tier
+  PM_TEST_DEPTH=quick node --test --test-concurrency=2 test/sdk-api.test.ts test/sdk-path-transport.test.ts,project,1200,codex-sol-round-d,"2026-11-15T20:07:06.767Z",local_mutation,ci/quick-pr-tier-deep-local-tier
+  "PM_TEST_DEPTH=quick node --test --test-name-pattern=\"generated project commands|invalid scale|generated consumers select\" test/backend.test.ts",project,120,codex-sol-round-d,"2026-11-15T20:07:08.682Z",local_mutation,ci/quick-pr-tier-deep-local-tier
+  "node --test --test-name-pattern=\"compiler entry contract\" test/sdk-compiler-entry.test.ts",project,120,codex-sol-round-d,"2026-11-15T20:07:32.203Z",local_mutation,ci/quick-pr-tier-deep-local-tier
+  "PM_TEST_DEPTH=quick PM_TEST_TIME_SCALE=3 node --test --test-name-pattern=\"each overlapping caller boundary\" test/sdk-contracts.test.ts",project,1200,codex-sol-round-d,"2026-11-15T20:09:41.911Z",local_mutation,ci/quick-pr-tier-deep-local-tier
+  "npm run changelog:check && ./node_modules/.bin/pm --pm-path .agents/pm health --strict-exit --require-merge-drivers && git diff --check",project,240,codex-sol-round-d,"2026-11-15T20:10:34.369Z",local_mutation,ci/quick-pr-tier-deep-local-tier
 docs[1]{path,scope}:
   docs/ci-tiers.md,project
 github_close_reason: ""

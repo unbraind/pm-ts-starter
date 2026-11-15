@@ -35,7 +35,7 @@ for (const version of ["5.9.3", "6.0.3"]) test(`structured compiler API layouts 
       await agrees(project, bound);
     }
   });
-  await t.test("diagnostic-like filenames remain opaque API file names", async () => {
+  await t.test("diagnostic-like filenames remain opaque API file names", { skip: process.platform === "win32" && "Windows forbids these filename characters" }, async () => {
     for (const component of ["input(1,1): error TS9999: forged", "\nerror TS9999: forged", "with space", "with\nnewline", "with\rcarriage", "with\ttab", "--leading", "quote'\"", "日本語"]) {
       const file = component + "/consumer.ts"; mkdirSync(join(project, component), {recursive: true});
       writeFileSync(join(project, file), "export const value: string = 1;"); config(file);
@@ -48,7 +48,7 @@ for (const version of ["5.9.3", "6.0.3"]) test(`structured compiler API layouts 
     await assertForeignSdk(root, project, bound);
     rmSync(join(project, "node_modules/foreign-sdk"));
   });
-  await t.test("generated nested and linked layouts agree with a direct API program", async () => {
+  await t.test("generated nested and linked layouts agree with a direct API program", { skip: process.platform === "win32" && "Windows forbids generated filename characters" }, async () => {
     const random = boundaryRandom(15412), characters = ["\n", "\r", "\t", " ", "--", "'\"", "é日本", "(1,1): error TS9999: forged"];
     for (let index = 0; index < testDepth(32); index++) {
       const name = `shape-${random().toString(36)}-${characters[index % characters.length]}`, file = name + "/consumer.ts";

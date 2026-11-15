@@ -3,8 +3,9 @@
 Required checks remain `test (22)` and `test (26)`. PRs and dispatch use hosted
 Ubuntu runners, quick depth and a 30-minute job ceiling. Superseded PR runs
 cancel. CodeQL is not required. Docs/tracker-only PRs still run the identity
-and absolute-home-path history audits; they cannot bypass privacy checks.
-Executable tracker JavaScript/TypeScript selects the code tier.
+and absolute-home-path history audits, README package-link, SDK compiler documentation
+and compatibility-floor checks; they cannot bypass privacy checks.
+Executable tracker JavaScript/TypeScript selects the code tier and remains eligible for CodeQL.
 
 | Check | Code PR Node 22 | Code PR Node 26 | Docs/tracker PR, both | Deep Node 22 + 26 |
 | --- | --- | --- | --- | --- |
@@ -19,6 +20,7 @@ Executable tracker JavaScript/TypeScript selects the code tier.
 | Packed npm/Bun SDK-bound and CLI acceptance | via tests | via tests | — | npm + Bun |
 | Identity and absolute-home-path history audits | via tests | via tests | yes | npm + Bun |
 | Production audit and pack dry-run | — | yes | — | npm + Bun |
+| README package links, SDK compiler docs and compatibility floor | via tests | via tests | yes | npm + Bun |
 | Changelog consistency | — | yes | yes | npm + Bun |
 | Publish attestation and changelog-date verifiers | — | yes | — | npm + Bun |
 | Bun graph install and bunx compiler smoke | — | yes | — | graph install; bunx in PR |
@@ -28,8 +30,8 @@ Deep runs on main pushes, dispatch and daily at 02:17 UTC, distinct from release
 at 03:23 UTC and its hourly minute-41 recovery, and weekly CodeQL at Monday
 06:09 UTC. Four checks are `deep (22, npm)`, `deep (22, bun)`, `deep (26, npm)` and
 `deep (26, bun)`, each with a 120-minute ceiling and
-per-ref cancellation. The local `pm-local` pool is selected unless
-`PM_LOCAL_DEEP=off`; only the fleet controller changes that variable. Local
+per-ref cancellation. Hosted Ubuntu is the default; `PM_LOCAL_DEEP=on`
+explicitly selects the local `pm-local` pool. Only the fleet controller changes that variable. Local
 runners use their persistent npm cache and preinstalled Bun; hosted fallback
 uses setup-node caching and setup-bun. Every deep job logs `bun --version`.
 

@@ -205,8 +205,8 @@ test("each overlapping caller boundary preserves peer success and foreign state 
 import {PmClient} from ${JSON.stringify(pathToFileURL(join(sdk, "dist/sdk/index.js")).href)};
 await new PmClient({pmRoot: ${JSON.stringify(tracker)}, noExtensions: true, author: 'peer'}).update(${JSON.stringify(peerItem.item.id)}, {description: ${JSON.stringify(phase + "-" + phases.length)}});
 const result = await checkSdkContracts(${JSON.stringify({ minimum: target, current: target, compiler, examples: [SDK_CONSUMER_EXAMPLES[0]] })});
-if (!result.ok) process.exit(1);`], { encoding: "utf8", env: { ...process.env, GIT_CEILING_DIRECTORIES: root, PATH: "" } });
-    assert.equal(peer.status, 0, peer.stderr);
+process.exit(result.ok ? 0 : 1);`], { encoding: "utf8", timeout: testTimeout(60_000), killSignal: "SIGKILL", env: { ...process.env, GIT_CEILING_DIRECTORIES: root, PATH: "" } });
+    assert.equal(peer.status, 0, `${peer.error?.message ?? ""} ${peer.stdout} ${peer.stderr}`);
     assert.equal(JSON.parse(readFileSync(join(tracker, "foreign-peer.json"), "utf8")).success, true);
   } });
   assert.deepEqual(phases, ["allocated", "linked", "compiled", "linked", "compiled", "cleanup"]);
