@@ -6,9 +6,7 @@ status: in_progress
 priority: 2
 tags[4]: ci,"gh:unbraind/pm-ts-starter#204","github_author:unbraind",performance
 created_at: "2026-11-09T11:55:55Z"
-updated_at: "2026-11-15T20:20:02.491Z"
-assignee: codex-sol-round-d
-claim_principal: codex-sol-round-d
+updated_at: "2026-11-15T20:45:06.234Z"
 author: pm-github
 comments[10]{created_at,author,text}:
   "2026-11-15T13:43:47.071Z",codex-sol,"Fleet CI v2; companion pm-cli-website-dyhg. Reuse the existing hung Bun gate item. Preserve required test (22) and test (26), generated-package acceptance, committed build-output checks, strict tracker health, privacy and release verifiers. Split quick hosted PR gates from exhaustive local deep gates; add bounded jobs and deterministic test depth. No release workflow or verifier changes."
