@@ -66,6 +66,14 @@ test("deep defaults to hosted runners and separates full installer graphs", () =
   }
 });
 
+test("generated deep Bun legs execute behavior under Bun after the release gate", () => {
+  const steps = workflow("templates/backend/.github/workflows/ci-deep.yml").jobs.deep.steps;
+  const release = steps.findIndex(step => step.run === "bun run release:check");
+  const behavior = steps.findIndex(step => step.run === "bun run test:bun");
+  assert.ok(behavior > release);
+  assert.equal(steps[behavior].if, "matrix.runtime == 'bun'");
+});
+
 test("CodeQL skips prose but includes executable tracker changes", () => {
   const codeql = workflow(".github/workflows/codeql.yml");
   for (const event of ["push", "pull_request"]) {

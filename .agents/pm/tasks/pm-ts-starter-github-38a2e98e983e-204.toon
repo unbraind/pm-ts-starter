@@ -4,11 +4,11 @@ description: "GH issue #204: https://github.com/unbraind/pm-ts-starter/issues/20
 type: Task
 status: in_progress
 priority: 2
-tags[4]: ci,"gh:unbraind/pm-ts-starter#204","github_author:unbraind",performance
+tags[5]: ci,"gh:unbraind/pm-ts-starter#204","gh:unbraind/pm-ts-starter#217","github_author:unbraind",performance
 created_at: "2026-11-09T11:55:55Z"
-updated_at: "2026-11-15T20:45:06.234Z"
+updated_at: "2026-11-15T22:50:07.883Z"
 author: pm-github
-comments[10]{created_at,author,text}:
+comments[14]{created_at,author,text}:
   "2026-11-15T13:43:47.071Z",codex-sol,"Fleet CI v2; companion pm-cli-website-dyhg. Reuse the existing hung Bun gate item. Preserve required test (22) and test (26), generated-package acceptance, committed build-output checks, strict tracker health, privacy and release verifiers. Split quick hosted PR gates from exhaustive local deep gates; add bounded jobs and deterministic test depth. No release workflow or verifier changes."
   "2026-11-15T13:47:57.883Z",codex-sol,"Latest successful main run 43691008662: Node 22 npm/Bun gates 59m04s/58m43s; Node 26 75m10s/76m10s. gh run view --log returned empty; individual jobs API log supplied timings: seeded property 693.34s, discovery 636.63s, compiler matrix 505.66s, packed acceptance 269.96s. Quick retains deterministic prefixes and unchanged coverage thresholds; full remains deep. Generated projects inherit adapted workflows and the helper and now execute their own release gate under both installed graphs. Bun project paths are accepted; bunx is a separate local-bin smoke. The historical Bun handle leak is contained, not diagnosed as fixed."
   "2026-11-15T13:50:43.690Z",codex-sol,"Deep uses four Node/runtime matrix legs, each with a fresh installer graph and its own 120-minute ceiling. This preserves all four full gates without stacking the measured 75-minute npm and 76-minute Bun gates in one 120-minute job. No coverage/source threshold changes."
@@ -19,7 +19,11 @@ comments[10]{created_at,author,text}:
   "2026-11-15T19:58:36.596Z",codex-sol-round-d,"Round D: verify PR 217 findings, preserve documentation validation and privacy checks, make generated private runners opt-in, scale harness timeout fixture lifetime, and diagnose both 30-minute required-check cancellations using individual job logs. Review all six CI defect classes."
   "2026-11-15T20:09:12.701Z",codex-sol-round-d,"Round D: all four review findings are valid. Generated and root deep workflows default to hosted Ubuntu unless PM_LOCAL_DEEP=on; generated deep jobs now separate Node x npm/Bun gates and actions are pinned. Docs tier keeps identity/privacy plus README package links, compatibility-floor and focused SDK compiler documentation tests. Harness timeout lifetime scales at 1.5 and 20; invalid scale is checked before spawn. Self-review restored executable tracker CodeQL eligibility and skips native invalid filename corpora on win32. No covered implementation source changed this round; coverage is not repeated. Required checks on prior head cancelled at 30 minutes immediately before the unbounded overlapping-peer test; its peer now has an integer scaled hard-kill timeout and explicit result exit. Focused regression is running; final CI recovery remains unverified."
   "2026-11-15T20:20:02.490Z",codex-sol-round-d,"Round D final local results on Node 24.19.0: typecheck/build:test/lint pass (23.41 s final); workflow/depth/metadata/compatibility/release/identity batch 28 passed (7.33 s), including strict root/generated YAML; focused compiler documentation 1 passed (4.94 s); backend deadline/invalid-scale/clean-network-env regressions 3 passed (10.57 s final). Full backend/consumer-graph/depth batch passed 29 (329.65 s) before the final added invalid-scale case, which passed separately. POSIX API/path corpora passed 17 with no skips (713.78 s). Overlapping caller contract passed all six phases and observer cleanup at scale 3 (465.40 s); initial scale-1 60-second peer watchdog failed under host load (283.86 s overall) and is retained as failed diagnostic evidence, not approval. Changelog regeneration/check and strict source tracker health passed (49.34 s linked command). The 30-minute prior hosted cancellations are traced to the previously unbounded peer test; its bound/explicit result exit improves failure containment, while hosted recovery and the general Bun handle issue remain unverified. All four finding thread IDs fixed: PRRT_kwDOSZpwFM63qKb7, PRRT_kwDOSZpwFM63qkY_, PRRT_kwDOSZpwFM63qKb8, PRRT_kwDOSZpwFM63qkZB. No source coverage change or local coverage run this round; full depth and replacement-head CI remain unverified. No item closure or thread action."
-files[26]{path,scope}:
+  "2026-11-15T22:24:21.409Z",codex-sol,"Round E: verified assigned review findings and current checks. Fix valid portability, gate-order and timeout regressions; preserve product deadlines, privacy/identity and self-host gates. Run targeted quick tests and required tooling checks before an explicit-path commit. Review threads remain untouched."
+  "2026-11-15T22:37:46.091Z",codex-sol,"Round E evidence: PRRT_kwDOSZpwFM63udS7 is valid: generated deep Bun legs never called test:bun. Add that explicit behavioral gate and ordering regression. Both failing checks actually reached the 30-minute job limit; the logs stop before the overlapping caller-boundary test finishes. Retain all six competition phases using a small actual compiled SDK fixture rather than repeated copies of the full published SDK dependency graph; validate the targeted case."
+  "2026-11-15T22:45:13.561Z",codex-sol,"Round E direct targeted check: PM_TEST_DEPTH=quick PM_TEST_TIME_SCALE=3 node --test --test-name-pattern=\"each overlapping caller boundary\" test/sdk-contracts.test.ts; passed: 1 test, all six boundaries, 342352 ms. No package coverage sources were changed; no package coverage run was performed."
+  "2026-11-15T22:50:05.287Z",codex-sol,"Round E final verification: typecheck, lint (docstring gate where no lint script exists), touched regression tests, workflow/tooling tests, strict workflow YAML and changelog:check passed. Duplication gates passed where provided. Self-review retained docs/tracker privacy and identity checks, unscaled product deadlines, integer-rounded validated harness budgets, platform filename guards and generated-only quick thresholds. No package coverage sources were edited; no package coverage run. No review thread actions or merge. Shared-runner hold and SteveBot commit identity will be checked before push. Hosted CI is intentionally not awaited. The targeted six-phase compiler competition check passed 1/1 in 342352 ms. Hosted timeout improvement remains to be measured after push."
+files[29]{path,scope}:
   .github/workflows/ci-deep.yml,project
   .github/workflows/ci.yml,project
   .github/workflows/codeql.yml,project
@@ -28,17 +32,20 @@ files[26]{path,scope}:
   dist/backend-project.d.ts.map,project
   dist/backend-project.js,project
   dist/backend-project.js.map,project
+  docs/ci-tiers.md,project
   package.json,project
   templates/backend/.github/workflows/ci-deep.yml,project
   templates/backend/.github/workflows/ci.yml,project
   templates/backend/.github/workflows/codeql.yml,project
   test/backend.test.ts,project
   test/ci-consumer-graphs.test.ts,project
+  test/ci-routing.test.ts,project
   test/ci-tiers.test.ts,project
   test/dependency-fixtures.ts,project
   test/dependency-property-worker.ts,project
   test/depth.test.ts,project
   test/rehearsal.test.ts,project
+  test/release-workflow.test.ts,project
   test/sdk-api.test.ts,project
   test/sdk-cache.test.ts,project
   test/sdk-contracts.test.ts,project
@@ -46,7 +53,7 @@ files[26]{path,scope}:
   test/sdk-program-graph.test.ts,project
   test/sdk-reference-refusal.test.ts,project
   test/support/depth.ts,project
-tests[9]{command,scope,timeout_seconds,provenance{author,created_at,source_kind,source_ref}}:
+tests[10]{command,scope,timeout_seconds,provenance{author,created_at,source_kind,source_ref}}:
   "npm run typecheck && npm run build:test && npm run lint",project,240,codex-sol,"2026-11-15T13:46:25.056Z",local_mutation,ci/quick-pr-tier-deep-local-tier
   PM_TEST_DEPTH=quick PM_TEST_TIME_SCALE=3 node --test --test-concurrency=2 test/backend.test.ts test/ci-consumer-graphs.test.ts test/depth.test.ts test/rehearsal.test.ts test/sdk-api.test.ts test/sdk-cache.test.ts test/sdk-contracts.test.ts test/sdk-path-transport.test.ts test/sdk-program-graph.test.ts test/sdk-reference-refusal.test.ts,project,1200,codex-sol,"2026-11-15T13:47:58.714Z",local_mutation,ci/quick-pr-tier-deep-local-tier
   PM_TEST_DEPTH=quick PM_TEST_TIME_SCALE=3 node --test test/backend.test.ts test/ci-consumer-graphs.test.ts test/depth.test.ts,project,600,codex-sol,"2026-11-15T13:54:53.171Z",local_mutation,ci/quick-pr-tier-deep-local-tier
@@ -56,6 +63,7 @@ tests[9]{command,scope,timeout_seconds,provenance{author,created_at,source_kind,
   "node --test --test-name-pattern=\"compiler entry contract\" test/sdk-compiler-entry.test.ts",project,120,codex-sol-round-d,"2026-11-15T20:07:32.203Z",local_mutation,ci/quick-pr-tier-deep-local-tier
   "PM_TEST_DEPTH=quick PM_TEST_TIME_SCALE=3 node --test --test-name-pattern=\"each overlapping caller boundary\" test/sdk-contracts.test.ts",project,1200,codex-sol-round-d,"2026-11-15T20:09:41.911Z",local_mutation,ci/quick-pr-tier-deep-local-tier
   "npm run changelog:check && ./node_modules/.bin/pm --pm-path .agents/pm health --strict-exit --require-merge-drivers && git diff --check",project,240,codex-sol-round-d,"2026-11-15T20:10:34.369Z",local_mutation,ci/quick-pr-tier-deep-local-tier
+  "npm run typecheck && npm run lint --if-present && npm run build:test && PM_TEST_DEPTH=quick PM_TEST_TIME_SCALE=3 node --test --test-concurrency=2 test/ci-routing.test.ts test/ci-tiers.test.ts test/ci-consumer-graphs.test.ts test/depth.test.ts test/release-workflow.test.ts && node --input-type=module -e 'import {readFileSync,readdirSync,existsSync} from \"node:fs\"; import assert from \"node:assert/strict\"; import {parseDocument} from \"yaml\"; for(const dir of [\".github/workflows\",\"templates/backend/.github/workflows\"]) if(existsSync(dir)) for(const file of readdirSync(dir).filter(f=>/\\.ya?ml$/.test(f))) {const d=parseDocument(readFileSync(dir+\"/\"+file,\"utf8\"),{uniqueKeys:true,strict:true});assert.deepEqual(d.errors,[],file);assert.deepEqual(d.warnings,[],file);} console.log(\"Strict workflow YAML passed\");'",project,1200,codex-sol,"2026-11-15T22:35:55.465Z",local_mutation,ci/quick-pr-tier-deep-local-tier
 docs[1]{path,scope}:
   docs/ci-tiers.md,project
 github_close_reason: ""

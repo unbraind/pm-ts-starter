@@ -40,3 +40,5 @@ jobs:
         run: rm -rf node_modules && bun install --no-save
       - if: matrix.runtime == 'bun'
         run: bun run release:check
+      - if: matrix.runtime == 'bun'
+        run: bun run test:bun

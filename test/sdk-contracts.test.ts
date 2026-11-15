@@ -190,6 +190,10 @@ test("diagnostic output is bounded and never echoes source text or machine paths
 
 test("each overlapping caller boundary preserves peer success and foreign state on one plain tracker", async t => {
   const root = scratch(t), tracker = join(root, "tracker");
+  // Boundary competition needs real compiler matrices, not repeated copies of
+  // the entire published SDK graph (covered by the compatibility tests above).
+  const bound = dependencyBound(root);
+  const matrix = { minimum: bound, current: bound, compiler, examples: [{ id: "peer", source: 'import {sdk} from "@unbrained/pm-cli"; export {sdk};' }] };
   const client = new PmClient({ pmRoot: tracker, noExtensions: true, author: "fixture" });
   await client.init("contract");
   const item = await client.create({ title: "Original public fixture" });
@@ -198,13 +202,13 @@ test("each overlapping caller boundary preserves peer success and foreign state 
   // There is no shared mutation path: every meaningful phase receives a competing
   // real tracker transition plus a second complete matrix. Foreign bytes survive.
   const phases: string[] = [];
-  await checkSdkContracts({ minimum: target, current: target, examples: [SDK_CONSUMER_EXAMPLES[0]!], onProgress(phase) {
+  await checkSdkContracts({ ...matrix, onProgress(phase) {
     phases.push(phase);
     writeFileSync(join(tracker, "foreign-peer.json"), JSON.stringify({ phase, owner: "peer", success: true }));
     const peer = spawnSync(process.execPath, ["--input-type=module", "-e", `import {checkSdkContracts} from ${JSON.stringify(pathToFileURL(join(repo, "sdk-contracts.ts")).href)};
 import {PmClient} from ${JSON.stringify(pathToFileURL(join(sdk, "dist/sdk/index.js")).href)};
 await new PmClient({pmRoot: ${JSON.stringify(tracker)}, noExtensions: true, author: 'peer'}).update(${JSON.stringify(peerItem.item.id)}, {description: ${JSON.stringify(phase + "-" + phases.length)}});
-const result = await checkSdkContracts(${JSON.stringify({ minimum: target, current: target, compiler, examples: [SDK_CONSUMER_EXAMPLES[0]] })});
+const result = await checkSdkContracts(${JSON.stringify(matrix)});
 process.exit(result.ok ? 0 : 1);`], { encoding: "utf8", timeout: testTimeout(60_000), killSignal: "SIGKILL", env: { ...process.env, GIT_CEILING_DIRECTORIES: root, PATH: "" } });
     assert.equal(peer.status, 0, `${peer.error?.message ?? ""} ${peer.stdout} ${peer.stderr}`);
     assert.equal(JSON.parse(readFileSync(join(tracker, "foreign-peer.json"), "utf8")).success, true);
@@ -215,7 +219,7 @@ process.exit(result.ok ? 0 : 1);`], { encoding: "utf8", timeout: testTimeout(60_
   assert.equal((await client.listAllComplete()).items.find(row => row.id === peerItem.item.id)?.description, "cleanup-6");
   const before = filesystemSnapshot(tracker);
   // Observer failures still clean exclusive scratch and leave peer state alone.
-  for (const phase of ["allocated", "cleanup"]) await assert.rejects(checkSdkContracts({ minimum: target, current: target, onProgress(current) {
+  for (const phase of ["allocated", "cleanup"]) await assert.rejects(checkSdkContracts({ ...matrix, onProgress(current) {
     if (current === phase) throw new Error("observer stopped");
   } }), /observer stopped/);
   assert.equal(filesystemSnapshot(tracker), before);

@@ -81,3 +81,9 @@ tracker item and PR body. Full depth is deliberately not run on the overloaded
 local host. Deep success and the 120-minute capacity margin remain unverified. Splitting
 runtime into separate matrix jobs avoids stacking the two previously measured
 75-minute gates inside a single 120-minute job.
+
+## Review round E
+
+PRRT_kwDOSZpwFM63udS7 is valid: generated deep Bun legs never called test:bun. Add that explicit behavioral gate and ordering regression. Both failing checks actually reached the 30-minute job limit; the logs stop before the overlapping caller-boundary test finishes. Retain all six competition phases using a small actual compiled SDK fixture rather than repeated copies of the full published SDK dependency graph. The targeted competition test passed; CI routing, deep workflow, typecheck, lint and strict YAML checks passed.
+
+The cheap tier excludes only inert tracker record formats; executable tracker changes keep product gates. `test/ci-routing.test.ts` executes each detector with inert and executable tracker paths. Product deadlines, full-depth cases and coverage thresholds are unchanged.
