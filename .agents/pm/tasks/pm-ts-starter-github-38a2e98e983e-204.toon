@@ -1,0 +1,40 @@
+id: pm-ts-starter-github-38a2e98e983e-204
+title: Bun release gate hangs after its last test and CI jobs have no timeout (two runners held for 2+ hours)
+description: "GH issue #204: https://github.com/unbraind/pm-ts-starter/issues/204 · author @unbraind · created 2026-11-09T11:55:55Z · updated 2026-11-09T11:55:55Z"
+type: Task
+status: in_progress
+priority: 2
+tags[4]: ci,"gh:unbraind/pm-ts-starter#204","github_author:unbraind",performance
+created_at: "2026-11-09T11:55:55Z"
+updated_at: "2026-11-15T13:51:15.436Z"
+assignee: codex-sol
+claim_principal: codex-sol
+author: pm-github
+comments[4]{created_at,author,text}:
+  "2026-11-15T13:43:47.071Z",codex-sol,"Fleet CI v2; companion pm-cli-website-dyhg. Reuse the existing hung Bun gate item. Preserve required test (22) and test (26), generated-package acceptance, committed build-output checks, strict tracker health, privacy and release verifiers. Split quick hosted PR gates from exhaustive local deep gates; add bounded jobs and deterministic test depth. No release workflow or verifier changes."
+  "2026-11-15T13:47:57.883Z",codex-sol,"Latest successful main run 43691008662: Node 22 npm/Bun gates 59m04s/58m43s; Node 26 75m10s/76m10s. gh run view --log returned empty; individual jobs API log supplied timings: seeded property 693.34s, discovery 636.63s, compiler matrix 505.66s, packed acceptance 269.96s. Quick retains deterministic prefixes and unchanged coverage thresholds; full remains deep. Generated projects inherit adapted workflows and the helper and now execute their own release gate under both installed graphs. Bun project paths are accepted; bunx is a separate local-bin smoke. The historical Bun handle leak is contained, not diagnosed as fixed."
+  "2026-11-15T13:50:43.690Z",codex-sol,"Deep uses four Node/runtime matrix legs, each with a fresh installer graph and its own 120-minute ceiling. This preserves all four full gates without stacking the measured 75-minute npm and 76-minute Bun gates in one 120-minute job. No coverage/source threshold changes."
+  "2026-11-15T13:51:15.430Z",codex-sol,"Pre-push checks: typecheck, test compilation, lint, build, duplicate gate (0%), docstrings and changelog pass. Strict health passes with inherited advisories. Strict YAML parser passes six source/generated workflows; actionlint is unavailable. Focused generator-asset, graph-failure and depth regressions pass (15 tests). Quick touched-file batch is running with a 20-minute bound; no full local run is planned. Coverage remains a required quick PR gate at the unchanged 100/100/100 thresholds."
+files[6]{path,scope}:
+  .github/workflows/ci-deep.yml,project
+  .github/workflows/ci.yml,project
+  .github/workflows/codeql.yml,project
+  backend-project.ts,project
+  templates/backend/.github/workflows/ci.yml,project
+  test/support/depth.ts,project
+tests[2]{command,scope,timeout_seconds,provenance{author,created_at,source_kind,source_ref}}:
+  "npm run typecheck && npm run build:test && npm run lint",project,240,codex-sol,"2026-11-15T13:46:25.056Z",local_mutation,ci/quick-pr-tier-deep-local-tier
+  PM_TEST_DEPTH=quick PM_TEST_TIME_SCALE=3 node --test --test-concurrency=2 test/backend.test.ts test/ci-consumer-graphs.test.ts test/depth.test.ts test/rehearsal.test.ts test/sdk-api.test.ts test/sdk-cache.test.ts test/sdk-contracts.test.ts test/sdk-path-transport.test.ts test/sdk-program-graph.test.ts test/sdk-reference-refusal.test.ts,project,1200,codex-sol,"2026-11-15T13:47:58.714Z",local_mutation,ci/quick-pr-tier-deep-local-tier
+docs[1]{path,scope}:
+  docs/ci-tiers.md,project
+github_close_reason: ""
+github_closed_at: ""
+github_created_at: "2026-11-09T11:55:55Z"
+github_link_only: false
+github_number: 204
+github_release: ""
+github_state: open
+github_state_reason: unspecified
+github_updated_at: "2026-11-09T11:55:55Z"
+github_url: "https://github.com/unbraind/pm-ts-starter/issues/204"
+body: "## What happened (2026-11-09)\n\nCI run 42590449630 (Dependabot pm-toolchain PR #203, head 1996b06) had `test (22)` and `test (26)` sitting in **Full Bun release gate** from 09:36Z and 09:54Z until the orchestrator cancelled them at 11:55Z. That is more than two hours with no output. The last test line before the hang was `✔ diagnostic output is bounded and never echoes source text or machine paths (8262 ms)`, so something after it never exits under Bun: a child process, an open handle, or a test that waits forever.\n\nThe CI jobs set no `timeout-minutes`, so GitHub's 6-hour default applies. On a shared free-tier account, two hung jobs starve every other repository's CI. 77 runs were queued fleet-wide while this happened.\n\n## Fix\n\n1. Find the test or teardown that keeps the Bun gate alive after the last test. For example, run `bun run release:check` locally with a timer, or with `--test-timeout` and active-handle reporting. Fix the leak, and add a regression that fails when a handle stays open.\n2. Add `timeout-minutes` to every CI job (`test`, `release gate`), sized at about twice the slowest healthy run, so a hang fails fast instead of holding runners.\n3. This repository is the starter for new packages, so carry the timeout into the template.\n\n## Acceptance\n\n- The Bun release gate exits within its normal duration on both Node lines.\n- Every job in `.github/workflows/ci.yml` has `timeout-minutes`."

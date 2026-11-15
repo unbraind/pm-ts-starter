@@ -1,0 +1,38 @@
+name: CI Deep
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-deep-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  deep:
+    runs-on: ${{ vars.PM_LOCAL_DEEP != 'off' && fromJSON('["self-hosted","pm-local"]') || 'ubuntu-latest' }}
+    timeout-minutes: 120
+    env:
+      PM_TEST_DEPTH: full
+      PM_TEST_TIME_SCALE: 3
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [22, 26]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+          cache-dependency-path: package.json
+      - if: runner.environment == 'github-hosted'
+        uses: oven-sh/setup-bun@v2.2.0
+      - run: bun --version
+      - run: npm install --package-lock-only --ignore-scripts
+      - run: npm ci
+      - run: npm run release:check
+      - run: rm -rf node_modules && bun install --no-save
+      - run: bun run release:check

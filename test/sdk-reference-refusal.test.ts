@@ -1,3 +1,4 @@
+import { testTimeout } from "./support/depth.ts";
 /** Reference graphs are refused before stale declarations or package roots can affect a matrix. */
 import assert from "node:assert/strict";
 import {spawnSync} from "node:child_process";
@@ -17,7 +18,7 @@ async function refused(project: string, bound: ReturnType<typeof apiConsumer>["b
 
 /** Warm a real build or force its cold recheck without parsing compiler output. */
 function build(project: string): {status: number | null; stdout: string} {
-  const result = spawnSync(process.execPath, [join(project, "node_modules/typescript/bin/tsc"), "-b", "--force", "--pretty", "false"], {cwd: project, encoding: "utf8", timeout: 30000});
+  const result = spawnSync(process.execPath, [join(project, "node_modules/typescript/bin/tsc"), "-b", "--force", "--pretty", "false"], {cwd: project, encoding: "utf8", timeout: testTimeout(30000)});
   assert.equal(result.error, undefined); assert.equal(result.signal, null);
   return {status: result.status, stdout: result.stdout};
 }

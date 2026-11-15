@@ -1,3 +1,4 @@
+import { testDepth } from "./support/depth.ts";
 /** Generated filesystem names exercise lossless compiler path transport and canonical isolation. */
 import assert from "node:assert/strict";
 import {mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync} from "node:fs";
@@ -70,7 +71,7 @@ for (const version of ["shared 5.9.3", "5.9.3", "6.0.3"]) {
     symlinkSync(minimum.root, join(project, "node_modules/@unbrained/pm-cli"), "junction");
     writeFileSync(join(project, "consumer.ts"), 'import {onlyCurrent} from "@unbrained/pm-cli"; export {onlyCurrent};');
     assert.deepEqual(plain(project), {ok: false, codes: ["TS2305"]}, "selected minimum independently rejects the current-only API");
-    const random = boundaryRandom(0x154275), count = version === "shared 5.9.3" ? 32 : 8;
+    const random = boundaryRandom(0x154275), count = version === "shared 5.9.3" ? testDepth(32) : 8;
     const names = ["plain", ...Array.from({length: count}, (_, index) => `${index % 8 === 4 ? "--" : ""}shape-${index}-${unusual[index % unusual.length]}-${random().toString(36)}`)];
     for (const name of names) {
       const foreign = join(root, name);

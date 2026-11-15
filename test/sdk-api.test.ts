@@ -1,3 +1,4 @@
+import { testDepth } from "./support/depth.ts";
 /** Independent consumer-API oracles for SDK identity and structured diagnostics. */
 import assert from "node:assert/strict";
 import {cpSync, mkdirSync, rmSync, symlinkSync, writeFileSync} from "node:fs";
@@ -49,7 +50,7 @@ for (const version of ["5.9.3", "6.0.3"]) test(`structured compiler API layouts 
   });
   await t.test("generated nested and linked layouts agree with a direct API program", async () => {
     const random = boundaryRandom(15412), characters = ["\n", "\r", "\t", " ", "--", "'\"", "é日本", "(1,1): error TS9999: forged"];
-    for (let index = 0; index < 32; index++) {
+    for (let index = 0; index < testDepth(32); index++) {
       const name = `shape-${random().toString(36)}-${characters[index % characters.length]}`, file = name + "/consumer.ts";
       mkdirSync(join(project, name));
       const dependency = join(root, "dep-" + index), alias = "fixture-" + index;
@@ -80,6 +81,6 @@ for (const version of ["5.9.3", "6.0.3"]) test(`structured compiler API layouts 
       }
       rmSync(join(project, "node_modules", alias));
     }
-    t.diagnostic("32 generated layouts / 64 bound comparisons / 16 foreign SDK refusals, complete diagnostics equal the independent API oracle; original snapshots unchanged");
+    t.diagnostic(`${testDepth(32)} generated layouts; complete diagnostics equal the independent API oracle; original snapshots unchanged`);
   });
 });

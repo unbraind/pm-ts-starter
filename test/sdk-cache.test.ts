@@ -1,3 +1,4 @@
+import { testTimeout } from "./support/depth.ts";
 /** Differential controls for warm consumer caches and independently compiled SDK bounds. */
 import assert from "node:assert/strict";
 import {spawnSync} from "node:child_process";
@@ -10,7 +11,7 @@ import {dependencyBound, filesystemSnapshot, versionedCompiler, directApiDiagnos
 
 /** Invoke the real compiler directly; no checker parsing or synthetic compiler diagnostics. */
 function plain(entry: string, project: string): {ok: boolean; codes: string[]} {
-  const result = spawnSync(process.execPath, [entry, "--project", "tsconfig.json", "--noEmit", "--pretty", "false"], {cwd: project, encoding: "utf8", timeout: 30000});
+  const result = spawnSync(process.execPath, [entry, "--project", "tsconfig.json", "--noEmit", "--pretty", "false"], {cwd: project, encoding: "utf8", timeout: testTimeout(30000)});
   assert.equal(result.error, undefined); assert.equal(result.signal, null);
   return {ok: result.status === 0, codes: directApiDiagnostics(project).map(d => d.code)};
 }

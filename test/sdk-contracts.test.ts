@@ -1,3 +1,4 @@
+import { testDepth, testTimeout } from "./support/depth.ts";
 /** Real compiler, isolated tracker and emitted-package compatibility contracts. */
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
@@ -44,7 +45,7 @@ function publishedSdks(): { root: string; minimum: string; current: string } {
   const root = mkdtempSync(join(tmpdir(), "sdk-published-test-"));
   published = { root, minimum: join(root, "minimum/node_modules/@unbrained/pm-cli"), current: join(root, "current/node_modules/@unbrained/pm-cli") };
   for (const [name, version] of [["minimum", minimumVersion], ["current", currentVersion]]) {
-    const install = spawnSync("npm", ["install", "--prefer-offline", "--prefix", join(root, name!), "--ignore-scripts", "--no-package-lock", "--no-audit", "--no-fund", `@unbrained/pm-cli@${version}`], { encoding: "utf8", timeout: INSTALL_TIMEOUT_MS, env: installationEnv() });
+    const install = spawnSync("npm", ["install", "--prefer-offline", "--prefix", join(root, name!), "--ignore-scripts", "--no-package-lock", "--no-audit", "--no-fund", `@unbrained/pm-cli@${version}`], { encoding: "utf8", timeout: testTimeout(INSTALL_TIMEOUT_MS), env: installationEnv() });
     assert.equal(install.status, 0, install.stderr || install.stdout || install.error?.message || "Package installation failed.");
   }
   return published;
@@ -254,7 +255,7 @@ test("registered command supports both flag forms, typed refusals and nonzero dr
 
 /** Get the exact npm archive filename through JSON, including whitespace and control characters. */
 function packedFixture(source: string, destination: string): string {
-  const archive = spawnSync("npm", ["pack", "--ignore-scripts", "--json", "--pack-destination", destination], {cwd: source, encoding: "utf8", timeout: 30000, env: installationEnv()});
+  const archive = spawnSync("npm", ["pack", "--ignore-scripts", "--json", "--pack-destination", destination], {cwd: source, encoding: "utf8", timeout: testTimeout(30000), env: installationEnv()});
   assert.equal(archive.status, 0, archive.stderr);
   return join(destination, (JSON.parse(archive.stdout) as {filename: string}[])[0]!.filename);
 }
@@ -271,7 +272,7 @@ test("packed npm and Bun consumers resolve each exact SDK bound and compile emit
     t.after(() => { for (const name of ["authoring.ts", "complete-read.ts", "emitted-consumer.ts", "consumer.mjs", "tsconfig.json", "tracker"]) rmSync(join(project, name), {recursive: true, force: true}); });
     const install = spawnSync(runtime, runtime === "npm"
       ? ["install", "--prefer-offline", "--ignore-scripts", "--no-audit", "--no-fund", "--no-package-lock", tarball]
-      : ["add", "--ignore-scripts", tarball], { cwd: project, encoding: "utf8", timeout: INSTALL_TIMEOUT_MS, env: installationEnv() });
+      : ["add", "--ignore-scripts", tarball], { cwd: project, encoding: "utf8", timeout: testTimeout(INSTALL_TIMEOUT_MS), env: installationEnv() });
     assert.equal(install.status, 0, install.stderr || install.stdout || install.error?.message || "Package installation failed.");
     const emitted = join(project, "node_modules/pm-ts-starter/dist/index.js").replaceAll("\\", "/");
     const ownMinimum = join(installedConsumer(runtime as "npm" | "bun", "minimum"), "node_modules/@unbrained/pm-cli");
@@ -300,7 +301,7 @@ const sdkVersion = JSON.parse(readFileSync(resolved, 'utf8')).version;
 const sdkEntry = require.resolve('@unbrained/pm-cli/sdk');
 console.log(JSON.stringify({sdkVersion, resolved, sdkEntry, matrix: await checkSdkContracts(${JSON.stringify(options)})}));`);
     const executable = runtime === "npm" ? process.execPath : bunExecutable();
-    const run = spawnSync(executable, [entry], { cwd: project, encoding: "utf8", timeout: 120000, env: { ...process.env, GIT_CEILING_DIRECTORIES: root } });
+    const run = spawnSync(executable, [entry], { cwd: project, encoding: "utf8", timeout: testTimeout(120000), env: { ...process.env, GIT_CEILING_DIRECTORIES: root } });
     assert.equal(run.status, 0, `${runtime} ${bound}: ${run.error?.message ?? run.stderr}`);
     const receipt = JSON.parse(run.stdout) as { sdkVersion: string; resolved: string; sdkEntry: string; matrix: { ok: boolean; checks: number; rows: { sdk: string; target: string }[] } };
     assert.equal(receipt.sdkVersion, version, `${runtime} ${bound} resolved SDK`);
@@ -313,24 +314,24 @@ console.log(JSON.stringify({sdkVersion, resolved, sdkEntry, matrix: await checkS
     // Keep activated extensions outside the compiler's consumer input tree.
     const tracker = join(root, `${runtime}-${bound}-tracker`);
     const initialized = spawnSync(executable, ["--input-type=module", "-e", `import {PmClient} from '@unbrained/pm-cli/sdk';
-await new PmClient({pmRoot:${JSON.stringify(tracker)},noExtensions:true,author:'fixture'}).init('packed');`], {cwd: project, encoding: "utf8", timeout: 30000});
+await new PmClient({pmRoot:${JSON.stringify(tracker)},noExtensions:true,author:'fixture'}).init('packed');`], {cwd: project, encoding: "utf8", timeout: testTimeout(30000)});
     assert.equal(initialized.status, 0, initialized.stderr);
     const cli = join(project, "node_modules/@unbrained/pm-cli/dist/cli.js");
-    const activated = spawnSync(executable, [cli, "--pm-path", tracker, "package", "install", join(project, "node_modules/pm-ts-starter"), "--project"], { cwd: project, encoding: "utf8", timeout: 30000 });
+    const activated = spawnSync(executable, [cli, "--pm-path", tracker, "package", "install", join(project, "node_modules/pm-ts-starter"), "--project"], { cwd: project, encoding: "utf8", timeout: testTimeout(30000) });
     assert.equal(activated.status, 0, activated.stderr);
-    const helpRun = spawnSync(executable, [cli, '--pm-path', tracker, 'ts-starter', 'sdk-contracts', '--help'], {cwd: project, encoding: 'utf8', timeout: 30000});
+    const helpRun = spawnSync(executable, [cli, '--pm-path', tracker, 'ts-starter', 'sdk-contracts', '--help'], {cwd: project, encoding: 'utf8', timeout: testTimeout(30000)});
     assert.equal(helpRun.status, 0, helpRun.stderr);
     assert.match(helpRun.stdout.replace(/\s+/g, ' '), /external shell\/JavaScript wrappers are rejected/);
     for (const format of [[], ["--json"]]) {
       const cliRun = spawnSync(executable, [cli, "--pm-path", tracker, "ts-starter", "sdk-contracts", "--minimum-sdk", ownMinimum,
         "--current-sdk", ownCurrent, "--current-version", currentVersion, "--compiler", compiler, ...format], {
-        cwd: project, encoding: "utf8", timeout: 120000, env: { ...process.env, PATH: noGit, npm_node_execpath: process.execPath, GIT_CEILING_DIRECTORIES: root },
+        cwd: project, encoding: "utf8", timeout: testTimeout(120000), env: { ...process.env, PATH: noGit, npm_node_execpath: process.execPath, GIT_CEILING_DIRECTORIES: root },
       });
       assert.equal(cliRun.status, 0, cliRun.stderr);
       if (format.length) assert.equal(JSON.parse(cliRun.stdout).checks, 4);
       else assert.match(cliRun.stdout, /checks: 4/);
       verified.add(`${runtime}/${bound}/cli-${format.length ? "json" : "toon"}`);
-      const refused = spawnSync(executable, [cli, '--pm-path', tracker, 'ts-starter', 'sdk-contracts', '--minimum-sdk', ownMinimum, '--current-sdk', ownCurrent, '--current-version', currentVersion, '--compiler', wrapper, ...format], {cwd: project, encoding: 'utf8', timeout: 30000});
+      const refused = spawnSync(executable, [cli, '--pm-path', tracker, 'ts-starter', 'sdk-contracts', '--minimum-sdk', ownMinimum, '--current-sdk', ownCurrent, '--current-version', currentVersion, '--compiler', wrapper, ...format], {cwd: project, encoding: 'utf8', timeout: testTimeout(30000)});
       assert.equal(refused.status, 2, refused.stderr);
       assert.match(refused.stdout + refused.stderr, /compiler_unavailable/);
       assert.match(refused.stdout + refused.stderr, /wrappers are rejected/);
@@ -340,7 +341,7 @@ await new PmClient({pmRoot:${JSON.stringify(tracker)},noExtensions:true,author:'
     assert.deepEqual([...verified].filter(key => key.startsWith(lane)).sort(), paths.filter(path => path !== "sdk-no-git").map(path => lane + path).sort(), "every installed graph must certify every SDK/CLI representation and refusal");
     // The same packed module also works with PATH containing no git (or other tools).
     const noGitRun = spawnSync(executable, [entry], {
-      cwd: project, encoding: "utf8", timeout: 120000, env: { ...process.env, PATH: noGit, npm_node_execpath: process.execPath, GIT_CEILING_DIRECTORIES: root },
+      cwd: project, encoding: "utf8", timeout: testTimeout(120000), env: { ...process.env, PATH: noGit, npm_node_execpath: process.execPath, GIT_CEILING_DIRECTORIES: root },
     });
     assert.equal(noGitRun.status, 0, `${runtime} ${bound}: ${noGitRun.error?.message ?? noGitRun.stderr}`);
     assert.equal(JSON.parse(noGitRun.stdout).matrix.ok, true);
@@ -365,7 +366,7 @@ function installedConsumer(runtime: "npm" | "bun", bound: "minimum" | "current")
   writeFileSync(join(root, "package.json"), JSON.stringify({ private: true, type: "module" }));
   const packages = [`@unbrained/pm-cli@${version}`, "typescript@5.9.3", "@types/node@26.6.5"];
   const result = spawnSync(runtime, runtime === "npm" ? ["install", "--save-exact", "--prefer-offline", "--ignore-scripts", "--no-audit", "--no-fund", ...packages]
-    : ["add", "--exact", "--ignore-scripts", ...packages], { cwd: root, encoding: "utf8", timeout: INSTALL_TIMEOUT_MS, env: installationEnv() });
+    : ["add", "--exact", "--ignore-scripts", ...packages], { cwd: root, encoding: "utf8", timeout: testTimeout(INSTALL_TIMEOUT_MS), env: installationEnv() });
   assert.ifError(result.error);
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const verify = spawnSync(runtime === "npm" ? process.execPath : "bun", ["--input-type=module", "-e", `
@@ -449,7 +450,7 @@ function compareOracle(matrix: SdkContractMatrix, receipt: string, source: strin
 
 test("differential compiler matrix covers node16 nodenext bundler, ESM import CJS require, types types@ typesVersions and both bounds", async t => {
   const root = scratch(t);
-  let rows = 0, drift = 0;
+  let rows = 0, drift = 0, cases = 0, expectedDrift = 0;
   for (const runtime of ["npm", "bun"] as const) {
     // Both installed endpoints are independently verified under this package manager.
     const project = installedConsumer(runtime, "minimum");
@@ -462,6 +463,8 @@ test("differential compiler matrix covers node16 nodenext bundler, ESM import CJ
       for (const resolution of ["node16", "nodenext", "bundler"]) for (const mode of ["esm", "cjs"]) {
         const config = consumerConfig(project, resolution, mode);
         for (const control of ["common", "onlyImport"]) {
+          if (cases >= testDepth(72)) continue;
+          cases++;
           const source = mode === "esm" ? `import {api${control === "onlyImport" ? ", onlyImport" : ""}} from "@unbrained/pm-cli/sdk"; export const use = api.${control};`
             : `import sdk = require("@unbrained/pm-cli/sdk"); ${control === "onlyImport" ? 'import {onlyImport} from "@unbrained/pm-cli/sdk";' : ""} export const use = sdk.api.${control};`;
           writeFileSync(join(project, `consumer.${mode === "esm" ? "mts" : "cts"}`), source);
@@ -469,6 +472,7 @@ test("differential compiler matrix covers node16 nodenext bundler, ESM import CJ
           const matrix = await checkSdkContracts({ minimum, current, consumer: project });
           compareOracle(matrix, receipt, project, config);
           const expected = control === "common" || (layout === "types" && mode === "esm");
+          expectedDrift += expected ? 0 : 2;
           assert.equal(matrix.ok, expected, `${runtime}/${layout}/${resolution}/${mode}/${control}`);
           if (!expected) for (const row of matrix.rows) {
             assert.ok(row.codes.includes("TS2339"), row.codes.join(","));
@@ -480,7 +484,8 @@ test("differential compiler matrix covers node16 nodenext bundler, ESM import CJ
       }
     }
   }
-  assert.equal(rows, 144); assert.equal(drift, 60);
+  assert.equal(cases, testDepth(72));
+  assert.equal(rows, cases * 2); assert.equal(drift, expectedDrift);
   t.diagnostic(`Differential matrix: ${rows}/${rows} compiler verdicts agree; ${drift} drift, ${rows - drift} clean.`);
 });
 
@@ -869,7 +874,7 @@ test("original discovery differential corpus equals plain tsc file lists, verdic
     ...["traceResolution", "explainFiles", "diagnostics", "extendedDiagnostics", "listFiles", "listEmittedFiles"].flatMap(name => [false, true].map(failing => ({name: `${name}-${failing ? "error" : "clean"}`, config: {compilerOptions: {[name]: true}, include: ["input/src/**/*"]}, files: {"src/consumer.mts": failing ? 'import {value} from "./contract.mjs"; export const use: string = value;' : good}}))),
   ];
   let comparisons = 0;
-  for (const entry of corpus) {
+  for (const entry of corpus.slice(0, testDepth(corpus.length))) {
     rmSync(join(project, "input"), {recursive: true, force: true});
     for (const [file, content] of Object.entries({"src/consumer.mts": good, "src/contract.d.mts": "export declare const value: number;", ...entry.files})) {
       mkdirSync(dirname(join(project, "input", file)), {recursive: true});
@@ -888,7 +893,7 @@ test("original discovery differential corpus equals plain tsc file lists, verdic
     }
 
   }
-  t.diagnostic(`Discovery differential: ${corpus.length} configs, ${comparisons} verdict/error-code comparisons; all filesystem snapshots unchanged outside the copied bound sandbox.`);
+  t.diagnostic(`Discovery differential: ${testDepth(corpus.length)} configs, ${comparisons} verdict/error-code comparisons; all filesystem snapshots unchanged outside the copied bound sandbox.`);
 });
 
 
@@ -1124,7 +1129,7 @@ const server=createServer((req,res)=>{
   const provision = join(root, "provision"); mkdirSync(provision);
   const npmrc = `@fixture:registry=http://127.0.0.1:${port}/\n//127.0.0.1:${port}/:_authToken=synthetic-fixture-token\n`;
   writeFileSync(join(provision, ".npmrc"), npmrc);
-  const install = spawnSync("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund", "@fixture/private@1.0.0"], {cwd: provision, encoding: "utf8", timeout: 30000, env: installationEnv()});
+  const install = spawnSync("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund", "@fixture/private@1.0.0"], {cwd: provision, encoding: "utf8", timeout: testTimeout(30000), env: installationEnv()});
   assert.equal(install.status, 0, install.stderr || install.stdout || install.error?.message || "Package installation failed.");
   cpSync(join(provision, "node_modules/@fixture"), join(project, "node_modules/@fixture"), {recursive: true});
   writeFileSync(join(project, ".npmrc"), npmrc + "global=true\nprefix=../../tripwire\n");
@@ -1202,11 +1207,11 @@ test("round 10 dependency-shape differential preserves aliases file link workspa
   t.diagnostic(`Dependency corpus: ${cases.length} installed shapes, 24 untouched plain-tsc oracles, ${comparisons} bound comparisons; matching verdicts and error codes, including the alias-fixture/actual-fixture review case.`);
 });
 
-test("round 10 property preserves 200 random alias scoped file dependency graphs by installed import name", async t => {
+test("round 10 property preserves seeded random alias scoped file dependency graphs by installed import name", async t => {
   const results: {graphs: number; edges: number}[] = [];
   // Keep every deterministic graph while limiting active compiler workers to two.
-  for (const shards of [[0, 1], [2, 3]]) results.push(...await Promise.all(shards.map(shard => new Promise<{graphs: number; edges: number}>((resolveWorker, reject) => {
-    const worker = new Worker(new URL("./dependency-property-worker.ts", import.meta.url), {workerData: {shard, compiler}});
+  for (const shards of [[0, 1], [2, 3]]) results.push(...await Promise.all(shards.filter(shard => shard * 50 < testDepth(200)).map(shard => new Promise<{graphs: number; edges: number}>((resolveWorker, reject) => {
+    const worker = new Worker(new URL("./dependency-property-worker.ts", import.meta.url), {workerData: {shard, compiler, graphs: Math.min(50, testDepth(200) - shard * 50)}});
     let result: {graphs: number; edges: number} | undefined;
     t.after(() => worker.terminate());
     worker.once("message", message => { result = message; });
@@ -1216,8 +1221,8 @@ test("round 10 property preserves 200 random alias scoped file dependency graphs
       else reject(new Error(`dependency property worker exited ${code} without a completed result`));
     });
   }))));
-  assert.equal(results.reduce((sum, row) => sum + row.graphs, 0), 200);
-  t.diagnostic(`Dependency property: 4 deterministic shards, at most 2 active workers, 200 independent random graphs, ${results.reduce((sum, row) => sum + row.edges, 0)} edges, alias/scoped/file shapes and nested aliases; 200 passing plain-tsc oracles, 400 checker rows without drift; all original tree snapshots unchanged.`);
+  assert.equal(results.reduce((sum, row) => sum + row.graphs, 0), testDepth(200));
+  t.diagnostic(`Dependency property: up to 4 deterministic shards, at most 2 active workers, ${testDepth(200)} independent random graphs, ${results.reduce((sum, row) => sum + row.edges, 0)} edges, alias/scoped/file shapes and nested aliases; ${testDepth(200)} passing plain-tsc oracles, ${2 * testDepth(200)} checker rows without drift; all original tree snapshots unchanged.`);
 });
 
 

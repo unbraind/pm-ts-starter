@@ -1,3 +1,4 @@
+import { testTimeout } from "./support/depth.ts";
 /** Behavioral contracts use real trackers and untrusted transport envelopes. */
 import assert from "node:assert/strict";
 import { accessSync, constants, existsSync, mkdtempSync, rmSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync, symlinkSync } from "node:fs";
@@ -7,7 +8,7 @@ import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import test, { type TestContext } from "node:test";
 import { PmClient } from "@unbrained/pm-cli/sdk";
 import { createDirectoryAdapter, createRemoteAdapter, parseCliInvocation } from "../backend.ts";
-import { buildBackendProjectFiles, generateBackendProject, readBackendSource } from "../backend-project.ts";
+import { buildBackendProjectFiles, generateBackendProject, readBackendSource, readProjectAsset } from "../backend-project.ts";
 import extension from "../index.ts";
 import { createExtensionTestHarness } from "@unbrained/pm-cli/sdk/testing";
 
@@ -61,7 +62,7 @@ function runBoundedCommand(
     cwd: options.cwd,
     env: options.env,
     encoding: "utf8",
-    timeout: options.timeoutMs ?? GENERATED_COMMAND_TIMEOUT_MS,
+    timeout: testTimeout(options.timeoutMs ?? GENERATED_COMMAND_TIMEOUT_MS),
   });
 }
 
@@ -84,6 +85,7 @@ function generatedProjectEnv(source: NodeJS.ProcessEnv, root: string, bin: strin
   const clean = Object.fromEntries(Object.entries(source).filter(([key]) =>
     /^(PATH|PATHEXT|SYSTEMROOT|WINDIR|COMSPEC|TEMP|TMP|TMPDIR|LANG|LC_[A-Z_]+|TZ|TERM|CI)$/i.test(key)));
   return { ...clean, PATH: bin, HOME: root, USERPROFILE: root, XDG_CONFIG_HOME: join(root, ".config"),
+    PM_TEST_DEPTH: source.PM_TEST_DEPTH ?? "full", PM_TEST_TIME_SCALE: source.PM_TEST_TIME_SCALE ?? "1",
     GIT_CEILING_DIRECTORIES: dirname(root), NPM_CONFIG_USERCONFIG: devNull, npm_config_userconfig: devNull,
     NPM_CONFIG_GLOBALCONFIG: join(root, "empty-global-npmrc"), npm_config_globalconfig: join(root, "empty-global-npmrc"),
     NPM_CONFIG_REGISTRY: "https://registry.npmjs.org", npm_config_registry: "https://registry.npmjs.org" };
@@ -105,15 +107,18 @@ async function verifyGeneratedConsumers(
   for (const runtime of ["npm", "bun"] as const) {
     const project = join(root, runtime);
     assert.equal(generateBackendProject(project, "pm-contract").ok, true);
+    for (const path of [".github/workflows/ci.yml", ".github/workflows/ci-deep.yml", ".github/workflows/codeql.yml", "test/support/depth.ts"]) {
+      assert.equal(readFileSync(join(project, path), "utf8"), readFileSync(new URL("../" + (path.startsWith("test/") ? path : "templates/backend/" + path), import.meta.url), "utf8"));
+    }
     const manifest = JSON.parse(readFileSync(join(project, "package.json"), "utf8"));
     assert.equal(Object.hasOwn(manifest.dependencies ?? {}, "@toon-format/toon"), false, "host owns the codec dependency");
     const commands = runtime === "npm"
-      ? [["install", "--ignore-scripts", "--no-audit", "--no-fund"], ["run", "build"], ["test"]]
-      : [["install", "--ignore-scripts", "--no-save"], ["run", "build"], ["run", "test:bun"]];
+      ? [["install", "--ignore-scripts", "--no-audit", "--no-fund"], ["run", "build"], ["run", "release:check"]]
+      : [["install", "--ignore-scripts", "--no-save"], ["run", "build"], ["run", "release:check"], ["run", "test:bun"]];
     for (const args of commands) {
       const result = run(join(bin, runtime), args, { cwd: project, env });
       assert.equal(result.status, 0, `${runtime}: ${commandText(result)}`);
-      if (args.includes("test")) assert.match(commandText(result), /tests 1/);
+      if (args.includes("release:check")) assert.match(commandText(result), /tests 1/);
       if (args.includes("test:bun")) assert.match(commandText(result), /1 pass/);
     }
     await verify(project, runtime);
@@ -123,12 +128,12 @@ async function verifyGeneratedConsumers(
 test("consumer graph ownership and every install/build/contract/acceptance failure are load-bearing", async (t) => {
   const success = runBoundedCommand(process.execPath, ["-e", 'console.log("tests 1\\n1 pass")']);
   const failure = runBoundedCommand(process.execPath, ["-e", 'console.error("injected consumer failure"); process.exit(23)']);
-  const required = ["npm/install", "npm/build", "npm/contracts", "npm/acceptance", "bun/install", "bun/build", "bun/contracts", "bun/acceptance"];
+  const required = ["npm/install", "npm/build", "npm/contracts", "npm/acceptance", "bun/install", "bun/build", "bun/contracts", "bun/native", "bun/acceptance"];
   for (const fault of [undefined, ...required]) await t.test(fault ?? "healthy independent graphs", async () => {
     const root = scratch(t), bin = join(root, "bin"), seen: string[] = [], projects = new Map<ConsumerRuntime, string>();
     const run: typeof runBoundedCommand = (command, args, options) => {
       const runtime = command === join(bin, "npm") ? "npm" : "bun";
-      const phase = args[0] === "install" ? "install" : args.includes("build") ? "build" : "contracts";
+      const phase = args[0] === "install" ? "install" : args.includes("build") ? "build" : args.includes("test:bun") ? "native" : "contracts";
       const project = options?.cwd; assert.ok(project);
       const marker = join(project, "node_modules", "installed-by");
       if (phase === "install") {
@@ -221,6 +226,14 @@ test("a leading option is a flag, not the generated CLI tracker path", () => {
   const cli = buildBackendProjectFiles("pm-contract")["src/cli.ts"];
   assert.match(cli, /parseCliInvocation\(process\.argv\.slice\(2\)\)/);
   assert.doesNotMatch(cli, /tracker = "\.agents\/pm"/);
+});
+
+test("generator assets resolve from source and compiled package layouts", () => {
+  const path = "test/support/depth.ts";
+  const source = new URL("../backend-project.ts", import.meta.url).href;
+  const compiled = new URL("../dist/backend-project.js", import.meta.url).href;
+  assert.equal(readProjectAsset(path, source), readProjectAsset(path, compiled));
+  assert.match(readProjectAsset(path, source), /export function testDepth/);
 });
 
 test("generated project commands stop at their ceiling and keep failed exits", () => {

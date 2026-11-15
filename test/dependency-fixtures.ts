@@ -1,3 +1,4 @@
+import { testTimeout } from "./support/depth.ts";
 /** Installed dependency fixtures shared by corpus and property oracles. */
 import assert from "node:assert/strict";
 import {spawnSync} from "node:child_process";
@@ -15,7 +16,7 @@ export const INSTALL_TIMEOUT_MS = Number.isInteger(configuredInstallTimeout) && 
 /** Resolve the Bun executable without a preload script (it runs before -e and may write to stdout); name Bun on failure. */
 export function bunExecutable(): string {
   const { BUN_INSPECT_PRELOAD: _preload, ...env } = process.env;
-  const found = spawnSync("bun", ["-e", "process.stdout.write(JSON.stringify(process.execPath))"], { encoding: "utf8", env, timeout: 10_000 });
+  const found = spawnSync("bun", ["-e", "process.stdout.write(JSON.stringify(process.execPath))"], { encoding: "utf8", env, timeout: testTimeout(10_000) });
   assert.ok(found.status === 0 && !found.error && found.stdout, `Bun lookup failed (install Bun for the packed Bun checks): ${found.error?.message ?? found.stderr}`);
   return JSON.parse(found.stdout) as string;
 }
@@ -60,7 +61,7 @@ export function boundaryRandom(seed: number): () => number {
 /** Provision an exact unmodified public compiler without lifecycle scripts or user credentials. */
 export function installTestCompiler(directory: string, version: string): void {
   const result = spawnSync("npm", ["install", "--prefer-offline", "--prefix", directory, "--ignore-scripts", "--no-package-lock", "--no-audit", "--no-fund", `typescript@${version}`], {
-    encoding: "utf8", timeout: INSTALL_TIMEOUT_MS, env: {...Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toLowerCase() !== "npm_config_allow_scripts")), NPM_CONFIG_USERCONFIG: devNull, npm_config_userconfig: devNull},
+    encoding: "utf8", timeout: testTimeout(INSTALL_TIMEOUT_MS), env: {...Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toLowerCase() !== "npm_config_allow_scripts")), NPM_CONFIG_USERCONFIG: devNull, npm_config_userconfig: devNull},
   });
   assert.equal(result.status, 0, `npm install typescript@${version} failed (status ${result.status}, signal ${result.signal}, error ${result.error?.message ?? "none"}): ${result.stderr}`);
 }
@@ -110,7 +111,7 @@ if(!config){diagnostics.push(...errors);return;}
 diagnostics.push(...ts.getPreEmitDiagnostics(ts.createProgram({rootNames:config.fileNames,options:config.options,projectReferences:config.projectReferences,configFileParsingDiagnostics:config.errors})));}
 check(path.join(root,'tsconfig.json'));
 process.stdout.write(JSON.stringify(diagnostics.filter(d=>d.category===ts.DiagnosticCategory.Error).map(d=>{const pos=d.file&&d.start!==undefined?d.file.getLineAndCharacterOfPosition(d.start):undefined;return {code:'TS'+d.code,file:d.file?location(d.file.fileName):'<config>',message:ts.flattenDiagnosticMessageText(d.messageText,'\\n').replaceAll(root,'.').replaceAll(root.split(path.sep).join('/'),'.'),line:pos?pos.line+1:0,column:pos?pos.character+1:0};})));`;
-  const run = spawnSync(process.execPath, ["-e", script, project], {encoding: "utf8", timeout: 30000,
+  const run = spawnSync(process.execPath, ["-e", script, project], {encoding: "utf8", timeout: testTimeout(30000),
     env: {...Object.fromEntries(Object.entries(process.env).filter(([key]) => !/NODE_OPTIONS|NODE_PATH|NODE_V8_COVERAGE|NODE_COMPILE_CACHE|BUN_RUNTIME_TRANSPILER_CACHE_PATH|TOKEN|SECRET|PASSWORD|CREDENTIAL|NPM_MEDIA_SERVER/i.test(key))), NODE_V8_COVERAGE: ""},
   });
   assert.equal(run.status, 0, run.stderr);
