@@ -10,7 +10,7 @@ export function testDepth(full: number): number {
 /** Scale harness watchdogs only; product deadline assertions remain unchanged. */
 export function testTimeout(milliseconds: number, value = process.env.PM_TEST_TIME_SCALE ?? "1"): number {
   const scale = Number(value);
-  if (!Number.isFinite(scale) || scale <= 0 || !Number.isSafeInteger(Math.ceil(milliseconds * scale))) {
+  if (!Number.isFinite(scale) || scale <= 0 || !Number.isSafeInteger(Math.ceil(milliseconds * scale)) || Math.ceil(milliseconds * scale) > 2_147_483_647) {
     throw new Error("PM_TEST_TIME_SCALE must yield a positive safe timeout");
   }
   return Math.ceil(milliseconds * scale);

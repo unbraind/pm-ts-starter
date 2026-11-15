@@ -20,5 +20,5 @@ test("depth defaults to full and quick preserves a deterministic prefix with a f
 test("scaled harness deadlines are integer milliseconds and reject invalid factors", () => {
   assert.equal(testTimeout(101, "1.5"), 152);
   assert.equal(testTimeout(30_000, "3"), 90_000);
-  for (const value of ["", "0", "-1", "NaN", "Infinity"]) assert.throws(() => testTimeout(100, value), /PM_TEST_TIME_SCALE/);
+  for (const value of ["", "0", "-1", "NaN", "Infinity", "100000000"]) assert.throws(() => testTimeout(100, value), /PM_TEST_TIME_SCALE/);
 });
