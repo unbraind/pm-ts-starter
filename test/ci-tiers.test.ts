@@ -7,7 +7,7 @@ import { join, matchesGlob } from "node:path";
 import test from "node:test";
 import { parseDocument } from "yaml";
 
-interface Step { name?: string; run?: string; uses?: string; if?: string }
+interface Step { name?: string; run?: string; uses?: string; if?: string; with?: Record<string, unknown> }
 interface Workflow {
   on: Record<string, { paths?: string[] }>;
   jobs: Record<string, { "runs-on": string; "timeout-minutes": number; steps: Step[]; strategy?: { matrix: Record<string, unknown> } }>;
@@ -92,5 +92,17 @@ test("all root and shipped workflow YAML parses strictly", () => {
     for (const name of readdirSync(new URL("../" + directory, import.meta.url))) {
       if (/\.ya?ml$/.test(name)) workflow(directory + name);
     }
+  }
+});
+
+
+test("template checkouts do not retain credentials for validation jobs", () => {
+  const directory = "templates/backend/.github/workflows/";
+  for (const name of readdirSync(new URL("../" + directory, import.meta.url))) {
+    if (!/\.ya?ml$/.test(name)) continue;
+    const checkouts = Object.values(workflow(directory + name).jobs)
+      .flatMap(job => job.steps).filter(step => step.uses?.startsWith("actions/checkout@"));
+    assert.ok(checkouts.length > 0, `${name}: checkout contract must exercise a checkout`);
+    for (const checkout of checkouts) assert.equal(checkout.with?.["persist-credentials"], false, name);
   }
 });
