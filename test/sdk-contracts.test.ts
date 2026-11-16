@@ -275,7 +275,7 @@ test("packed npm and Bun consumers resolve each exact SDK bound and compile emit
   const tarball = packedFixture(repo, root);
   const noGit = join(root, "no-git"); mkdirSync(noGit);
   const verified = new Set<string>();
-  const paths = ["sdk", "cli-json", "cli-toon", "refusal-json", "refusal-toon", "sdk-no-git"];
+  const paths = ["sdk", "cli-json", "cli-toon", "refusal-json", "refusal-toon", "sdk-no-git"].slice(0, testDepth(6, 1));
   const lanes = [["npm", "minimum"], ["npm", "current"], ["bun", "minimum"], ["bun", "current"]] as const;
   // Exhaustive installed SDK/CLI representations belong to deep; quick keeps one complete real installed graph.
   const selectedLanes = process.env.PM_TEST_DEPTH === "quick" ? lanes.filter(([runtime, bound]) => runtime === "npm" && bound === "current") : lanes;
@@ -324,6 +324,7 @@ console.log(JSON.stringify({sdkVersion, resolved, sdkEntry, matrix: await checkS
     assert.equal(receipt.matrix.ok, true, JSON.stringify(receipt.matrix)); assert.equal(receipt.matrix.checks, 2);
     assert.deepEqual(receipt.matrix.rows.map(row => row.sdk), [minimumVersion, currentVersion]);
     verified.add(`${runtime}/${bound}/sdk`);
+    if (testDepth(6, 1) === 1) continue;
     // Keep activated extensions outside the compiler's consumer input tree.
     const tracker = join(root, `${runtime}-${bound}-tracker`);
     const initialized = spawnSync(executable, ["--input-type=module", "-e", `import {PmClient} from '@unbrained/pm-cli/sdk';
@@ -475,7 +476,8 @@ test("differential compiler matrix covers node16 nodenext bundler, ESM import CJ
       for (const resolution of ["node16", "nodenext", "bundler"]) for (const mode of ["esm", "cjs"]) {
         const config = consumerConfig(project, resolution, mode);
         for (const control of ["common", "onlyImport"]) {
-          if (cases >= testDepth(72)) continue;
+          const lane = ["types", "types@", "typesVersions"].indexOf(layout) + ["node16", "nodenext", "bundler"].indexOf(resolution);
+          if (testDepth(72, 9) < 72 && (runtime !== (lane % 2 ? "bun" : "npm") || mode !== (lane % 2 ? "cjs" : "esm") || control !== (lane % 3 ? "onlyImport" : "common"))) continue;
           cases++;
           const source = mode === "esm" ? `import {api${control === "onlyImport" ? ", onlyImport" : ""}} from "@unbrained/pm-cli/sdk"; export const use = api.${control};`
             : `import sdk = require("@unbrained/pm-cli/sdk"); ${control === "onlyImport" ? 'import {onlyImport} from "@unbrained/pm-cli/sdk";' : ""} export const use = sdk.api.${control};`;
@@ -496,7 +498,7 @@ test("differential compiler matrix covers node16 nodenext bundler, ESM import CJ
       }
     }
   }
-  assert.equal(cases, testDepth(72));
+  assert.equal(cases, testDepth(72, 9));
   assert.equal(rows, cases * 2); assert.equal(drift, expectedDrift);
   t.diagnostic(`Differential matrix: ${rows}/${rows} compiler verdicts agree; ${drift} drift, ${rows - drift} clean.`);
 });
@@ -508,7 +510,8 @@ test("differential hostile specifiers in consumer and external declarations pres
   const minimum = { root: declarationLayout(join(root, "min"), minimumVersion, "types"), version: minimumVersion };
   const current = { root: declarationLayout(join(root, "cur"), currentVersion, "types"), version: currentVersion };
   let rows = 0;
-  for (const location of ["consumer", "declaration"]) for (const [id, specifier] of hostileSpecifiers) {
+  for (const location of ["consumer", "declaration"]) for (const [index, [id, specifier]] of hostileSpecifiers.entries()) {
+    if (testDepth(2, 1) === 1 && location !== (index % 2 ? "declaration" : "consumer")) continue;
     const literal = id.startsWith("raw-") ? `"${specifier}"` : JSON.stringify(specifier);
     const source = `import * as sdk from ${literal}; export declare const api: typeof sdk;`;
     writeFileSync(join(project, "contract.d.mts"), source);
@@ -520,7 +523,7 @@ test("differential hostile specifiers in consumer and external declarations pres
     assert.ok(matrix.rows.every(row => row.codes.some(code => /^(TS2307|TS1002)$/.test(code))));
     rows += matrix.checks;
   }
-  assert.equal(rows, 64);
+  assert.equal(rows, hostileSpecifiers.length * testDepth(2, 1) * 2);
   t.diagnostic(`Hostile differential: ${rows}/${rows} compiler verdicts agree.`);
 });
 
@@ -668,7 +671,7 @@ function restoreEnvironment(keys: readonly string[], previous: readonly (string 
 test("all supplementary output options preserve plain compiler verdicts and unchanged caller metadata", async t => {
   const project = linkedCompilerConsumer(t);
   for (const name of ["traceResolution", "explainFiles", "diagnostics", "extendedDiagnostics", "listFiles", "listEmittedFiles"]) {
-    for (const failing of [false, true]) {
+    for (const failing of [false, true].slice(0, testDepth(2, 1))) {
       writeFileSync(join(project, "consumer.mts"), failing ? "export const use: string = 1;" : "export const use = 1;");
       writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions: {target: "ES2022", module: "NodeNext", types: [], [name]: true, outDir: "dist"}, files: ["consumer.mts"]}));
       const plain = plainProject(project);
@@ -682,7 +685,7 @@ test("all supplementary output options preserve plain compiler verdicts and unch
       assert.equal(filesystemSnapshot(project), before, name);
     }
   }
-  t.diagnostic("Supplementary output: 12 configurations and 24 bound comparisons agree with plain tsc; caller metadata remains unchanged.");
+  t.diagnostic(`${6 * testDepth(2, 1)} supplementary configurations and ${12 * testDepth(2, 1)} bound comparisons agree with plain tsc; caller metadata remains unchanged.`);
 });
 
 
@@ -886,7 +889,12 @@ test("original discovery differential corpus equals plain tsc file lists, verdic
     ...["traceResolution", "explainFiles", "diagnostics", "extendedDiagnostics", "listFiles", "listEmittedFiles"].flatMap(name => [false, true].map(failing => ({name: `${name}-${failing ? "error" : "clean"}`, config: {compilerOptions: {[name]: true}, include: ["input/src/**/*"]}, files: {"src/consumer.mts": failing ? 'import {value} from "./contract.mjs"; export const use: string = value;' : good}}))),
   ];
   let comparisons = 0;
-  for (const entry of corpus.slice(0, testDepth(corpus.length))) {
+  // Output flag pairs and declaration/cache variants have dedicated deterministic
+  // regressions above/below; retain one discovery oracle for each discovery kind.
+  const quickNames = new Set(["include", "exclude-stale", "explicit-files-override-exclude", "implicit-declarationDir-stale", "rootDir-error", "paths", "typeRoots-types", "allowJs-output-collision", "quoted-path-literals", "json-import", "extends-chain-outDir", "composite-unlisted-import", "incremental-explicit-cache", "source-map-metadata", "declaration-only-invalid", "own-noEmitOnError", "noLib", "trace-resolved-diagnostic-text"]);
+  const selectedCorpus = testDepth(corpus.length, quickNames.size) === corpus.length ? corpus : corpus.filter(entry => quickNames.has(entry.name));
+  assert.equal(selectedCorpus.length, testDepth(corpus.length, quickNames.size));
+  for (const entry of selectedCorpus) {
     rmSync(join(project, "input"), {recursive: true, force: true});
     for (const [file, content] of Object.entries({"src/consumer.mts": good, "src/contract.d.mts": "export declare const value: number;", ...entry.files})) {
       mkdirSync(dirname(join(project, "input", file)), {recursive: true});
@@ -905,7 +913,7 @@ test("original discovery differential corpus equals plain tsc file lists, verdic
     }
 
   }
-  t.diagnostic(`Discovery differential: ${testDepth(corpus.length)} configs, ${comparisons} verdict/error-code comparisons; all filesystem snapshots unchanged outside the copied bound sandbox.`);
+  t.diagnostic(`Discovery differential: ${selectedCorpus.length} configs, ${comparisons} verdict/error-code comparisons; all filesystem snapshots unchanged outside the copied bound sandbox.`);
 });
 
 

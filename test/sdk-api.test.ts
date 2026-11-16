@@ -19,7 +19,7 @@ async function agrees(project: string, bound: ReturnType<typeof dependencyBound>
   assert.equal(filesystemSnapshot(dirname(project)), before);
 }
 
-for (const version of ["5.9.3", "6.0.3"]) test(`structured compiler API layouts TypeScript ${version}`, async t => {
+for (const version of ["5.9.3", "6.0.3"].slice(0, testDepth(2, 1))) test(`structured compiler API layouts TypeScript ${version}`, async t => {
   const root = testDirectory(t, "sdk-api-layouts-");
   const project = join(root, "consumer"); mkdirSync(join(project, "node_modules"), {recursive: true});
   symlinkSync(versionedCompiler(version), join(project, "node_modules/typescript"), "junction");

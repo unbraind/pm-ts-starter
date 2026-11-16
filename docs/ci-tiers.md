@@ -18,7 +18,7 @@ Executable tracker JavaScript/TypeScript selects the code tier and remains eligi
 | Coverage, unchanged 100% lines/branches/functions | — | yes | — | npm + Bun |
 | Tracker competition at all six observer phases | one peer compiler matrix | same via coverage | — | peer matrix at every phase |
 | Generated npm/Bun projects run their own release gate | via tests | via tests | — | npm + Bun |
-| Packed SDK-bound and CLI acceptance | npm/current graph, all representations | same via coverage | — | all four npm/Bun × minimum/current graphs |
+| Packed SDK-bound and CLI acceptance | one npm/current packed SDK path | same via coverage | — | all four npm/Bun × minimum/current graphs and SDK/CLI representations |
 | Identity and absolute-home-path history audits | via tests | via tests | yes | npm + Bun |
 | Production audit and pack dry-run | — | yes | — | npm + Bun |
 | README package links, SDK compiler docs and compatibility floor | via tests | via tests | yes | npm + Bun |
@@ -39,13 +39,24 @@ uses setup-node caching and setup-bun. Every deep job logs `bun --version`.
 `PM_TEST_DEPTH` defaults to full. Quick uses an identical deterministic prefix,
 one tenth rounded up with at least 25 cases (capped at the original size).
 The 200-graph property uses the first 25 graphs in quick, retaining original
-shard/seed ordering; full uses all four 50-graph shards. Generated API
-layouts use 25/32, compiler-matrix cases 25/72, path names 25/32, module-mode combinations 25/81 spread across the matrix, and discovery
-configs 25/49. Smaller explicit regressions remain complete. Every full case
-and assertion still runs in deep. Fixed product boundary fixtures, including
-the oversized-directory refusal, are unchanged. Coverage thresholds and source
-scope are unchanged; the reporter measures lines, branches and functions,
-not independent statement coverage.
+shard/seed ordering; full uses all four 50-graph shards. Generated API layouts
+retain 25/32 seeds. Finite enumerations use explicit representative budgets:
+
+| Finite contract | Quick | Deep / unset |
+| --- | --- | --- |
+| Differential compiler matrix | 9 diagonal cases spanning both runtimes, all 3 layouts/resolvers, ESM/CJS and clean/drift controls; both SDK bounds per case | all 72 cases |
+| Hostile specifiers | all 16 specifier kinds, alternating consumer/declaration locations; both bounds | all 32 location/specifier pairs |
+| Supplementary compiler output | each of 6 flags with a clean verdict; other diagnostic regressions remain | all 12 clean/error combinations |
+| Discovery corpus | 18 named discovery/input/output kinds, including late diagnostic and noLib fixtures; dedicated output/cache/declaration regressions remain | all 49 configurations |
+| Structured API compiler versions | 5.9.3 | 5.9.3 and 6.0.3 |
+| Program graph compiler versions | 6.0.3, 9 cases covering every file/export/syntax kind | both versions, all 81 combinations each |
+| Packed SDK and real-host CLI | one npm/current SDK execution | all npm/Bun × minimum/current × SDK/CLI/JSON/TOON/refusal/no-git paths |
+
+Path transport retains its 25/32 generated names and fixed per-version names.
+Every full case and assertion still runs in deep. Fixed product boundary fixtures,
+including oversized-directory refusal and malformed API results, remain complete.
+Coverage thresholds and source scope are unchanged; the reporter measures lines,
+branches and functions, not independent statement coverage.
 
 Harness subprocess deadlines use `PM_TEST_TIME_SCALE` (default 1, deep 3),
 rounded with `Math.ceil` for spawnSync. This does not change SDK/product deadlines
@@ -54,7 +65,7 @@ runner occupancy. Issue #204's underlying Bun handle leak is not claimed fixed:
 PRs no longer repeat its full gate and all jobs have ceilings, while deep retains
 the original independent fresh npm/Bun graphs for diagnosis.
 
-Packed acceptance proves Bun project installs and execution, but does not prove
+Deep packed acceptance proves Bun project installs and execution, but does not prove
 bunx/global installation. PR Node 26 therefore also runs `bunx --no-install tsc
 --version` and `bun install --no-save`; the smoke proves local bin resolution,
 not an ephemeral public-registry package installation.

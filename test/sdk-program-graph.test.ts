@@ -81,7 +81,7 @@ test("program source aliases use canonical diagnostic filenames without changing
   }
 });
 
-for (const version of ["5.9.3", "6.0.3"]) test(`program graph and module-mode properties TypeScript ${version}`, async t => {
+for (const version of ["6.0.3", "5.9.3"].slice(0, testDepth(2, 1))) test(`program graph and module-mode properties TypeScript ${version}`, async t => {
   const {project, bound} = apiConsumer(t, version); rmSync(join(project, "consumer.ts"));
   await t.test("module syntax by file kind and conditional export", async () => {
     const syntaxes = [
@@ -94,7 +94,7 @@ for (const version of ["5.9.3", "6.0.3"]) test(`program graph and module-mode pr
       {name: "mixed", source: 'import sdk = require("@unbrained/pm-cli"); export const required: "require" = sdk.sdk; export const loaded = import("@unbrained/pm-cli").then(value => {const imported: "import" = value.sdk; return imported;});'},
     ];
     const cases = ["mts", "cts", "ts"].flatMap(extension => ["require", "import", "dual"].flatMap(branch => syntaxes.map(syntax => ({extension, branch, syntax}))));
-    for (const {extension, branch, syntax} of testMatrix(cases)) {
+    for (const {extension, branch, syntax} of testMatrix(cases, 9)) {
       const file = "consumer." + extension;
       conditionalSdk(bound.root, bound.version, branch);
       writeFileSync(join(project, file), syntax.source);
@@ -102,5 +102,5 @@ for (const version of ["5.9.3", "6.0.3"]) test(`program graph and module-mode pr
       await agreesWithBuild(project, bound); rmSync(join(project, file));
     }
   });
-  t.diagnostic(`${testDepth(81)} syntax/file/export combinations; complete API diagnostics and real tsc --build verdict agree`);
+  t.diagnostic(`${testDepth(81, 9)} syntax/file/export combinations; complete API diagnostics and real tsc --build verdict agree`);
 });

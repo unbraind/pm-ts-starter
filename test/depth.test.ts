@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { testDepth, testTimeout, testMatrix } from "./support/depth.ts";
+import { testDepth, testTimeout, testMatrix, testKinds } from "./support/depth.ts";
 
 test("depth defaults to full and quick preserves a deterministic prefix with a floor", () => {
   const original = process.env.PM_TEST_DEPTH;
@@ -29,15 +29,35 @@ test("quick compatibility sampling spans every extension and syntax with unique 
   try {
     const cases = ["mts", "cts", "ts"].flatMap(extension => ["require", "import", "dual"].flatMap(branch => Array.from({length: 9}, (_, syntax) => ({extension, branch, syntax}))));
     process.env.PM_TEST_DEPTH = "quick";
-    const selected = testMatrix(cases);
-    assert.equal(selected.length, 25);
-    assert.equal(new Set(selected).size, 25);
+    const selected = testMatrix(cases, 9);
+    assert.equal(selected.length, 9);
+    assert.equal(new Set(selected).size, 9);
     assert.deepEqual(new Set(selected.map(row => row.extension)), new Set(["mts", "cts", "ts"]));
     assert.equal(new Set(selected.map(row => row.syntax)).size, 9);
-    assert.deepEqual(testMatrix(cases), selected);
+    assert.deepEqual(testMatrix(cases, 9), selected);
     process.env.PM_TEST_DEPTH = "full";
     assert.deepEqual(testMatrix(cases), cases);
     assert.deepEqual(testMatrix([]), []);
+  } finally {
+    if (previous === undefined) delete process.env.PM_TEST_DEPTH; else process.env.PM_TEST_DEPTH = previous;
+  }
+});
+
+
+test("finite quick matrices retain every named kind and full retains repeated ordinals", () => {
+  const previous = process.env.PM_TEST_DEPTH;
+  const trace = ["opened", "read", "read", "closed", "read", "retired"];
+  try {
+    process.env.PM_TEST_DEPTH = "quick";
+    assert.equal(testDepth(512), 52);
+    assert.equal(testDepth(512, 25), 25);
+    assert.deepEqual(testKinds(trace, value => value), ["opened", "read", "closed", "retired"]);
+    assert.deepEqual(testKinds([], value => value), []);
+    process.env.PM_TEST_DEPTH = "full";
+    assert.equal(testDepth(512, 25), 512);
+    assert.deepEqual(testKinds(trace, value => value), trace);
+    delete process.env.PM_TEST_DEPTH;
+    assert.deepEqual(testKinds(trace, value => value), trace);
   } finally {
     if (previous === undefined) delete process.env.PM_TEST_DEPTH; else process.env.PM_TEST_DEPTH = previous;
   }
