@@ -6,9 +6,9 @@ status: in_progress
 priority: 2
 tags[5]: ci,"gh:unbraind/pm-ts-starter#204","gh:unbraind/pm-ts-starter#217","github_author:unbraind",performance
 created_at: "2026-11-09T11:55:55Z"
-updated_at: "2026-11-16T12:01:24.292Z"
+updated_at: "2026-11-16T19:13:03.372Z"
 author: pm-github
-comments[38]{created_at,author,text}:
+comments[41]{created_at,author,text}:
   "2026-11-15T13:43:47.071Z",codex-sol,"Fleet CI v2; companion pm-cli-website-dyhg. Reuse the existing hung Bun gate item. Preserve required test (22) and test (26), generated-package acceptance, committed build-output checks, strict tracker health, privacy and release verifiers. Split quick hosted PR gates from exhaustive local deep gates; add bounded jobs and deterministic test depth. No release workflow or verifier changes."
   "2026-11-15T13:47:57.883Z",codex-sol,"Latest successful main run 43691008662: Node 22 npm/Bun gates 59m04s/58m43s; Node 26 75m10s/76m10s. gh run view --log returned empty; individual jobs API log supplied timings: seeded property 693.34s, discovery 636.63s, compiler matrix 505.66s, packed acceptance 269.96s. Quick retains deterministic prefixes and unchanged coverage thresholds; full remains deep. Generated projects inherit adapted workflows and the helper and now execute their own release gate under both installed graphs. Bun project paths are accepted; bunx is a separate local-bin smoke. The historical Bun handle leak is contained, not diagnosed as fixed."
   "2026-11-15T13:50:43.690Z",codex-sol,"Deep uses four Node/runtime matrix legs, each with a fresh installer graph and its own 120-minute ceiling. This preserves all four full gates without stacking the measured 75-minute npm and 76-minute Bun gates in one 120-minute job. No coverage/source threshold changes."
@@ -47,7 +47,10 @@ comments[38]{created_at,author,text}:
   "2026-11-16T11:56:42.963Z",codex-sol-root,"Orchestrator completed the checkout finding. Linked row 21 passed typecheck, lint, build, build:test, the tier/consumer-graph/shard/routing/release contracts, generated-project template assertions in the consumer graph ownership test, changelog:check and diff whitespace checks. The contract was red before the workflow change. All three shipped workflows now explicitly disable checkout credential persistence. No further edits are needed from the delegated worker; orchestrator will push after verification."
   "2026-11-16T12:00:00.374Z",codex-sol,"Delegated verification found the initially clean supplied head advanced to b9552ba while the separate VCS archive gates ran. The intervening orchestrator commit already implements PRRT_kwDOSZpwFM631sKc and records a red-before-green template contract. All three shipped workflow checkouts now explicitly set persist-credentials false; later steps require no authenticated Git. Preserve that implementation and the existing CodeQL contract follow-up. Reuse linked gate 21 for independent verification; no duplicate source edits, pushes or thread actions."
   "2026-11-16T12:01:17.260Z",codex-sol,"Independent linked gate 21 passed with exit 0 in 42.6 seconds on the orchestrator implementation: npm run typecheck; npm run lint; npm run build; npm run build:test; PM_TEST_DEPTH=quick node --test --test-concurrency=2 test/ci-tiers.test.ts test/ci-consumer-graphs.test.ts test/ci-shards.test.ts test/ci-routing.test.ts test/release-workflow.test.ts; PM_TEST_DEPTH=quick node --test --test-name-pattern=\"consumer graph ownership\" test/backend.test.ts; npm run changelog:check; git diff --check. Test-result tracking is disabled, so this comment retains the receipt. Strict YAML and all shipped template checkout assertions are green. No source changes were needed beyond b9552ba. Preserve separate follow-up pm-ts-starter-codeql-dot-contract. Release in_progress for orchestrator verification; commit tracker receipts only, with no push or review-thread action."
-files[38]{path,scope}:
+  "2026-11-16T19:06:17.983Z",codex-sol,"Review round O: pulled fast-forward only and verified supplied PR head. Checking each requested thread against source before changes; will run targeted gates and commit tracker evidence with fixes. No workflow dispatches or review-thread mutations."
+  "2026-11-16T19:08:41.269Z",codex-sol,"All six findings verified and fixed: PRRT_kwDOSZpwFM64EiH7 template now opts into local runners only at on, root off override retained; PRRT_kwDOSZpwFM64EiIM merges same-major patch differences and refuses another major; PRRT_kwDOSZpwFM64EiIO malformed shard/output flags fail clearly; PRRT_kwDOSZpwFM64EiIW quick supplementary options alternate clean and failing verdicts; PRRT_kwDOSZpwFM64EiIc checks foreign Git sentinel bytes; PRRT_kwDOSZpwFM64EiIr assigns published cache after both installs and cleans failed roots, with a synthetic second-install failure/retry regression."
+  "2026-11-16T19:13:02.058Z",codex-sol,"Round O validation passed: npm run typecheck; npm run build:test; npm run lint; linked full coverage-gate/coverage-merge, CI tiers/consumer graphs/shards/routing and release-workflow tests; targeted SDK supplementary verdicts, project refusal sentinel and published-cache retry regression at quick depth and timeout scale 3; npm run changelog:check; git diff --check. Final patch-only version fixture and explicit Node 22-versus-26 refusal were rechecked with the type/lint gates and both coverage-merge tests passed. Initial invalid PM context selection ran no tests; corrected tracker/source linked execution passed. All six supplied findings accepted; no review-thread mutations or workflow dispatches."
+files[39]{path,scope}:
   .github/workflows/ci-deep.yml,project
   .github/workflows/ci.yml,project
   .github/workflows/codeql.yml,project
@@ -83,10 +86,11 @@ files[38]{path,scope}:
   test/sdk-contracts-support.ts,project
   test/sdk-path-transport.test.ts,project
   test/sdk-program-graph.test.ts,project
+  test/sdk-published-cache.test.ts,project
   test/sdk-reference-refusal.test.ts,project
   test/smoke.test.ts,project
   test/support/depth.ts,project
-tests[21]:
+tests[23]:
   - command: "npm run typecheck && npm run build:test && npm run lint"
     scope: project
     timeout_seconds: 240
@@ -250,6 +254,22 @@ tests[21]:
     provenance:
       author: codex-sol-root
       created_at: "2026-11-16T11:55:12.468Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: "npm run lint && node --test --test-concurrency=1 test/coverage-gate.test.ts test/coverage-merge.test.ts test/ci-tiers.test.ts test/ci-consumer-graphs.test.ts test/ci-shards.test.ts test/ci-routing.test.ts test/release-workflow.test.ts && PM_TEST_DEPTH=quick PM_TEST_TIME_SCALE=3 node --test --test-concurrency=1 --test-name-pattern='all supplementary|project inputs refuse|published SDK cache' test/sdk-contracts-a.test.ts test/sdk-contracts-c.test.ts test/sdk-published-cache.test.ts && npm run changelog:check && git diff --check"
+    scope: project
+    timeout_seconds: 1800
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-16T19:08:49.301Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: "npm run typecheck && npm run build:test && npm run lint && node --test test/coverage-merge.test.ts"
+    scope: project
+    timeout_seconds: 600
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-16T19:13:00.475Z"
       source_kind: local_mutation
       source_ref: ci/quick-pr-tier-deep-local-tier
 docs[4]{path,scope}:

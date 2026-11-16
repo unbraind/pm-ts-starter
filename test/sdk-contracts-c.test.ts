@@ -322,6 +322,7 @@ test("project inputs refuse ambiguous options and missing compiler APIs", async 
   writeFileSync(join(root, ".git", "sentinel"), "foreign state");
   writeFileSync(join(root, "tsconfig.json"), JSON.stringify({ files: ["consumer.ts"] }));
   await assert.rejects(checkSdkContracts({ minimum: target, current: target, consumer: root }), refuses("compiler_unavailable"));
+  assert.equal(readFileSync(join(root, ".git", "sentinel"), "utf8"), "foreign state");
 
 });
 

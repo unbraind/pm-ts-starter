@@ -54,7 +54,9 @@ export function negative() { return "negative"; }
   const saved=readFileSync(join(root,paths[0]!),"utf8");
   const change=(mutate:(artifact: {digest:string;node:string;raw:{url:string;functions?:unknown}[]})=>void) => {const artifact=JSON.parse(saved);mutate(artifact);writeFileSync(join(root,paths[0]!),JSON.stringify(artifact));};
   change(artifact=>{artifact.digest="wrong"});assert.throws(()=>mergeCoverageShards(root,paths,["src/value.ts"]),/source mismatch/);
-  change(artifact=>{artifact.node="0.0.0"});assert.throws(()=>mergeCoverageShards(root,paths,["src/value.ts"]),/runtime mismatch/);
+  change(artifact=>{artifact.node=process.versions.node.replace(/\d+$/, patch => String(Number(patch) + 1))});
+  assert.deepEqual(mergeCoverageShards(root,paths,["src/value.ts"]),merged,"patch differences must preserve the native coverage union");
+  change(artifact=>{artifact.node=process.versions.node.startsWith("26.") ? "22.0.0" : "26.0.0"});assert.throws(()=>mergeCoverageShards(root,paths,["src/value.ts"]),/runtime mismatch/);
   change(artifact=>{artifact.raw[0].functions=null});assert.throws(()=>mergeCoverageShards(root,paths,["src/value.ts"]),/native merge failed/);
   change(artifact=>{artifact.raw=[]});assert.throws(()=>mergeCoverageShards(root,paths,["src/value.ts"]),/empty shard/);
   change(artifact=>{artifact.raw[0].url="../outside.ts"});assert.throws(()=>mergeCoverageShards(root,paths,["src/value.ts"]),/unexpected source/);
@@ -63,4 +65,21 @@ export function negative() { return "negative"; }
   assert.equal(runCoverageGate(root,"ignore",{merge:[paths[0]!]}),1);
   assert.throws(()=>mergeCoverageShards(root,[paths[0]!],["src/value.ts"]),/missing shards/);
   assert.throws(()=>mergeCoverageShards(root,[paths[0]!,paths[0]!],["src/value.ts"]),/duplicate or missing/);
+});
+
+/** Malformed shard invocations must fail before they can run an unsharded gate. */
+test("coverage CLI requires explicit values for shard and output flags", () => {
+  const savedArgv = process.argv;
+  try {
+    for (const [args, message] of [
+      [["--shard"], /--shard requires a value/],
+      [["--shard", "1/2"], /--shard requires --output with a value/],
+      [["--shard", "1/2", "--output"], /--output requires a value/],
+      [["--output", "--shard", "1/2"], /--output requires a value/],
+      [["--shard", "--output", "out"], /--shard requires a value/],
+    ] as const) {
+      process.argv = [savedArgv[0]!, fileURLToPath(new URL("../scripts/coverage-gate.ts", import.meta.url)), ...args];
+      assert.throws(() => runScriptEntry(), message);
+    }
+  } finally { process.argv = savedArgv; }
 });

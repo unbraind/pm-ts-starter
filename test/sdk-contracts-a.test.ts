@@ -11,8 +11,9 @@ import { sdk, pinned, target, compiler, checkSdkContracts, scratch, refuses, ins
 
 test("all supplementary output options preserve plain compiler verdicts and unchanged caller metadata", async t => {
   const project = linkedCompilerConsumer(t);
-  for (const name of ["traceResolution", "explainFiles", "diagnostics", "extendedDiagnostics", "listFiles", "listEmittedFiles"]) {
-    for (const failing of [false, true].slice(0, testDepth(2, 1))) {
+  for (const [index, name] of ["traceResolution", "explainFiles", "diagnostics", "extendedDiagnostics", "listFiles", "listEmittedFiles"].entries()) {
+    for (const failing of [false, true]) {
+      if (testDepth(2, 1) === 1 && failing !== Boolean(index % 2)) continue;
       writeFileSync(join(project, "consumer.mts"), failing ? "export const use: string = 1;" : "export const use = 1;");
       writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions: {target: "ES2022", module: "NodeNext", types: [], [name]: true, outDir: "dist"}, files: ["consumer.mts"]}));
       const plain = plainProject(project);

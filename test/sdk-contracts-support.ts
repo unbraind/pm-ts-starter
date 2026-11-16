@@ -44,11 +44,14 @@ after(() => { if (published) rmSync(published.root, { recursive: true, force: tr
 export function publishedSdks(): { root: string; minimum: string; current: string } {
   if (published) return published;
   const root = mkdtempSync(join(tmpdir(), "sdk-published-test-"));
-  published = { root, minimum: join(root, "minimum/node_modules/@unbrained/pm-cli"), current: join(root, "current/node_modules/@unbrained/pm-cli") };
-  for (const [name, version] of [["minimum", minimumVersion], ["current", currentVersion]]) {
-    const install = spawnSync("npm", ["install", "--prefer-offline", "--prefix", join(root, name!), "--ignore-scripts", "--no-package-lock", "--no-audit", "--no-fund", `@unbrained/pm-cli@${version}`], { encoding: "utf8", timeout: testTimeout(INSTALL_TIMEOUT_MS), env: installationEnv() });
-    assert.equal(install.status, 0, install.stderr || install.stdout || install.error?.message || "Package installation failed.");
-  }
+  const fresh = { root, minimum: join(root, "minimum/node_modules/@unbrained/pm-cli"), current: join(root, "current/node_modules/@unbrained/pm-cli") };
+  try {
+    for (const [name, version] of [["minimum", minimumVersion], ["current", currentVersion]]) {
+      const install = spawnSync("npm", ["install", "--prefer-offline", "--prefix", join(root, name!), "--ignore-scripts", "--no-package-lock", "--no-audit", "--no-fund", `@unbrained/pm-cli@${version}`], { encoding: "utf8", timeout: testTimeout(INSTALL_TIMEOUT_MS), env: installationEnv() });
+      assert.equal(install.status, 0, install.stderr || install.stdout || install.error?.message || "Package installation failed.");
+    }
+  } catch (error) { rmSync(root, { recursive: true, force: true }); throw error; }
+  published = fresh;
   return published;
 }
 

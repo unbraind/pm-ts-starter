@@ -503,7 +503,7 @@ export function mergeCoverageShards(rootDir: string, paths: readonly string[], r
     for (let i = 1; i <= total; i++) if (!ordinals.has(`${i}/${total}`)) throw new Error("coverage-gate: duplicate or missing shard");
     for (const [index, shard] of shards.entries()) {
       if (shard.digest !== coverageDigest(rootDir, required)) throw new Error("coverage-gate: source mismatch");
-      if (shard.node !== process.versions.node || !shard.raw.length) throw new Error("coverage-gate: runtime mismatch or empty shard");
+      if (shard.node.split(".")[0] !== process.versions.node.split(".")[0] || !shard.raw.length) throw new Error("coverage-gate: runtime mismatch or empty shard");
       const result = shard.raw.map(script => {
         if (!required.includes(script.url)) throw new Error("coverage-gate: unexpected source in shard");
         return { ...script, url: pathToFileURL(join(rootDir, script.url)).href };
@@ -546,6 +546,10 @@ export function runScriptEntry(rootDir: string = repoRoot): void {
   if (process.argv[1] && realpathSync(resolve(process.argv[1])) === realpathSync(fileURLToPath(import.meta.url))) {
     const args = process.argv.slice(2);
     const merge = args.indexOf("--merge"), shard = args.indexOf("--shard"), output = args.indexOf("--output");
+    for (const [flag, index] of [["--shard", shard], ["--output", output]] as const) {
+      if (index >= 0 && (!args[index + 1] || args[index + 1]!.startsWith("--"))) throw new Error(`coverage-gate: ${flag} requires a value`);
+    }
+    if (shard >= 0 && output < 0) throw new Error("coverage-gate: --shard requires --output with a value");
     process.exit(runCoverageGate(rootDir, "inherit", {
       ...(merge >= 0 ? { merge: args.slice(merge + 1) } : {}),
       ...(shard >= 0 ? { shard: args[shard + 1], output: args[output + 1] } : {}),

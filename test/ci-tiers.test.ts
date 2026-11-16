@@ -53,10 +53,9 @@ test("NUL-delimited classifier keeps docs cheap and executable tracker files in 
   }
 });
 
-test("deep defaults to the local pool and separates full installer graphs", () => {
+test("deep separates full installer graphs", () => {
   for (const path of [".github/workflows/ci-deep.yml", "templates/backend/.github/workflows/ci-deep.yml"]) {
     const deep = workflow(path).jobs.deep;
-    assert.equal(deep["runs-on"], "${{ vars.PM_LOCAL_DEEP != 'off' && fromJSON('[\"self-hosted\",\"pm-local\"]') || 'ubuntu-latest' }}");
     assert.deepEqual(deep.strategy?.matrix, { "node-version": [22, 26], runtime: ["npm", "bun"] });
     assert.equal(deep["timeout-minutes"], 120);
     const gates = deep.steps.filter(step => step.run === "npm run release:check" || step.run === "bun run release:check");
@@ -64,6 +63,11 @@ test("deep defaults to the local pool and separates full installer graphs", () =
     for (const gate of gates) assert.ok(gate.if?.includes(`matrix.runtime == '${gate.run!.startsWith("npm") ? "npm" : "bun"}'`));
     for (const step of deep.steps) if (step.uses) assert.match(step.uses, /@[a-f0-9]{40}$/);
   }
+});
+
+test("root deep defaults to local while generated deep requires explicit opt-in", () => {
+  assert.equal(workflow(".github/workflows/ci-deep.yml").jobs.deep["runs-on"], "${{ vars.PM_LOCAL_DEEP != 'off' && fromJSON('[\"self-hosted\",\"pm-local\"]') || 'ubuntu-latest' }}");
+  assert.equal(workflow("templates/backend/.github/workflows/ci-deep.yml").jobs.deep["runs-on"], "${{ vars.PM_LOCAL_DEEP == 'on' && fromJSON('[\"self-hosted\",\"pm-local\"]') || 'ubuntu-latest' }}");
 });
 
 test("generated deep Bun legs execute behavior under Bun after the release gate", () => {
