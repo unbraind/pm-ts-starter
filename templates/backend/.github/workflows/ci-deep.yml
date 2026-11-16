@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   deep:
-    runs-on: ${{ vars.PM_LOCAL_DEEP == 'on' && fromJSON('["self-hosted","pm-local"]') || 'ubuntu-latest' }}
+    runs-on: ${{ vars.PM_LOCAL_DEEP != 'off' && fromJSON('["self-hosted","pm-local"]') || 'ubuntu-latest' }}
     timeout-minutes: 120
     env:
       PM_TEST_DEPTH: full

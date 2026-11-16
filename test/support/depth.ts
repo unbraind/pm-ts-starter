@@ -15,3 +15,10 @@ export function testTimeout(milliseconds: number, value = process.env.PM_TEST_TI
   }
   return Math.ceil(milliseconds * scale);
 }
+
+
+/** Spread a finite compatibility matrix across all dimensions within the quick budget. */
+export function testMatrix<T>(cases: readonly T[]): T[] {
+  const count = testDepth(cases.length);
+  return Array.from({ length: count }, (_, index) => cases[Math.floor(index * cases.length / count)]!);
+}

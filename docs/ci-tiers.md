@@ -16,8 +16,9 @@ Executable tracker JavaScript/TypeScript selects the code tier and remains eligi
 | Typecheck, lint, duplicate and docstring gates | — | yes | — | npm + Bun |
 | Build/test compilation and behavioral tests | quick | quick via coverage | — | full, npm + Bun |
 | Coverage, unchanged 100% lines/branches/functions | — | yes | — | npm + Bun |
+| Tracker competition at all six observer phases | one peer compiler matrix | same via coverage | — | peer matrix at every phase |
 | Generated npm/Bun projects run their own release gate | via tests | via tests | — | npm + Bun |
-| Packed npm/Bun SDK-bound and CLI acceptance | via tests | via tests | — | npm + Bun |
+| Packed SDK-bound and CLI acceptance | npm/current graph, all representations | same via coverage | — | all four npm/Bun × minimum/current graphs |
 | Identity and absolute-home-path history audits | via tests | via tests | yes | npm + Bun |
 | Production audit and pack dry-run | — | yes | — | npm + Bun |
 | README package links, SDK compiler docs and compatibility floor | via tests | via tests | yes | npm + Bun |
@@ -30,8 +31,8 @@ Deep runs on main pushes, dispatch and daily at 02:17 UTC, distinct from release
 at 03:23 UTC and its hourly minute-41 recovery, and weekly CodeQL at Monday
 06:09 UTC. Four checks are `deep (22, npm)`, `deep (22, bun)`, `deep (26, npm)` and
 `deep (26, bun)`, each with a 120-minute ceiling and
-per-ref cancellation. Hosted Ubuntu is the default; `PM_LOCAL_DEEP=on`
-explicitly selects the local `pm-local` pool. Only the fleet controller changes that variable. Local
+per-ref cancellation. The local `pm-local` pool is the default;
+`PM_LOCAL_DEEP=off` explicitly selects hosted Ubuntu. Only the fleet controller changes that variable. Local
 runners use their persistent npm cache and preinstalled Bun; hosted fallback
 uses setup-node caching and setup-bun. Every deep job logs `bun --version`.
 
@@ -39,7 +40,7 @@ uses setup-node caching and setup-bun. Every deep job logs `bun --version`.
 one tenth rounded up with at least 25 cases (capped at the original size).
 The 200-graph property uses the first 25 graphs in quick, retaining original
 shard/seed ordering; full uses all four 50-graph shards. Generated API
-layouts use 25/32, compiler-matrix cases 25/72, path names 25/32, module-mode combinations 25/81 and discovery
+layouts use 25/32, compiler-matrix cases 25/72, path names 25/32, module-mode combinations 25/81 spread across the matrix, and discovery
 configs 25/49. Smaller explicit regressions remain complete. Every full case
 and assertion still runs in deep. Fixed product boundary fixtures, including
 the oversized-directory refusal, are unchanged. Coverage thresholds and source
@@ -87,3 +88,20 @@ runtime into separate matrix jobs avoids stacking the two previously measured
 PRRT_kwDOSZpwFM63udS7 is valid: generated deep Bun legs never called test:bun. Add that explicit behavioral gate and ordering regression. Both failing checks actually reached the 30-minute job limit; the logs stop before the overlapping caller-boundary test finishes. Retain all six competition phases using a small actual compiled SDK fixture rather than repeated copies of the full published SDK dependency graph. The targeted competition test passed; CI routing, deep workflow, typecheck, lint and strict YAML checks passed.
 
 The cheap tier excludes only inert tracker record formats; executable tracker changes keep product gates. `test/ci-routing.test.ts` executes each detector with inert and executable tracker paths. Product deadlines, full-depth cases and coverage thresholds are unchanged.
+
+Round F timing evidence: at revision 90ed1c0, dependency setup completed in
+under 20 seconds per job. Node 26 spent 29m56s in the release gate, including
+coverage from 22:57:27 UTC until cancellation at 23:27:20 UTC. Node 22 spent
+29m59s in engines-floor tests. The last completed SDK test appeared at
+23:05:24 / 23:08:48 UTC, before overlapping-caller checks.
+
+Quick now retains all six real tracker competitions with one peer compiler
+matrix over a minimal ES5 consumer; deep repeats that matrix at every phase.
+Quick packed acceptance keeps every SDK/CLI representation on the npm/current
+graph; deep certifies the full npm/Bun × minimum/current cross product. Other
+Bun project install and runtime smokes remain. Simple dependency fixtures use
+explicit ES5 libraries; public SDK and Node/DOM library contract tests keep
+their original configurations. Coverage thresholds and required sources stay
+unchanged. The 25 program-graph samples span mts, cts and ts and all nine syntax
+forms; deep retains all 81 combinations per compiler. Seeded properties still
+keep at least 25 generated cases. New hosted job durations require CI evidence.

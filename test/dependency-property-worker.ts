@@ -13,7 +13,7 @@ const root = mkdtempSync(join(tmpdir(), "sdk-property-"));
 const project = join(root, "consumer");
 mkdirSync(join(project, "node_modules"), {recursive: true});
 symlinkSync(dirname(dirname(compiler)), join(project, "node_modules/typescript"), "junction");
-writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions:{noEmit:true,types:[],module:"NodeNext"},files:["consumer.mts"]}));
+writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions:{noEmit:true,types:[],lib:["ES5"],module:"NodeNext"},files:["consumer.mts"]}));
 
 const bound = dependencyBound(project), random = boundaryRandom(15410 + shard);
 let edges = 0;

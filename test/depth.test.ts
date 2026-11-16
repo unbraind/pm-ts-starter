@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { testDepth, testTimeout } from "./support/depth.ts";
+import { testDepth, testTimeout, testMatrix } from "./support/depth.ts";
 
 test("depth defaults to full and quick preserves a deterministic prefix with a floor", () => {
   const original = process.env.PM_TEST_DEPTH;
@@ -21,4 +21,24 @@ test("scaled harness deadlines are integer milliseconds and reject invalid facto
   assert.equal(testTimeout(101, "1.5"), 152);
   assert.equal(testTimeout(30_000, "3"), 90_000);
   for (const value of ["", "0", "-1", "NaN", "Infinity", "100000000"]) assert.throws(() => testTimeout(100, value), /PM_TEST_TIME_SCALE/);
+});
+
+
+test("quick compatibility sampling spans every extension and syntax with unique deterministic cases", () => {
+  const previous = process.env.PM_TEST_DEPTH;
+  try {
+    const cases = ["mts", "cts", "ts"].flatMap(extension => ["require", "import", "dual"].flatMap(branch => Array.from({length: 9}, (_, syntax) => ({extension, branch, syntax}))));
+    process.env.PM_TEST_DEPTH = "quick";
+    const selected = testMatrix(cases);
+    assert.equal(selected.length, 25);
+    assert.equal(new Set(selected).size, 25);
+    assert.deepEqual(new Set(selected.map(row => row.extension)), new Set(["mts", "cts", "ts"]));
+    assert.equal(new Set(selected.map(row => row.syntax)).size, 9);
+    assert.deepEqual(testMatrix(cases), selected);
+    process.env.PM_TEST_DEPTH = "full";
+    assert.deepEqual(testMatrix(cases), cases);
+    assert.deepEqual(testMatrix([]), []);
+  } finally {
+    if (previous === undefined) delete process.env.PM_TEST_DEPTH; else process.env.PM_TEST_DEPTH = previous;
+  }
 });

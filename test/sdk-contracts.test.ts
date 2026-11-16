@@ -192,8 +192,13 @@ test("each overlapping caller boundary preserves peer success and foreign state 
   const root = scratch(t), tracker = join(root, "tracker");
   // Boundary competition needs real compiler matrices, not repeated copies of
   // the entire published SDK graph (covered by the compatibility tests above).
-  const bound = dependencyBound(root);
-  const matrix = { minimum: bound, current: bound, compiler, examples: [{ id: "peer", source: 'import {sdk} from "@unbrained/pm-cli"; export {sdk};' }] };
+  const consumer = join(root, "consumer");
+  mkdirSync(join(consumer, "node_modules"), {recursive: true});
+  symlinkSync(dirname(dirname(compiler)), join(consumer, "node_modules/typescript"), "junction");
+  writeFileSync(join(consumer, "consumer.mts"), 'import {sdk} from "@unbrained/pm-cli"; export {sdk};');
+  writeFileSync(join(consumer, "tsconfig.json"), JSON.stringify({compilerOptions: {types: [], lib: ["ES5"], module: "NodeNext"}, files: ["consumer.mts"]}));
+  const bound = dependencyBound(consumer);
+  const matrix = { minimum: bound, current: bound, consumer };
   const client = new PmClient({ pmRoot: tracker, noExtensions: true, author: "fixture" });
   await client.init("contract");
   const item = await client.create({ title: "Original public fixture" });
@@ -208,7 +213,8 @@ test("each overlapping caller boundary preserves peer success and foreign state 
     const peer = spawnSync(process.execPath, ["--input-type=module", "-e", `import {checkSdkContracts} from ${JSON.stringify(pathToFileURL(join(repo, "sdk-contracts.ts")).href)};
 import {PmClient} from ${JSON.stringify(pathToFileURL(join(sdk, "dist/sdk/index.js")).href)};
 await new PmClient({pmRoot: ${JSON.stringify(tracker)}, noExtensions: true, author: 'peer'}).update(${JSON.stringify(peerItem.item.id)}, {description: ${JSON.stringify(phase + "-" + phases.length)}});
-const result = await checkSdkContracts(${JSON.stringify(matrix)});
+const compile = ${process.env.PM_TEST_DEPTH !== "quick" || phases.length === 1};
+const result = compile ? await checkSdkContracts(${JSON.stringify(matrix)}) : {ok: true};
 process.exit(result.ok ? 0 : 1);`], { encoding: "utf8", timeout: testTimeout(60_000), killSignal: "SIGKILL", env: { ...process.env, GIT_CEILING_DIRECTORIES: root, PATH: "" } });
     assert.equal(peer.status, 0, `${peer.error?.message ?? ""} ${peer.stdout} ${peer.stderr}`);
     assert.equal(JSON.parse(readFileSync(join(tracker, "foreign-peer.json"), "utf8")).success, true);
@@ -270,7 +276,10 @@ test("packed npm and Bun consumers resolve each exact SDK bound and compile emit
   const noGit = join(root, "no-git"); mkdirSync(noGit);
   const verified = new Set<string>();
   const paths = ["sdk", "cli-json", "cli-toon", "refusal-json", "refusal-toon", "sdk-no-git"];
-  for (const runtime of ["npm", "bun"]) for (const bound of ["minimum", "current"] as const) {
+  const lanes = [["npm", "minimum"], ["npm", "current"], ["bun", "minimum"], ["bun", "current"]] as const;
+  // Exhaustive installed SDK/CLI representations belong to deep; quick keeps one complete real installed graph.
+  const selectedLanes = process.env.PM_TEST_DEPTH === "quick" ? lanes.filter(([runtime, bound]) => runtime === "npm" && bound === "current") : lanes;
+  for (const [runtime, bound] of selectedLanes) {
     const version = bound === "minimum" ? minimumVersion : currentVersion;
     const project = installedConsumer(runtime as "npm" | "bun", bound);
     t.after(() => { for (const name of ["authoring.ts", "complete-read.ts", "emitted-consumer.ts", "consumer.mjs", "tsconfig.json", "tracker"]) rmSync(join(project, name), {recursive: true, force: true}); });
@@ -351,8 +360,7 @@ await new PmClient({pmRoot:${JSON.stringify(tracker)},noExtensions:true,author:'
     assert.equal(JSON.parse(noGitRun.stdout).matrix.ok, true);
     verified.add(`${runtime}/${bound}/sdk-no-git`);
   }
-  const lanes = ["npm/minimum", "npm/current", "bun/minimum", "bun/current"];
-  assert.deepEqual([...verified].sort(), lanes.flatMap(lane => paths.map(path => `${lane}/${path}`)).sort(), "every installed graph must certify every SDK/CLI representation and refusal");
+  assert.deepEqual([...verified].sort(), selectedLanes.flatMap(([runtime, bound]) => paths.map(path => `${runtime}/${bound}/${path}`)).sort(), "every installed graph must certify every SDK/CLI representation and refusal");
 });
 
 /** Exact npm and Bun installations used as consumer-owned toolchains, without Git. */
@@ -639,7 +647,7 @@ function linkedCompilerConsumer(t: TestContext): string {
 function noEmitConsumer(t: TestContext): string {
   const project = linkedCompilerConsumer(t);
   writeFileSync(join(project, "consumer.mts"), 'export const value = 1;');
-  writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions: {types: [], noEmit: true, module: "NodeNext"}, files: ["consumer.mts"]}));
+  writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions: {types: [], lib: ["ES5"], noEmit: true, module: "NodeNext"}, files: ["consumer.mts"]}));
   return project;
 }
 /** Stable diagnostic presentation for independent real-compiler oracles. */

@@ -1,4 +1,4 @@
-import { testDepth, testTimeout } from "./support/depth.ts";
+import { testDepth, testTimeout, testMatrix } from "./support/depth.ts";
 /** Compiler-owned project graphs and usage-mode resolutions match real build verdicts. */
 import assert from "node:assert/strict";
 import {spawnSync} from "node:child_process";
@@ -94,7 +94,7 @@ for (const version of ["5.9.3", "6.0.3"]) test(`program graph and module-mode pr
       {name: "mixed", source: 'import sdk = require("@unbrained/pm-cli"); export const required: "require" = sdk.sdk; export const loaded = import("@unbrained/pm-cli").then(value => {const imported: "import" = value.sdk; return imported;});'},
     ];
     const cases = ["mts", "cts", "ts"].flatMap(extension => ["require", "import", "dual"].flatMap(branch => syntaxes.map(syntax => ({extension, branch, syntax}))));
-    for (const {extension, branch, syntax} of cases.slice(0, testDepth(cases.length))) {
+    for (const {extension, branch, syntax} of testMatrix(cases)) {
       const file = "consumer." + extension;
       conditionalSdk(bound.root, bound.version, branch);
       writeFileSync(join(project, file), syntax.source);
