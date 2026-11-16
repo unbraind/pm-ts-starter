@@ -151,3 +151,8 @@ The non-coverage job runs every other original release command, plus the existin
 Bun/bunx smoke. Setup, download/merge and required aggregates have their own
 bounded jobs. Actual hosted wall times and merged coverage belong in the tracker
 and PR body; a projection is not a completed timing or coverage certificate.
+
+Direct shard commands publish the package's `node_modules/.bin` through
+`GITHUB_PATH` after installation, preserving the npm script environment.
+PM CLI integration tests must run rather than skip because `pm` is unavailable.
+The workflow contract checks this setup in both shard matrices.
