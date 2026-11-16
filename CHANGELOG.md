@@ -2,9 +2,7 @@
 
 ## Unreleased
 
-### Other
-
-- Close delivered pm items and reserve in progress for active work (2026-10-24) ([pm-ts-starter-ooy4](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-ooy4.toon))
+No changes.
 
 ## 2026.11.12 - 2026-11-12
 
@@ -14,9 +12,13 @@
 
 ## 2026.11.10 - 2026-11-10
 
-### Other
+### Dependencies
 
-- Use public SDK TOON codecs in generated backend projects ([pm-ts-starter-sdk-toon-codec](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-sdk-toon-codec.toon))
+- Bump the pm-toolchain group with 3 updates ([#206](https://github.com/unbraind/pm-ts-starter/pull/206))
+- Bump the pm-toolchain group with 3 updates ([#203](https://github.com/unbraind/pm-ts-starter/pull/203))
+- Bump unbraind/pm-github/.github/workflows/pm-github-closeout.yml ([#201](https://github.com/unbraind/pm-ts-starter/pull/201))
+- Bump unbraind/pm-github/.github/workflows/pm-github-sync.yml ([#200](https://github.com/unbraind/pm-ts-starter/pull/200))
+- Bump the codeql-action group with 2 updates ([#199](https://github.com/unbraind/pm-ts-starter/pull/199))
 
 ## 2026.11.7 - 2026-11-07
 
@@ -30,6 +32,10 @@
 
 - Compile packed contracts against each exact selected SDK bound ([pm-ts-starter-min-sdk-drift](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-min-sdk-drift.toon))
 
+## 2026.10.30 - 2026-10-30
+
+No changes.
+
 ## 2026.10.29 - 2026-10-29
 
 ### Changed
@@ -39,6 +45,10 @@
 ### Other
 
 - Make the 2026.10.23 pm toolchain bump pass: refresh SDK-inferred declarations and generated changelog ([pm-ts-starter-tc1023](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-tc1023.toon))
+
+## 2026.10.27 - 2026-10-27
+
+No changes.
 
 ## 2026.10.26 - 2026-10-26
 
@@ -79,11 +89,55 @@
 - Closed: Fix release publish ordering before protected main push ([pm-ts-starter-8xyb](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-8xyb.toon))
 - Closed: Full development audit is blocked by unpatched braces through required latest pm-ops ([pm-ts-starter-audit104](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-audit104.toon))
 
+## 2026.10.21 - 2026-10-21
+
+No changes.
+
+## 2026.10.20 - 2026-10-20
+
+No changes.
+
+## 2026.10.19 - 2026-10-19
+
+No changes.
+
+## 2026.10.17 - 2026-10-17
+
+No changes.
+
+## 2026.10.16 - 2026-10-16
+
+No changes.
+
+## 2026.10.15 - 2026-10-15
+
+No changes.
+
+## 2026.10.13 - 2026-10-13
+
+No changes.
+
+## 2026.10.11 - 2026-10-11
+
+No changes.
+
+## 2026.10.9 - 2026-10-09
+
+No changes.
+
+## 2026.10.8 - 2026-10-08
+
+No changes.
+
 ## 2026.10.5 - 2026-10-05
 
 ### Other
 
 - Auto-merge green Dependabot updates and group the pm toolchain into one daily PR ([pm-ts-starter-lzj0](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/tasks/pm-ts-starter-lzj0.toon))
+
+## 2026.10.3 - 2026-10-03
+
+No changes.
 
 ## 2026.9.26 - 2026-09-26
 
@@ -231,11 +285,19 @@
 
 - Resolve pm-changelog to the release that derives release dates in UTC ([pm-ts-starter-px9p](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-px9p.toon))
 
+## 2026.8.3 - 2026-08-03
+
+No changes.
+
 ## 2026.8.1 - 2026-08-01
 
 ### Fixed
 
 - Release commits discard the rebuilt dist, so the git-install path serves the previous version ([pm-ts-starter-brsy](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-brsy.toon))
+
+## 2026.7.31 - 2026-07-31
+
+No changes.
 
 ## 2026.7.29 - 2026-07-29
 
@@ -300,6 +362,14 @@
 
 - Closed: Recommend pm merge reconcile (2026.7.22) over raw history-repair in Multi-agent merge safety docs ([pm-ts-starter-quha](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-quha.toon))
 
+## 2026.7.22 - 2026-07-22
+
+No changes.
+
+## 2026.7.21 - 2026-07-21
+
+No changes.
+
 ## 2026.7.19 - 2026-07-19
 
 ### Added
@@ -309,6 +379,14 @@
 ### Other
 
 - Harden release bun-verify so registry-mirror lag cannot block the GitHub release ([pm-ts-starter-yybv](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-yybv.toon))
+
+## 2026.7.13 - 2026-07-13
+
+No changes.
+
+## 2026.7.11 - 2026-07-11
+
+No changes.
 
 ## 2026.7.10 - 2026-07-10
 
@@ -327,6 +405,14 @@
 - Align Node engine with pm CLI runtime ([pm-ts-starter-zzhl](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/tasks/pm-ts-starter-zzhl.toon))
 - Regenerate CHANGELOG after pm close item ([pm-ts-starter-xgpp](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/tasks/pm-ts-starter-xgpp.toon))
 
+## 2026.6.14 - 2026-06-14
+
+No changes.
+
+## 2026.6.13-2 - 2026-06-13
+
+No changes.
+
 ## 2026.6.13-1 - 2026-06-13
 
 ### Other
@@ -338,6 +424,18 @@
 ### Fixed
 
 - Reported extension version drifts from released version (hardcoded VERSION constant) ([pm-ts-starter-41z0](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/tasks/pm-ts-starter-41z0.toon))
+
+## 2026.6.10 - 2026-06-10
+
+No changes.
+
+## 2026.6.9 - 2026-06-09
+
+No changes.
+
+## 2026.6.8 - 2026-06-08
+
+No changes.
 
 ## 2026.6.7 - 2026-06-07
 
@@ -356,11 +454,19 @@
 
 - Fix version mismatch + complete 9-capability demo, test mock, README ([pm-ts-starter-ol9y](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-ol9y.toon))
 
+## 2026.6.3 - 2026-06-03
+
+No changes.
+
 ## 2026.6.2 - 2026-06-02
 
 ### Fixed
 
 - Fix output-corruption + demonstrate all 9 SDK capabilities correctly (typed reference) ([pm-ts-starter-l3ga](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/features/pm-ts-starter-l3ga.toon))
+
+## 2026.5.31 - 2026-05-31
+
+No changes.
 
 ## 2026.5.30 - 2026-05-30
 
