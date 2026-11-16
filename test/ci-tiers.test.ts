@@ -27,14 +27,14 @@ test("documentation and tracker changes retain health, privacy and input checks"
   const steps = ci.jobs.test.steps;
   assert.ok(steps.some(step => step.run?.includes("pm health --strict-exit --require-merge-drivers")));
   const docs = steps.find(step => step.name === "Check documentation and tracker changes");
-  assert.equal(docs?.if, "steps.changes.outputs.code != 'true'");
+  assert.equal(docs?.if, "needs.changes.result == 'success' && needs.changes.outputs.code != 'true'");
   for (const command of ["npm run changelog:check", "test/identity-audit.test.ts", "test/package-metadata.test.ts", "test/compatibility-floor.test.ts", "test/sdk-compiler-entry.test.ts"]) assert.ok(docs?.run?.includes(command), command);
 });
 
 test("NUL-delimited classifier keeps docs cheap and executable tracker files in the code tier", { skip: process.platform === "win32" && "The workflow classifier runs in Ubuntu Bash" }, t => {
   const root = mkdtempSync(join(tmpdir(), "ci-paths-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  const script = ci.jobs.test.steps.find(step => step.name === "Detect code changes")?.run;
+  const script = ci.jobs.changes.steps.find(step => step.name === "Detect code changes")?.run;
   assert.ok(script);
   // A tiny git shim emits the exact diff protocol without depending on a remote.
   const git = join(root, "git");

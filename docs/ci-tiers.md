@@ -116,3 +116,38 @@ their original configurations. Coverage thresholds and required sources stay
 unchanged. The 25 program-graph samples span mts, cts and ts and all nine syntax
 forms; deep retains all 81 combinations per compiler. Seeded properties still
 keep at least 25 generated cases. New hosted job durations require CI evidence.
+
+## Round G file shards and coverage union
+
+Required `test (22)` and `test (26)` checks are always-run aggregates. The former
+requires every Node 22 quick shard; the latter requires the parallel non-coverage
+release gates and the coverage merge, which depends on every Node 26 shard.
+Failures, cancellations and skipped prerequisites fail the code aggregate.
+Docs/tracker changes still run their original health, privacy and changelog
+checks, with no suite build unless a documentation-input gate requires it.
+
+There are 5 shards per Node line. Shards use the complete sorted test-file
+inventory at quick depth, with concurrency one and a 22-minute hard limit.
+The target remains at most 15 minutes per job (12 minutes for Node 22).
+The SDK contract suite is split across five files; all 42 test names and their
+assertions remain. The measured 1,381-second file is divided into roughly
+235–350-second files. Prior file-time simulation projects a maximum of about
+460 seconds per shard plus setup; unmeasured tail files remain an estimate.
+
+Each coverage artifact contains repository-relative per-file line, branch and
+function hits plus original V8 offset ranges. Merge uses the same runtime merger
+as the original gate, before calculating percentages. Merging percentages or
+line-only branch keys is invalid: dynamically emitted branch ranges may differ
+between shards. A real two-file fixture covers a branch and a function exclusively
+in each shard and compares the merged totals and hits with an unsharded run.
+Missing/duplicate shards and differing Node versions fail closed. Thresholds,
+source scope, `npm run coverage`, `npm run release:check` and ci-deep stay unchanged.
+
+The starter merge invokes Node's internal coverage merger in a subprocess with
+`--expose-internals`. This is a version-sensitive runtime API; matching Node
+versions and the fixture detect drift. The source-presence check runs on the union.
+
+The non-coverage job runs every other original release command, plus the existing
+Bun/bunx smoke. Setup, download/merge and required aggregates have their own
+bounded jobs. Actual hosted wall times and merged coverage belong in the tracker
+and PR body; a projection is not a completed timing or coverage certificate.

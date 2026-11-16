@@ -1,41 +1,24 @@
 name: CI
-
 on:
-  pull_request:
-  workflow_dispatch:
-
+  pull_request: null
+  workflow_dispatch: null
 permissions:
   contents: read
-
-# Superseded PR runs cancel; manual runs stay independent.
 concurrency:
   group: ci-${{ github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
 jobs:
-  test:
-    # Required checks stay on fast GitHub-hosted hardware.
+  changes:
     runs-on: ubuntu-latest
-    # Bound hosted slot occupancy, including the Bun gate hang reported in #204.
-    timeout-minutes: 30
-    env:
-      PM_TEST_DEPTH: quick
-    strategy:
-      fail-fast: false
-      matrix:
-        # 22 is the floor declared in `engines` and the first line that strips
-        # TypeScript without a flag; 26 is what the fleet develops against.
-        node-version: [22, 26]
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.changes.outputs.code }}
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
           fetch-tags: true
-
-      # Checkout must precede this first decision. NUL delimiters handle unusual
-      # filenames; compare the actual PR endpoints, not the synthetic merge commit.
-      # Disable rename folding so moving source into docs still counts its deletion.
       - name: Detect code changes
         id: changes
         shell: bash
@@ -58,20 +41,113 @@ jobs:
             done < "$RUNNER_TEMP/ci-changed-paths"
           fi
           echo "code=$code" >> "$GITHUB_OUTPUT"
-
+  quick-shard:
+    needs:
+      - changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    env:
+      PM_TEST_DEPTH: quick
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version:
+          - 22
+        shard:
+          - 1
+          - 2
+          - 3
+          - 4
+          - 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
       - name: Setup Node.js
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
-
       - name: Setup Bun
-        if: steps.changes.outputs.code == 'true'
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
       - name: Install dependencies
         run: npm ci
-
+      - name: Build shard
+        run: |-
+          npm run build
+          npm run build:test
+      - name: Run quick shard
+        run: node --test --test-concurrency=1 --test-shard=${{ matrix.shard }}/5 test/*.test.ts
+  coverage-shard:
+    needs:
+      - changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    env:
+      PM_TEST_DEPTH: quick
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version:
+          - 26
+        shard:
+          - 1
+          - 2
+          - 3
+          - 4
+          - 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 26
+          cache: npm
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+      - name: Install dependencies
+        run: npm ci
+      - name: Build coverage shard
+        run: |-
+          npm run build
+          npm run build:test
+      - name: Collect coverage shard
+        run: node scripts/coverage-gate.ts --shard ${{ matrix.shard }}/5 --output coverage/shard-${{ matrix.shard }}
+      - name: Upload raw hits
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: coverage-shard-${{ matrix.shard }}
+          path: coverage/shard-${{ matrix.shard }}/hits.json
+          if-no-files-found: error
+          retention-days: 7
+  release-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    env:
+      PM_TEST_DEPTH: quick
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 26
+          cache: npm
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+      - name: Install dependencies
+        run: npm ci
       - name: Install project pm-github extension
         shell: bash
         run: |
@@ -84,9 +160,7 @@ jobs:
           else
             rm -f "${managed_registry}"
           fi
-
       - name: Verify tracked pm project health
-        if: steps.changes.outputs.code != 'true' || matrix.node-version == 26
         shell: bash
         run: |
           set -euo pipefail
@@ -103,17 +177,7 @@ jobs:
           # `--strict-exit` is load-bearing: non-strict health may report findings while
           # still exiting successfully.
           ./node_modules/.bin/pm health --strict-exit --require-merge-drivers
-
-      # Tracker/docs changes retain changelog and public identity/privacy audits.
-      - name: Check documentation and tracker changes
-        if: steps.changes.outputs.code != 'true'
-        run: |
-          npm run changelog:check
-          node --test test/identity-audit.test.ts test/package-metadata.test.ts test/compatibility-floor.test.ts
-          node --test --test-name-pattern="compiler entry contract" test/sdk-compiler-entry.test.ts
-
       - name: Build and verify committed output is current
-        if: steps.changes.outputs.code == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -130,20 +194,134 @@ jobs:
             exit 1
           fi
           echo "Committed dist/ matches a fresh build."
-
-      - name: Engines floor tests
-        if: steps.changes.outputs.code == 'true' && matrix.node-version == 22
-        run: npm test
-
-      - name: Quick npm release gate
-        if: steps.changes.outputs.code == 'true' && matrix.node-version == 26
-        run: npm run release:check
-
-      # Packed tests cover Bun project installs and execution, but not bunx.
+      - name: Non-coverage release gates
+        run: npm run typecheck && npm run lint && npm run duplication && npm run build && npm run docstring && npm run audit:prod && npm run pack:dry-run && npm run changelog:check && npm run verify:release-publish-attestation && npm run verify:release-changelog-date
       - name: Bunx smoke
-        if: steps.changes.outputs.code == 'true' && matrix.node-version == 26
         run: bunx --no-install tsc --version
-
       - name: Verify Bun can install the package graph
-        if: steps.changes.outputs.code == 'true' && matrix.node-version == 26
         run: bun install --no-save
+    needs:
+      - changes
+    if: needs.changes.outputs.code == 'true'
+  coverage-merge:
+    needs:
+      - changes
+      - coverage-shard
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PM_TEST_DEPTH: quick
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 26
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Download shard hits
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          pattern: coverage-shard-*
+          path: coverage/shards
+      - name: Merge exact hits and enforce thresholds
+        run: node --expose-internals scripts/coverage-gate.ts --merge coverage/shards/coverage-shard-*/hits.json
+      - name: Keep merged coverage
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: coverage-merged
+          path: coverage/merged.json
+          if-no-files-found: warn
+          retention-days: 7
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PM_TEST_DEPTH: quick
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version:
+          - 22
+          - 26
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+        if: needs.changes.result == 'success' && needs.changes.outputs.code != 'true'
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+        if: needs.changes.result == 'success' && needs.changes.outputs.code != 'true'
+      - name: Install dependencies
+        run: npm ci
+        if: needs.changes.result == 'success' && needs.changes.outputs.code != 'true'
+      - name: Install project pm-github extension
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/pm package install npm:pm-github@2026.10.4 --project
+          node -e 'if (require("./.agents/pm/extensions/pm-github/package.json").version !== "2026.10.4") process.exit(1)'
+          managed_registry=".agents/pm/extensions/.managed-extensions.json"
+          if git ls-files --error-unmatch "${managed_registry}" > /dev/null 2>&1; then
+            git restore -- "${managed_registry}"
+          else
+            rm -f "${managed_registry}"
+          fi
+        if: needs.changes.result == 'success' && needs.changes.outputs.code != 'true'
+      - name: Verify tracked pm project health
+        if: needs.changes.result == 'success' && needs.changes.outputs.code != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Catch durable checkout-visible failures: conflict markers, parse failures,
+          # invalid or drifted history, tracked runtime caches, extension health,
+          # stale in-progress work, and any merge evidence present in this clone.
+          #
+          # This is not a lossless-merge attestation. Merge receipts are clone-local and
+          # absent from a fresh CI checkout. Some unreconciled loss shapes surface as
+          # history drift, but reconciliation or history repair can remove that signal.
+          # Keep receipt review as a local pre-push step; pm-cli#921 and pm-cli#922 track
+          # the missing durable proof.
+          #
+          # `--strict-exit` is load-bearing: non-strict health may report findings while
+          # still exiting successfully.
+          ./node_modules/.bin/pm health --strict-exit --require-merge-drivers
+      - name: Check documentation and tracker changes
+        if: needs.changes.result == 'success' && needs.changes.outputs.code != 'true'
+        run: |
+          npm run changelog:check
+          node --test test/identity-audit.test.ts test/package-metadata.test.ts test/compatibility-floor.test.ts
+          node --test --test-name-pattern="compiler entry contract" test/sdk-compiler-entry.test.ts
+      - name: Require every prerequisite
+        env:
+          NODE_VERSION: ${{ matrix.node-version }}
+          CHANGES: ${{ needs.changes.result }}
+          CODE: ${{ needs.changes.outputs.code }}
+          QUICK: ${{ needs.quick-shard.result }}
+          RELEASE: ${{ needs.release-gate.result }}
+          COVERAGE: ${{ needs.coverage-merge.result }}
+        run: |-
+          set -euo pipefail
+          test "$CHANGES" = success
+          if [ "$CODE" = true ]; then
+            if [ "$NODE_VERSION" = 22 ]; then test "$QUICK" = success;
+            else test "$RELEASE" = success; test "$COVERAGE" = success; fi
+          fi
+    needs:
+      - changes
+      - quick-shard
+      - release-gate
+      - coverage-merge
+    if: ${{ always() }}

@@ -6,9 +6,9 @@ status: in_progress
 priority: 2
 tags[5]: ci,"gh:unbraind/pm-ts-starter#204","gh:unbraind/pm-ts-starter#217","github_author:unbraind",performance
 created_at: "2026-11-09T11:55:55Z"
-updated_at: "2026-11-16T03:02:13.702Z"
+updated_at: "2026-11-16T04:37:57.040Z"
 author: pm-github
-comments[23]{created_at,author,text}:
+comments[26]{created_at,author,text}:
   "2026-11-15T13:43:47.071Z",codex-sol,"Fleet CI v2; companion pm-cli-website-dyhg. Reuse the existing hung Bun gate item. Preserve required test (22) and test (26), generated-package acceptance, committed build-output checks, strict tracker health, privacy and release verifiers. Split quick hosted PR gates from exhaustive local deep gates; add bounded jobs and deterministic test depth. No release workflow or verifier changes."
   "2026-11-15T13:47:57.883Z",codex-sol,"Latest successful main run 43691008662: Node 22 npm/Bun gates 59m04s/58m43s; Node 26 75m10s/76m10s. gh run view --log returned empty; individual jobs API log supplied timings: seeded property 693.34s, discovery 636.63s, compiler matrix 505.66s, packed acceptance 269.96s. Quick retains deterministic prefixes and unchanged coverage thresholds; full remains deep. Generated projects inherit adapted workflows and the helper and now execute their own release gate under both installed graphs. Bun project paths are accepted; bunx is a separate local-bin smoke. The historical Bun handle leak is contained, not diagnosed as fixed."
   "2026-11-15T13:50:43.690Z",codex-sol,"Deep uses four Node/runtime matrix legs, each with a fresh installer graph and its own 120-minute ceiling. This preserves all four full gates without stacking the measured 75-minute npm and 76-minute Bun gates in one 120-minute job. No coverage/source threshold changes."
@@ -32,7 +32,10 @@ comments[23]{created_at,author,text}:
   "2026-11-16T02:29:37.514Z",codex-sol,"Finite quick selection now preserves 9 compiler dimension representatives (both runtime kinds and SDK bounds), all 16 hostile specifier kinds across alternating locations, 18 discovery kinds, each supplementary flag, one compiler per structural family and one packed npm/current SDK path. Deep retains every original combination. Typecheck, test compilation, lint and depth-helper tests pass. Frozen baseline and revised quick touched-file runs are in progress; shared-host timings are comparative, not hosted-runner guarantees."
   "2026-11-16T02:31:57.013Z",codex-sol,"Validation before the early push: npm run typecheck; npm run build:test; npm run lint; npm run build; PM_TEST_DEPTH=quick node --test test/depth.test.ts all pass. The helper also passes through pm test --run --only-last --progress (4 tests). Frozen old-depth baseline and the linked revised touched-file command continue in parallel; measurements will follow. Coverage thresholds and all product deadlines are unchanged. Do not interpret pending focused tests or CI as approval."
   "2026-11-16T03:02:05.668Z",codex-sol,"Bounded quick-fit evidence for code head fa7d363: the 15-minute target is NOT met. Both Linux checks remain running after more than 28 minutes; their test-step lower bounds and every completed setup step are in the Jobs API table below. GitHub returns 404 for unfinished job logs, so a new complete per-test CI ranking is unavailable. Unchanged next candidates from prior logs: post-compile isolation 103.822s, malformed API results 101.273s, import mutations 50.837-70.221s, SDK-bound declaration pairs 51.122s and location tripwires 47.373s. Local quick validation ended at the time budget: 20 passed, zero assertion failures, one cancelled SDK-contracts file. The 5.9.3 structural API and 9-case 6.0.3 graph families pass; the broad suite and coverage are not certified. Local before/after and exact commands are in docs/ci-quick-fit-measurements.md. Release the claim, retain in_progress, never close.\n\n# Quick-fit measurements: pm-ts-starter\n\nCode head: `fa7d36307fb34c30a45130689b32709d342339e1`. [CI run 43792754575](https://github.com/unbraind/pm-ts-starter/actions/runs/43792754575).\nJobs API snapshot: 2026-11-16T03:00:40+00:00. All local timing commands use `PM_TEST_DEPTH=quick`; unset/full depth is not run locally.\n\n| Job | Result at snapshot | Created to completion | Queue | Started to completion |\n| --- | --- | --- | --- | --- |\n| test (26) | in_progress | unfinished | 2s | >= 1712s running |\n| test (22) | in_progress | unfinished | 2s | >= 1712s running |\n\nStep times are completed wall times from `started_at` to `completed_at`; running values are lower bounds, not completed durations.\n\n| Step | test (26) | test (22) |\n| --- | --- | --- |\n| Set up job | 2s success | 2s success |\n| Checkout | 1s success | 2s success |\n| Detect code changes | 1s success | 0s success |\n| Setup Node.js | 6s success | 3s success |\n| Setup Bun | 2s success | 2s success |\n| Install dependencies | 4s success | 6s success |\n| Install project pm-github extension | 1s success | 2s success |\n| Verify tracked pm project health | 1s success | skipped |\n| Check documentation and tracker changes | skipped | skipped |\n| Build and verify committed output is current | 1s success | 0s success |\n| Engines floor tests | skipped | >= 1694s running |\n| Quick npm release gate | >= 1692s running | pending |\n| Bunx smoke | pending | pending |\n| Verify Bun can install the package graph | pending | pending |\n| Post Setup Bun | pending | pending |\n| Post Setup Node.js | pending | pending |\n| Post Checkout | pending | pending |"
-files[29]{path,scope}:
+  "2026-11-16T04:00:19.039Z",pi-glm,"Round G sharding plan, from the cancelled-run measurements: the quick suite never completes one hosted job (test 22: 389 tests in 1799 s then cancelled; test 26: 431 tests in 1797 s then cancelled, both inside the coverage run; static gates take ~10 s). Per-test totals from the logs: the quick Node 22 suite is ~2100-2400 s serial and is dominated by test/sdk-contracts.test.ts (~1381 s alone), which no file-based shard can fit under 12 min. Restructure: (1) split sdk-contracts.test.ts into a shared support module plus five part files sized from measured test durations (parts ~235-350 s each, published-bounds tests grouped to avoid repeated registry installs); (2) Node 22: non-required quick-shard matrix (5 shards, node --test --test-shard=k/5 --test-concurrency=1, PM_TEST_DEPTH=quick, same build/setup), required test (22) becomes an always()-aggregate that requires every shard success on code PRs and the docs gates otherwise; (3) Node 26: non-coverage release-gate steps in one job (they measure ~10 s), coverage run sharded 5 ways via a new --shard mode of scripts/coverage-gate.ts that writes per-shard JSON reports, plus a --merge gate that merges per-file line, branch and function hit counts (sum; covered iff any shard hit) and enforces the unchanged 100 percent thresholds plus the source-presence check on the union; fixture test proves sharded-then-merged equals unsharded on a real fixture project; required test (26) aggregates static, shards and merge. npm run coverage and npm run release:check stay intact for local/deep use. Round-robin shard assignment simulated on measured per-file times: worst shard ~460 s tests + setup, under the 12-minute projection. Risks: the eight tail files never completed any logged run (estimated 200-400 s total), so per-shard projections there are estimates; first CI run of this head will measure them."
+  "2026-11-16T04:23:33.294Z",codex-sol,"Resuming the interrupted round G under the requested handoff. Reviewed the pending tracker changes. Implementing separate Node 22 shards, Node 26 coverage shards and exact hit union, plus non-coverage gates with required success aggregates. CI will provide timing and merged coverage evidence; thresholds and deep gates stay unchanged."
+  "2026-11-16T04:37:55.412Z",codex-sol,"Implementation ready for hosted measurement: five Node 22 quick shards, five Node 26 coverage shards, a parallel non-coverage release gate, exact coverage merge and required test (22/26) aggregates. SDK split comparison: 42 test names before and after, no missing or added names; repaired missing helper/type imports from the interrupted split. Five focused split-file tests passed. Workflow, routing, native coverage-gate and merge fixtures passed 38/38 via pm test. Typecheck, build:test, lint, zero-duplication gate, docstrings and changelog check passed. Focused coverage of the modified gate is 100% lines/branches/functions; this is not full-suite coverage. Artifacts bind raw offsets and line/branch/function hits to source bytes and runtime version; missing/duplicate/mismatched shards fail closed. Thresholds and deep/local commands unchanged. Native merger uses a version-sensitive internal Node API, guarded by the real unsharded-equivalence fixture. Full-suite timing and merged coverage remain pending hosted CI."
+files[38]{path,scope}:
   .github/workflows/ci-deep.yml,project
   .github/workflows/ci.yml,project
   .github/workflows/codeql.yml,project
@@ -43,13 +46,16 @@ files[29]{path,scope}:
   dist/backend-project.js.map,project
   docs/ci-tiers.md,project
   package.json,project
+  scripts/coverage-gate.ts,project
   templates/backend/.github/workflows/ci-deep.yml,project
   templates/backend/.github/workflows/ci.yml,project
   templates/backend/.github/workflows/codeql.yml,project
   test/backend.test.ts,project
   test/ci-consumer-graphs.test.ts,project
   test/ci-routing.test.ts,project
+  test/ci-shards.test.ts,project
   test/ci-tiers.test.ts,project
+  test/coverage-merge.test.ts,project
   test/dependency-fixtures.ts,project
   test/dependency-property-worker.ts,project
   test/depth.test.ts,project
@@ -57,12 +63,18 @@ files[29]{path,scope}:
   test/release-workflow.test.ts,project
   test/sdk-api.test.ts,project
   test/sdk-cache.test.ts,project
+  test/sdk-contracts-a.test.ts,project
+  test/sdk-contracts-b.test.ts,project
+  test/sdk-contracts-c.test.ts,project
+  test/sdk-contracts-d.test.ts,project
+  test/sdk-contracts-e.test.ts,project
+  test/sdk-contracts-support.ts,project
   test/sdk-contracts.test.ts,project
   test/sdk-path-transport.test.ts,project
   test/sdk-program-graph.test.ts,project
   test/sdk-reference-refusal.test.ts,project
   test/support/depth.ts,project
-tests[15]:
+tests[16]:
   - command: "npm run typecheck && npm run build:test && npm run lint"
     scope: project
     timeout_seconds: 240
@@ -180,6 +192,14 @@ tests[15]:
     provenance:
       author: codex-sol
       created_at: "2026-11-16T02:31:48.958Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: PM_TEST_DEPTH=quick node --test test/ci-tiers.test.ts test/ci-routing.test.ts test/ci-consumer-graphs.test.ts test/ci-shards.test.ts test/coverage-gate.test.ts test/coverage-merge.test.ts
+    scope: project
+    timeout_seconds: 180
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-16T04:35:48.009Z"
       source_kind: local_mutation
       source_ref: ci/quick-pr-tier-deep-local-tier
 docs[2]{path,scope}:
