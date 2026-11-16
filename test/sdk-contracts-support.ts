@@ -132,7 +132,7 @@ export function installedConsumer(runtime: "npm" | "bun", bound: "minimum" | "cu
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const verify = spawnSync(runtime === "npm" ? process.execPath : "bun", ["--input-type=module", "-e", `
 import {createRequire} from 'node:module'; import {readFileSync} from 'node:fs';
-export const require = createRequire(process.cwd() + '/package.json');
+const require = createRequire(process.cwd() + '/package.json');
 console.log(JSON.stringify({path:require.resolve('@unbrained/pm-cli/package.json'), version:JSON.parse(readFileSync(require.resolve('@unbrained/pm-cli/package.json'))).version, compiler:require.resolve('typescript/package.json')}));`], { cwd: root, encoding: "utf8" });
   assert.equal(verify.status, 0, verify.stderr);
   const receipt = JSON.parse(verify.stdout) as { path: string; version: string; compiler: string };
@@ -158,7 +158,7 @@ export function instrumentOracle(project: string, receipt: string, t: TestContex
   t.after(() => writeFileSync(metadataFile, original));
   writeFileSync(join(directory, "oracle.cjs"), `const ts=require('./lib/typescript.js'),fs=require('node:fs'),path=require('node:path');
 module.exports={...ts,getPreEmitDiagnostics(program){const diagnostics=ts.getPreEmitDiagnostics(program).filter(d=>d.category===ts.DiagnosticCategory.Error);
-export const sdk=path.join(process.cwd(),'node_modules/@unbrained/pm-cli/package.json'),config=fs.readFileSync('tsconfig.json','utf8');
+const sdk=path.join(process.cwd(),'node_modules/@unbrained/pm-cli/package.json'),config=fs.readFileSync('tsconfig.json','utf8');
 fs.appendFileSync(${JSON.stringify(receipt)},JSON.stringify({cwd:process.cwd(),sdk,version:JSON.parse(fs.readFileSync(sdk)).version,config,sources:JSON.parse(config).files.map(file=>fs.readFileSync(file,'utf8')),status:diagnostics.length?1:0,codes:diagnostics.map(d=>'TS'+d.code)})+'\\n');return diagnostics;}};`);
 }
 

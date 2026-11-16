@@ -1,9 +1,10 @@
 /** Resolution self-tests, registered-command and packed-consumer contracts. Part c of the SDK contract suite; see sdk-contracts-support.ts. */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { chmodSync, cpSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import {dependencyEntry, testCompiler, directApiDiagnostics, dependencyBound, filesystemSnapshot, boundaryRandom, INSTALL_TIMEOUT_MS, bunExecutable} from "./dependency-fixtures.ts";
 import { PmClient } from "@unbrained/pm-cli/sdk";
@@ -322,4 +323,15 @@ test("project inputs refuse ambiguous options and missing compiler APIs", async 
   writeFileSync(join(root, "tsconfig.json"), JSON.stringify({ files: ["consumer.ts"] }));
   await assert.rejects(checkSdkContracts({ minimum: target, current: target, consumer: root }), refuses("compiler_unavailable"));
 
+});
+
+/** Generated compiler hooks must keep their declared CommonJS module kind after sharing helpers. */
+test("instrumented compiler oracle stays valid CommonJS", t => {
+  const project = mkdtempSync(join(tmpdir(), "sdk-oracle-syntax-")), directory = join(project, "node_modules/typescript");
+  mkdirSync(directory, {recursive:true});
+  writeFileSync(join(directory,"package.json"),JSON.stringify({main:"lib/typescript.js"}));
+  instrumentOracle(project, join(project,"receipt.jsonl"), t);
+  t.after(() => rmSync(project, {recursive:true,force:true}));
+  const checked=spawnSync(process.execPath,["--check",join(directory,"oracle.cjs")],{encoding:"utf8"});
+  assert.equal(checked.status,0,checked.stderr);
 });
