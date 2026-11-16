@@ -6,16 +6,20 @@ status: in_progress
 priority: 2
 tags[1]: "gh:unbraind/pm-ts-starter#216"
 created_at: "2026-11-16T12:09:56.217Z"
-updated_at: "2026-11-16T12:13:10.519Z"
-assignee: codex-sol
-claim_principal: codex-sol
+updated_at: "2026-11-16T12:59:02.098Z"
 author: codex-sol
-comments[1]{created_at,author,text}:
+comments[5]{created_at,author,text}:
   "2026-11-16T12:10:11.186Z",codex-sol,Resolved both caller conflicts against current main by retaining main workflow content and reapplying the exact 2026.11.15 SHA/comment and removal of pm-github-version. Main had independently advanced the same lines to 2026.11.11. No review threads or failed checks were returned at the inspected head. Required gates will run on the merged tree.
+  "2026-11-16T12:28:39.870Z",codex-sol,"Caller conflict resolution is e9d890c and exact caller-contract verification with tracker provenance is edae46f. Typecheck, lint, linked caller-contract test, tracker validation and changelog:check pass. The broad quick suite observed a failure in the unchanged generated npm/Bun consumer acceptance test after 267985 ms; the parent suite is still running, so its final error detail and accounting remain pending. Do not treat the initial PR having no failed checks as verification of this merged head."
+  "2026-11-16T12:29:36.221Z",codex-sol,"Depth verification: current main has no PM_TEST_DEPTH switch, so PM_TEST_DEPTH=quick npm test still executes the full default npm suite here. Do not label that run a reduced quick suite; no new test tier or test-count reduction is introduced by this pin PR."
+  "2026-11-16T12:50:59.775Z",codex-sol,"Focused generated-consumer retry passes 1/1 without a code change: node --test --test-name-pattern=\"generated npm and Bun projects build and execute contracts with Git absent\" test/backend.test.ts. Test duration 286909 ms, command duration 296595 ms. Both npm and Bun consumers build and execute their real contracts. Preserve the earlier broad-run failure as separate evidence until the parent run reports its exact cause; this focused pass does not certify the full suite."
+  "2026-11-16T12:58:57.039Z",codex-sol,"Main/caller conflicts are resolved in e9d890c and caller verification committed in edae46f. Typecheck, lint, exact caller contract, changelog:check and tracker validation pass. Focused real npm/Bun generated consumer retry passes 1/1 without code changes. The full default npm suite remains active at receipt preparation, with the earlier generated-consumer failure still awaiting its parent error detail. PM_TEST_DEPTH is unsupported here; no reduced-depth or complete-suite pass is claimed. Release the claim for orchestrator review."
 files[3]{path,scope}:
   .github/workflows/pm-github-closeout.yml,project
   .github/workflows/pm-github-sync.yml,project
   test/pm-github-callers.test.ts,project
 tests[1]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
   node --test test/pm-github-callers.test.ts,project,codex-sol,"2026-11-16T12:11:49.609Z",local_mutation,ci/pm-github-2026.11.15-bounded-ci-dispatch
+docs[1]{path,scope}:
+  README.md,project
 body: ""
