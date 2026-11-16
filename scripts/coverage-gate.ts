@@ -414,11 +414,11 @@ export function runCoverageGate(
     const raw = readdirSync(join(reportRoot, "raw")).filter(name => name.endsWith(".json")).flatMap(name => {
       const data = JSON.parse(readFileSync(join(reportRoot, "raw", name), "utf8")) as { result: RawScript[] };
       return data.result.filter(script => required.some(file => pathToFileURL(join(rootDir, file)).href === script.url))
-        .map(script => ({ ...script, url: relative(rootDir, fileURLToPath(script.url)) }));
+        .map(script => ({ ...script, url: relative(rootDir, fileURLToPath(script.url)).replaceAll("\\", "/") }));
     });
     if (!native.length || !raw.length || !runtime.output) throw new Error("coverage-gate: empty shard or missing output");
     mkdirSync(resolve(rootDir, runtime.output), { recursive: true });
-    const files = native.flatMap(record => record.summary.files).map(file => ({ ...file, path: relative(rootDir, file.path) }));
+    const files = native.flatMap(record => record.summary.files).map(file => ({ ...file, path: relative(rootDir, file.path).replaceAll("\\", "/") }));
     writeFileSync(join(rootDir, runtime.output, "hits.json"), JSON.stringify({ shard: runtime.shard, node: process.versions.node, digest: coverageDigest(rootDir, required), files, raw }));
     rmSync(reportRoot, { recursive: true, force: true });
     return 0;
