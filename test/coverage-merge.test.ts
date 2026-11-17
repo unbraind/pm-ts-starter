@@ -1,6 +1,6 @@
 /** Compare actual offset-based hit unions against an unsharded runtime report. */
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -157,4 +157,28 @@ test('all module identities', () => {
   assert.deepEqual(artifact.raw.map(script => script.url), ["src/value.ts", "src/value.ts", "src/value.ts"]);
   assert.equal(runCoverageGate(root, "ignore", { merge: ["query/hits.json"] }), 0,
     "query-qualified executions supply the positive branch required for full coverage");
+});
+
+
+/** An explicit symlink root must retain both raw and native required-source hits. */
+test("coverage shard roots use canonical paths before filtering counters", t => {
+  const parent = mkdtempSync(join(tmpdir(), "coverage symlink-"));
+  t.after(() => rmSync(parent, { recursive: true, force: true }));
+  const root = join(parent, "real"), alias = join(parent, "alias");
+  mkdirSync(root);
+  mkdirSync(join(root, "src"));
+  mkdirSync(join(root, "test"));
+  writeCoverageConfig(root);
+  writeFileSync(join(root, "src/value.ts"), "export function value() { return 42; }\n");
+  writeFileSync(join(root, "test/value.test.ts"), "import test from 'node:test'; import assert from 'node:assert/strict'; import {value} from '../src/value.ts'; test('value', () => assert.equal(value(), 42));\n");
+  symlinkSync(root, alias, process.platform === "win32" ? "junction" : "dir");
+  assert.equal(runCoverageGate(alias, "ignore", { shard: "1/1", output: "linked" }), 0);
+  const artifact = JSON.parse(readFileSync(join(root, "linked/hits.json"), "utf8")) as {
+    raw: { url: string; functions: { ranges: { count: number }[] }[] }[];
+    files: { path: string }[];
+  };
+  assert.deepEqual(artifact.raw.map(script => script.url), ["src/value.ts"]);
+  assert.ok(artifact.raw[0]!.functions.some(fn => fn.ranges.some(range => range.count > 0)));
+  assert.deepEqual(artifact.files.map(file => file.path), ["src/value.ts"]);
+  assert.equal(runCoverageGate(alias, "ignore", { merge: ["linked/hits.json"] }), 0);
 });

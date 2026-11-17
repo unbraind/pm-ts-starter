@@ -27,8 +27,17 @@ test("quick and coverage matrices retain all files and unchanged deep gates",()=
 
 test("required aggregates reject failures, cancellations and skipped prerequisites",{skip:process.platform==="win32"},()=>{
   const run=jobs.test.steps.at(-1).run;
-  for(const node of ["22","26"]) for(const result of ["success","failure","cancelled","skipped"]){
-    const env={...process.env,NODE_VERSION:node,CHANGES:"success",CODE:"true",QUICK:"success",RELEASE:"success",COVERAGE:"success",[node==="22"?"QUICK":"COVERAGE"]:result};
-    const child=spawnSync("bash",["-c",run],{env,encoding:"utf8"});assert.equal(child.status===0,result==="success",node+result);
+  for (const node of ["22", "26"]) for (const code of ["true", "false"]) {
+    const base = { ...process.env, NODE_VERSION: node, CHANGES: "success", CODE: code,
+      QUICK: code === "true" ? "success" : "skipped", RELEASE: code === "true" ? "success" : "skipped", COVERAGE: code === "true" ? "success" : "skipped" };
+    const check = (env: NodeJS.ProcessEnv, success: boolean, label: string) => {
+      const child = spawnSync("bash", ["-c", run], { env, encoding: "utf8" });
+      assert.equal(child.status === 0, success, `${node}/${code}/${label}: ${child.stderr}`);
+    };
+    check(base, true, "successful control");
+    const required = code === "false" ? ["CHANGES"] : node === "22" ? ["CHANGES", "QUICK"] : ["CHANGES", "RELEASE", "COVERAGE"];
+    for (const field of required) for (const result of ["failure", "cancelled", "skipped"]) {
+      check({ ...base, [field]: result }, false, `${field}/${result}`);
+    }
   }
 });

@@ -253,6 +253,7 @@ export function runCoverageGate(
   stdio: "inherit" | "ignore" = "inherit",
   runtime: CoverageGateRuntime = {},
 ): number {
+  rootDir = realpathSync(rootDir);
   const manifest = JSON.parse(readFileSync(join(rootDir, "package.json"), "utf8")) as PackageManifest;
   const config = manifest.coverageGate;
 
