@@ -7,12 +7,19 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { runCoverageGate, mergeCoverageShards, runScriptEntry } from "../scripts/coverage-gate.ts";
 
+/** Give real coverage fixtures the same required source scope and strict thresholds. */
+function writeCoverageConfig(root: string): void {
+  writeFileSync(join(root, "package.json"), JSON.stringify({ type: "module", coverageGate: {
+    sources: ["src"], tests: ["test/*.test.ts"], thresholds: { lines: 100, branches: 100, functions: 100 },
+  } }));
+}
+
 test("sharded coverage equals unsharded including one-shard branches and functions", t => {
   const root = mkdtempSync(join(tmpdir(), "coverage union-"));
   t.after(() => rmSync(root, {recursive:true,force:true}));
   mkdirSync(join(root,"test"));
   mkdirSync(join(root,"src"));
-  writeFileSync(join(root,"package.json"), JSON.stringify({type:"module",coverageGate:{sources:["src"],tests:["test/*.test.ts"],thresholds:{lines:100,branches:100,functions:100}}}));
+  writeCoverageConfig(root);
   writeFileSync(join(root,"src/value.ts"), `export function classify(value: number) {
   if (value > 0) return positive();
   return negative();
@@ -97,9 +104,7 @@ test("successful tooling-only shard contributes empty hits without weakening the
   mkdirSync(join(root, "src"));
   mkdirSync(join(root, "test"));
   mkdirSync(join(root, "tooling"));
-  writeFileSync(join(root, "package.json"), JSON.stringify({ type: "module", coverageGate: {
-    sources: ["src"], tests: ["test/*.test.ts"], thresholds: { lines: 100, branches: 100, functions: 100 },
-  } }));
+  writeCoverageConfig(root);
   writeFileSync(join(root, "src/value.ts"), "export function value() { return 42; }\n");
   writeFileSync(join(root, "tooling/check.ts"), "export const ready = true;\n");
   writeFileSync(join(root, "test/a.test.ts"), "import test from 'node:test'; import assert from 'node:assert/strict'; import {value} from '../src/value.ts'; test('source', () => assert.equal(value(), 42));\n");
