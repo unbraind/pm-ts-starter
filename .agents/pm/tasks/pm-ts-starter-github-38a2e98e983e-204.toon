@@ -6,9 +6,9 @@ status: in_progress
 priority: 2
 tags[5]: ci,"gh:unbraind/pm-ts-starter#204","gh:unbraind/pm-ts-starter#217","github_author:unbraind",performance
 created_at: "2026-11-09T11:55:55Z"
-updated_at: "2026-11-17T02:31:30.165Z"
+updated_at: "2026-11-17T05:34:30.133Z"
 author: pm-github
-comments[43]{created_at,author,text}:
+comments[45]{created_at,author,text}:
   "2026-11-15T13:43:47.071Z",codex-sol,"Fleet CI v2; companion pm-cli-website-dyhg. Reuse the existing hung Bun gate item. Preserve required test (22) and test (26), generated-package acceptance, committed build-output checks, strict tracker health, privacy and release verifiers. Split quick hosted PR gates from exhaustive local deep gates; add bounded jobs and deterministic test depth. No release workflow or verifier changes."
   "2026-11-15T13:47:57.883Z",codex-sol,"Latest successful main run 43691008662: Node 22 npm/Bun gates 59m04s/58m43s; Node 26 75m10s/76m10s. gh run view --log returned empty; individual jobs API log supplied timings: seeded property 693.34s, discovery 636.63s, compiler matrix 505.66s, packed acceptance 269.96s. Quick retains deterministic prefixes and unchanged coverage thresholds; full remains deep. Generated projects inherit adapted workflows and the helper and now execute their own release gate under both installed graphs. Bun project paths are accepted; bunx is a separate local-bin smoke. The historical Bun handle leak is contained, not diagnosed as fixed."
   "2026-11-15T13:50:43.690Z",codex-sol,"Deep uses four Node/runtime matrix legs, each with a fresh installer graph and its own 120-minute ceiling. This preserves all four full gates without stacking the measured 75-minute npm and 76-minute Bun gates in one 120-minute job. No coverage/source threshold changes."
@@ -52,6 +52,8 @@ comments[43]{created_at,author,text}:
   "2026-11-16T19:13:02.058Z",codex-sol,"Round O validation passed: npm run typecheck; npm run build:test; npm run lint; linked full coverage-gate/coverage-merge, CI tiers/consumer graphs/shards/routing and release-workflow tests; targeted SDK supplementary verdicts, project refusal sentinel and published-cache retry regression at quick depth and timeout scale 3; npm run changelog:check; git diff --check. Final patch-only version fixture and explicit Node 22-versus-26 refusal were rechecked with the type/lint gates and both coverage-merge tests passed. Initial invalid PM context selection ran no tests; corrected tracker/source linked execution passed. All six supplied findings accepted; no review-thread mutations or workflow dispatches."
   "2026-11-17T02:29:24.021Z",codex-sol,"AB findings verified: shard mkdir resolves absolute output while writing uses join(rootDir, output), and merge inputs also use join. Resolve both consistently and extend the real union fixture with absolute paths. Compiler bodies are rejected by containment before any worker executes; replace the misleading worker loop with one external-wrapper rejection and explicit remedy assertion."
   "2026-11-17T02:31:27.008Z",codex-sol,"Review AB fixed PRRT_kwDOSZpwFM64Krni and PRRT_kwDOSZpwFM64Krnr. Shard output is resolved once and reused for mkdir and hits.json; merge input paths resolve against rootDir. Real union and CLI fixtures now cover absolute output and absolute merge inputs beside relative cases. Removed unreachable worker-crash bodies and assert one typed external-wrapper rejection with the explicit containment remedy. Linked coverage-gate, real merge and wrapper regressions pass; real merge fixture passes on Node 22 and 26 (2/2 each). Typecheck, build:test, lint, changelog:check and diff whitespace checks pass. Full-suite certification remains with CI."
+  "2026-11-17T05:33:03.238Z",codex-sol,"PRRT_kwDOSZpwFM64RpK6 verified: shard production and merge both reject empty required-source hits, although a successful tooling-only shard is legitimate. Allow empty contributions while retaining exact shard completeness, source digest, runtime identity, union thresholds and union source presence. Add a real tooling-only shard fixture."
+  "2026-11-17T05:34:28.386Z",codex-sol,"PRRT_kwDOSZpwFM64RpK6 fixed. A successful tooling-only shard now publishes empty files/raw arrays and merges normally. Real fixture equals the unsharded native union; missing-shard, partial-threshold and missing-source controls still fail. The new fixture fails against original HEAD with empty shard or missing output and passes with the fix. Gates passed: three coverage-merge tests (also via pm test index 25), npm run typecheck, npm run build:test, npm run lint, npm run changelog:check. No full-suite coverage claim."
 files[39]{path,scope}:
   .github/workflows/ci-deep.yml,project
   .github/workflows/ci.yml,project
@@ -92,7 +94,7 @@ files[39]{path,scope}:
   test/sdk-reference-refusal.test.ts,project
   test/smoke.test.ts,project
   test/support/depth.ts,project
-tests[24]:
+tests[25]:
   - command: "npm run typecheck && npm run build:test && npm run lint"
     scope: project
     timeout_seconds: 240
@@ -280,6 +282,13 @@ tests[24]:
     provenance:
       author: codex-sol
       created_at: "2026-11-17T02:30:13.659Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: node --test test/coverage-merge.test.ts
+    scope: project
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-17T05:33:49.420Z"
       source_kind: local_mutation
       source_ref: ci/quick-pr-tier-deep-local-tier
 docs[4]{path,scope}:

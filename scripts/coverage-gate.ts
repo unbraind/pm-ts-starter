@@ -416,7 +416,9 @@ export function runCoverageGate(
       return data.result.filter(script => required.some(file => pathToFileURL(join(rootDir, file)).href === script.url))
         .map(script => ({ ...script, url: relative(rootDir, fileURLToPath(script.url)).replaceAll("\\", "/") }));
     });
-    if (!native.length || !raw.length || !runtime.output) throw new Error("coverage-gate: empty shard or missing output");
+    // A successful tooling-only shard contributes no required-source hits.
+    // Completeness, source presence and thresholds are enforced on the union.
+    if (!native.length || !runtime.output) throw new Error("coverage-gate: missing shard report or output");
     const outputDir = resolve(rootDir, runtime.output);
     mkdirSync(outputDir, { recursive: true });
     const files = native.flatMap(record => record.summary.files).map(file => ({ ...file, path: relative(rootDir, file.path).replaceAll("\\", "/") }));
@@ -504,7 +506,7 @@ export function mergeCoverageShards(rootDir: string, paths: readonly string[], r
     for (let i = 1; i <= total; i++) if (!ordinals.has(`${i}/${total}`)) throw new Error("coverage-gate: duplicate or missing shard");
     for (const [index, shard] of shards.entries()) {
       if (shard.digest !== coverageDigest(rootDir, required)) throw new Error("coverage-gate: source mismatch");
-      if (shard.node.split(".")[0] !== process.versions.node.split(".")[0] || !shard.raw.length) throw new Error("coverage-gate: runtime mismatch or empty shard");
+      if (shard.node.split(".")[0] !== process.versions.node.split(".")[0]) throw new Error("coverage-gate: runtime mismatch");
       const result = shard.raw.map(script => {
         if (!required.includes(script.url)) throw new Error("coverage-gate: unexpected source in shard");
         return { ...script, url: pathToFileURL(join(rootDir, script.url)).href };

@@ -55,7 +55,7 @@ export function negative() { return "negative"; }
   writeFileSync(join(root,paths[1]!),JSON.stringify(sameHalf));
   assert.equal(runCoverageGate(root,"ignore",{merge:paths}),1,"partial union must retain the original 100 percent threshold");
   writeFileSync(join(root,paths[1]!),secondSaved);
-  assert.throws(()=>runCoverageGate(root,"ignore",{shard:"1/2"}),/empty shard or missing output/);
+  assert.throws(()=>runCoverageGate(root,"ignore",{shard:"1/2"}),/missing shard report or output/);
   const saved=readFileSync(join(root,paths[0]!),"utf8");
   const change=(mutate:(artifact: {digest:string;node:string;raw:{url:string;functions?:unknown}[]})=>void) => {const artifact=JSON.parse(saved);mutate(artifact);writeFileSync(join(root,paths[0]!),JSON.stringify(artifact));};
   change(artifact=>{artifact.digest="wrong"});assert.throws(()=>mergeCoverageShards(root,paths,["src/value.ts"]),/source mismatch/);
@@ -63,7 +63,8 @@ export function negative() { return "negative"; }
   assert.deepEqual(mergeCoverageShards(root,paths,["src/value.ts"]),merged,"patch differences must preserve the native coverage union");
   change(artifact=>{artifact.node=process.versions.node.startsWith("26.") ? "22.0.0" : "26.0.0"});assert.throws(()=>mergeCoverageShards(root,paths,["src/value.ts"]),/runtime mismatch/);
   change(artifact=>{artifact.raw[0].functions=null});assert.throws(()=>mergeCoverageShards(root,paths,["src/value.ts"]),/native merge failed/);
-  change(artifact=>{artifact.raw=[]});assert.throws(()=>mergeCoverageShards(root,paths,["src/value.ts"]),/empty shard/);
+  change(artifact=>{artifact.raw=[]});
+  assert.equal(runCoverageGate(root,"ignore",{merge:paths}),1,"empty contributions must not hide incomplete union coverage");
   change(artifact=>{artifact.raw[0].url="../outside.ts"});assert.throws(()=>mergeCoverageShards(root,paths,["src/value.ts"]),/unexpected source/);
   assert.equal(runCoverageGate(root,"ignore",{merge:paths}),1);
   writeFileSync(join(root,paths[0]!),saved);
@@ -87,4 +88,36 @@ test("coverage CLI requires explicit values for shard and output flags", () => {
       assert.throws(() => runScriptEntry(), message);
     }
   } finally { process.argv = savedArgv; }
+});
+
+/** Tooling-only shards are valid contributions; union source presence remains mandatory. */
+test("successful tooling-only shard contributes empty hits without weakening the union", t => {
+  const root = mkdtempSync(join(tmpdir(), "coverage tooling-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(join(root, "src"));
+  mkdirSync(join(root, "test"));
+  mkdirSync(join(root, "tooling"));
+  writeFileSync(join(root, "package.json"), JSON.stringify({ type: "module", coverageGate: {
+    sources: ["src"], tests: ["test/*.test.ts"], thresholds: { lines: 100, branches: 100, functions: 100 },
+  } }));
+  writeFileSync(join(root, "src/value.ts"), "export function value() { return 42; }\n");
+  writeFileSync(join(root, "tooling/check.ts"), "export const ready = true;\n");
+  writeFileSync(join(root, "test/a.test.ts"), "import test from 'node:test'; import assert from 'node:assert/strict'; import {value} from '../src/value.ts'; test('source', () => assert.equal(value(), 42));\n");
+  writeFileSync(join(root, "test/b.test.ts"), "import test from 'node:test'; import assert from 'node:assert/strict'; import {ready} from '../tooling/check.ts'; test('tooling', () => assert.equal(ready, true));\n");
+  const paths = ["source/hits.json", "tooling-only/hits.json"];
+  for (const [shard, output] of [["1/1", "whole"], ["1/2", "source"], ["2/2", "tooling-only"]]) {
+    assert.equal(runCoverageGate(root, "ignore", { shard, output }), 0);
+  }
+  const tooling = JSON.parse(readFileSync(join(root, paths[1]!), "utf8"));
+  assert.deepEqual(tooling.files, []);
+  assert.deepEqual(tooling.raw, []);
+  assert.deepEqual(mergeCoverageShards(root, paths, ["src/value.ts"]),
+    mergeCoverageShards(root, ["whole/hits.json"], ["src/value.ts"]));
+  assert.equal(runCoverageGate(root, "ignore", { merge: paths }), 0);
+  assert.throws(() => mergeCoverageShards(root, [paths[0]!], ["src/value.ts"]), /missing shards/);
+  writeFileSync(join(root, "src/missing.ts"), "export const missing = true;\n");
+  for (const [shard, output] of [["1/2", "source"], ["2/2", "tooling-only"]]) {
+    assert.equal(runCoverageGate(root, "ignore", { shard, output }), 0);
+  }
+  assert.equal(runCoverageGate(root, "ignore", { merge: paths }), 1, "the union must still load every required source");
 });
