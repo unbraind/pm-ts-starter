@@ -524,11 +524,22 @@ export function mergeCoverageShards(rootDir: string, paths: readonly string[], r
       });
       writeFileSync(join(scratch, `coverage-${index}-1000000000000-0.json`), JSON.stringify({ result }));
     }
-    // This version-specific API is guarded by the real sharded/unsharded fixture on every run.
-    const program = `const {TestCoverage} = require('internal/test_runner/coverage'); process.stdout.write(JSON.stringify((TestCoverage.length === 3 ? new TestCoverage(process.argv[1], undefined, {cwd:process.argv[2], coverageIncludeGlobs:JSON.parse(process.argv[3]), coverageExcludeGlobs:[]}) : new TestCoverage(process.argv[1], undefined, process.argv[2], [], JSON.parse(process.argv[3]), false, {})).summary()));`;
-    const result = spawnSync(process.execPath, ["--expose-internals", "-e", program, scratch, rootDir, JSON.stringify(required)], { encoding: "utf8" });
-    if (result.status !== 0) throw new Error(`coverage-gate: native merge failed: ${result.stderr}`);
-    return JSON.parse(result.stdout) as NativeSummary;
+    // Native summaries contain a record for every source line and can exceed
+    // the child process's stdout buffer. Keep them with the merge scratch data.
+    const summaryPath = join(scratch, "summary.json");
+    const program = `
+      const {writeFileSync} = require('node:fs');
+      const {TestCoverage} = require('internal/test_runner/coverage');
+      const [scratch, cwd, required, summaryPath] = process.argv.slice(1);
+      const coverageIncludeGlobs = JSON.parse(required);
+      const coverage = TestCoverage.length === 3
+        ? new TestCoverage(scratch, undefined, {cwd, coverageIncludeGlobs, coverageExcludeGlobs: []})
+        : new TestCoverage(scratch, undefined, cwd, [], coverageIncludeGlobs, false, {});
+      writeFileSync(summaryPath, JSON.stringify(coverage.summary()));
+    `;
+    const result = spawnSync(process.execPath, ["--expose-internals", "-e", program, scratch, rootDir, JSON.stringify(required), summaryPath], { encoding: "utf8" });
+    if (result.status !== 0) throw new Error(`coverage-gate: native merge failed: ${result.error?.message ?? result.stderr}`);
+    return JSON.parse(readFileSync(summaryPath, "utf8")) as NativeSummary;
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }

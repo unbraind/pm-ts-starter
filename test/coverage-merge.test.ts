@@ -92,6 +92,24 @@ export function negative() { return "negative"; }
   assert.throws(()=>mergeCoverageShards(root,[paths[0]!,paths[0]!],["src/value.ts"]),/duplicate or missing/);
 });
 
+test("merged coverage matches the native report when the summary exceeds 1 MiB", t => {
+  const root = coverageFixture(t, "coverage large-");
+  const source = "src/large.ts";
+  writeFileSync(join(root, source), `let value = 0;\n${"value += 1;\n".repeat(50_000)}export {value};\n`);
+  writeFileSync(join(root, "test/large.test.ts"), `import test from 'node:test';
+import assert from 'node:assert/strict';
+import {value} from '../src/large.ts';
+test('covers all source lines', () => assert.equal(value, 50_000));`);
+  assert.equal(runCoverageGate(root, "ignore", { shard: "1/1", output: "whole" }), 0);
+  const whole = JSON.parse(readFileSync(join(root, "whole/hits.json"), "utf8")) as ReturnType<typeof mergeCoverageShards>;
+  assert.ok(Buffer.byteLength(JSON.stringify(whole.files)) > 1024 * 1024,
+    "the per-line records alone must exceed the default child stdout buffer");
+  const merged = mergeCoverageShards(root, ["whole/hits.json"], [source]);
+  assert.deepEqual(merged.files.map(file => ({ ...file, path: relative(root, file.path).split(sep).join("/") })), whole.files);
+  const {coveredLinePercent, coveredBranchPercent, coveredFunctionPercent} = merged.totals;
+  assert.deepEqual([coveredLinePercent, coveredBranchPercent, coveredFunctionPercent], [100, 100, 100]);
+});
+
 /** Malformed shard invocations must fail before they can run an unsharded gate. */
 test("coverage CLI requires explicit values for shard and output flags", () => {
   const savedArgv = process.argv;

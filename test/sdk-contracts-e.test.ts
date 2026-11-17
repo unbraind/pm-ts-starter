@@ -1,7 +1,7 @@
 /** Sandbox dependency, registry allowlist and round 9/10 dependency-shape contracts. Part e of the SDK contract suite; see sdk-contracts-support.ts. */
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { chmodSync, cpSync, mkdirSync, readFileSync, renameSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, mkdirSync, readdirSync, readFileSync, renameSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { Worker } from "node:worker_threads";
@@ -10,6 +10,24 @@ import { SdkContractRefusal, type SdkContractOptions } from "../sdk-contracts.ts
 import { testDepth, testTimeout } from "./support/depth.ts";
 import test, { type TestContext } from "node:test";
 import { sdk, target, compiler, checkSdkContracts, installationEnv, scratch, refuses, command, packedFixture, linkedCompilerConsumer, noEmitConsumer, restoreEnvironment, plainCopy, assertPlainRows } from "./sdk-contracts-support.ts";
+
+test("plain compiler oracle removes its baseline before returning the verdict", t => {
+  const project = noEmitConsumer(t);
+  const temporary = scratch(t);
+  const tempKeys = ["TMPDIR", "TEMP", "TMP"];
+  const previous = tempKeys.map(key => process.env[key]);
+  try {
+    for (const key of tempKeys) process.env[key] = temporary;
+    assert.deepEqual(plainCopy(project, t), {ok: true, codes: []});
+    writeFileSync(join(project, "consumer.mts"), 'export const value: string = 1;');
+    assert.deepEqual(plainCopy(project, t), {ok: false, codes: ["TS2322"]});
+    for (const directory of readdirSync(temporary)) {
+      assert.deepEqual(readdirSync(join(temporary, directory)), [], "the oracle must remove the copied project immediately");
+    }
+  } finally {
+    restoreEnvironment(tempKeys, previous);
+  }
+});
 
 test("real noEmit delegation prevents allowJs output collisions while preserving config bytes", async t => {
   const project = linkedCompilerConsumer(t);

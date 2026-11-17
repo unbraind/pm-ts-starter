@@ -241,9 +241,13 @@ export function restoreEnvironment(keys: readonly string[], previous: readonly (
 
 export function plainCopy(project: string, t: TestContext): {ok: boolean; codes: string[]} {
   const baseline = join(scratch(t), "baseline");
-  cpSync(project, baseline, {recursive: true});
-  const diagnostics = directApiDiagnostics(baseline);
-  return {ok: diagnostics.length === 0, codes: diagnostics.map(d => d.code)};
+  try {
+    cpSync(project, baseline, {recursive: true});
+    const diagnostics = directApiDiagnostics(baseline);
+    return {ok: diagnostics.length === 0, codes: diagnostics.map(d => d.code)};
+  } finally {
+    rmSync(baseline, {recursive: true, force: true});
+  }
 }
 
 /** Compare both selected bounds with the independent native verdict and diagnostic codes. */
