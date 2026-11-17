@@ -538,7 +538,7 @@ export function mergeCoverageShards(rootDir: string, paths: readonly string[], r
       writeFileSync(summaryPath, JSON.stringify(coverage.summary()));
     `;
     const result = spawnSync(process.execPath, ["--expose-internals", "-e", program, scratch, rootDir, JSON.stringify(required), summaryPath], { encoding: "utf8" });
-    if (result.status !== 0) throw new Error(`coverage-gate: native merge failed: ${result.error?.message ?? result.stderr}`);
+    if (result.status !== 0) throw new Error(`coverage-gate: native merge failed: ${result.stderr}`);
     return JSON.parse(readFileSync(summaryPath, "utf8")) as NativeSummary;
   } finally {
     rmSync(scratch, { recursive: true, force: true });
