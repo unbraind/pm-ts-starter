@@ -126,3 +126,35 @@ test("successful tooling-only shard contributes empty hits without weakening the
   }
   assert.equal(runCoverageGate(root, "ignore", { merge: paths }), 1, "the union must still load every required source");
 });
+
+
+/** Query and fragment imports retain their counters under the source file identity. */
+test("coverage shards retain plain, query and fragment imports of the same source", t => {
+  const root = mkdtempSync(join(tmpdir(), "coverage query-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(join(root, "src"));
+  mkdirSync(join(root, "test"));
+  writeCoverageConfig(root);
+  writeFileSync(join(root, "src/value.ts"), `export function classify(value: number) {
+  if (value > 0) return "positive";
+  return "negative";
+}
+`);
+  writeFileSync(join(root, "test/value.test.ts"), `import test from 'node:test';
+import assert from 'node:assert/strict';
+import {classify} from '../src/value.ts';
+const {classify: query} = await import('../src/value.ts?case=positive');
+const {classify: fragment} = await import('../src/value.ts#case=positive');
+test('all module identities', () => {
+  assert.equal(classify(-1), 'negative');
+  assert.equal(query(1), 'positive');
+  assert.equal(fragment(1), 'positive');
+});
+`);
+  assert.equal(runCoverageGate(root, "ignore", { shard: "1/1", output: "query" }), 0);
+  const artifact = JSON.parse(readFileSync(join(root, "query/hits.json"), "utf8")) as { raw: { url: string }[] };
+  assert.equal(artifact.raw.length, 3, "all three module executions must survive the shard filter");
+  assert.deepEqual(artifact.raw.map(script => script.url), ["src/value.ts", "src/value.ts", "src/value.ts"]);
+  assert.equal(runCoverageGate(root, "ignore", { merge: ["query/hits.json"] }), 0,
+    "query-qualified executions supply the positive branch required for full coverage");
+});

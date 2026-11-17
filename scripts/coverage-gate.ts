@@ -413,7 +413,9 @@ export function runCoverageGate(
     const native = JSON.parse(readFileSync(reportPath, "utf8")) as NativeRecord[];
     const raw = readdirSync(join(reportRoot, "raw")).filter(name => name.endsWith(".json")).flatMap(name => {
       const data = JSON.parse(readFileSync(join(reportRoot, "raw", name), "utf8")) as { result: RawScript[] };
-      return data.result.filter(script => required.some(file => pathToFileURL(join(rootDir, file)).href === script.url))
+      // Module cache identities may carry query/fragment suffixes; coverage belongs to the source file.
+      return data.result.map(script => ({ ...script, url: script.url.split(/[?#]/, 1)[0]! }))
+        .filter(script => required.some(file => pathToFileURL(join(rootDir, file)).href === script.url))
         .map(script => ({ ...script, url: relative(rootDir, fileURLToPath(script.url)).replaceAll("\\", "/") }));
     });
     // A successful tooling-only shard contributes no required-source hits.
