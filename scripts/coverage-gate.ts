@@ -414,10 +414,12 @@ export function runCoverageGate(
     const native = JSON.parse(readFileSync(reportPath, "utf8")) as NativeRecord[];
     const raw = readdirSync(join(reportRoot, "raw")).filter(name => name.endsWith(".json")).flatMap(name => {
       const data = JSON.parse(readFileSync(join(reportRoot, "raw", name), "utf8")) as { result: RawScript[] };
-      // Module cache identities may carry query/fragment suffixes; coverage belongs to the source file.
-      return data.result.map(script => ({ ...script, url: script.url.split(/[?#]/, 1)[0]! }))
-        .filter(script => required.some(file => pathToFileURL(join(rootDir, file)).href === script.url))
-        .map(script => ({ ...script, url: relative(rootDir, fileURLToPath(script.url)).replaceAll("\\", "/") }));
+      // Filter by source path, but preserve each full module identity when relocating the URL.
+      return data.result.filter(script => required.some(file => pathToFileURL(join(rootDir, file)).href === script.url.split(/[?#]/, 1)[0]))
+        .map(script => {
+          const source = script.url.split(/[?#]/, 1)[0]!;
+          return { ...script, url: relative(rootDir, fileURLToPath(source)).replaceAll("\\", "/") + script.url.slice(source.length) };
+        });
     });
     // A successful tooling-only shard contributes no required-source hits.
     // Completeness, source presence and thresholds are enforced on the union.
@@ -511,8 +513,9 @@ export function mergeCoverageShards(rootDir: string, paths: readonly string[], r
       if (shard.digest !== coverageDigest(rootDir, required)) throw new Error("coverage-gate: source mismatch");
       if (shard.node.split(".")[0] !== process.versions.node.split(".")[0]) throw new Error("coverage-gate: runtime mismatch");
       const result = shard.raw.map(script => {
-        if (!required.includes(script.url)) throw new Error("coverage-gate: unexpected source in shard");
-        return { ...script, url: pathToFileURL(join(rootDir, script.url)).href };
+        const source = script.url.split(/[?#]/, 1)[0]!;
+        if (!required.includes(source)) throw new Error("coverage-gate: unexpected source in shard");
+        return { ...script, url: pathToFileURL(join(rootDir, source)).href + script.url.slice(source.length) };
       });
       writeFileSync(join(scratch, `coverage-${index}-1000000000000-0.json`), JSON.stringify({ result }));
     }

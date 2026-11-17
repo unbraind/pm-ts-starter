@@ -6,9 +6,9 @@ status: in_progress
 priority: 2
 tags[5]: ci,"gh:unbraind/pm-ts-starter#204","gh:unbraind/pm-ts-starter#217","github_author:unbraind",performance
 created_at: "2026-11-09T11:55:55Z"
-updated_at: "2026-11-17T13:57:15.655Z"
+updated_at: "2026-11-17T15:55:27.909Z"
 author: pm-github
-comments[55]{created_at,author,text}:
+comments[57]{created_at,author,text}:
   "2026-11-15T13:43:47.071Z",codex-sol,"Fleet CI v2; companion pm-cli-website-dyhg. Reuse the existing hung Bun gate item. Preserve required test (22) and test (26), generated-package acceptance, committed build-output checks, strict tracker health, privacy and release verifiers. Split quick hosted PR gates from exhaustive local deep gates; add bounded jobs and deterministic test depth. No release workflow or verifier changes."
   "2026-11-15T13:47:57.883Z",codex-sol,"Latest successful main run 43691008662: Node 22 npm/Bun gates 59m04s/58m43s; Node 26 75m10s/76m10s. gh run view --log returned empty; individual jobs API log supplied timings: seeded property 693.34s, discovery 636.63s, compiler matrix 505.66s, packed acceptance 269.96s. Quick retains deterministic prefixes and unchanged coverage thresholds; full remains deep. Generated projects inherit adapted workflows and the helper and now execute their own release gate under both installed graphs. Bun project paths are accepted; bunx is a separate local-bin smoke. The historical Bun handle leak is contained, not diagnosed as fixed."
   "2026-11-15T13:50:43.690Z",codex-sol,"Deep uses four Node/runtime matrix legs, each with a fresh installer graph and its own 120-minute ceiling. This preserves all four full gates without stacking the measured 75-minute npm and 76-minute Bun gates in one 120-minute job. No coverage/source threshold changes."
@@ -64,6 +64,8 @@ comments[55]{created_at,author,text}:
   "2026-11-17T10:58:53.154Z",codex-sol,"Round AS verified and fixed PRRT_kwDOSZpwFM64YtoJ and PRRT_kwDOSZpwFM64YtoU. The symlink-root fixture failed before the root canonicalization (raw counters were empty) and now retains portable required-source paths and nonzero hits through shard collection and merge. The aggregate fixture covers CHANGES failures for both runtime rows and code/non-code runs, plus RELEASE failures for the required Node 26 code row; failure, cancelled and skipped all reject, and successful code/non-code controls pass. Requested three-file gate passed 34/34 on Node 22.23.4, 24.19.0 and 26.13.0; build, typecheck, lint and duplication passed. No findings refused. Changelog generation/check follows final tracker writes; CI is not yet verified."
   "2026-11-17T13:53:45.502Z",codex-sol,"Round AV: reproduced PRRT_kwDOSZpwFM64baoN using a failing template contract. The backend template is the only shipped CodeQL workflow; use ordered paths to re-include direct and nested executable tracker scripts for push and pull_request, matching root behavior."
   "2026-11-17T13:57:11.449Z",codex-sol,"Round AV verified results: node --test --test-concurrency=2 test/backend.test.ts test/ci-tiers.test.ts PASS (35/35/0/0/0 tests/pass/fail/cancelled/skipped); npm run typecheck PASS; npm run lint PASS; npm run duplication PASS; PRRT_kwDOSZpwFM64baoN covered in root and every shipped CodeQL template for both events and all four executable extensions, including direct and nested paths.. Changelog regeneration/check follows these final tracker writes. Item remains in progress for orchestrator review."
+  "2026-11-17T15:54:45.812Z",codex-sol,"Round AY: verified PRRT_kwDOSZpwFM64f_t6 and PRRT_kwDOSZpwFM64f_uE with failing regression controls before implementation. Coverage artifacts now retain each complete query/fragment module identity while relocating only the source path; required-source filtering uses the query-free path. Native-report equality and matching unsharded/merged pass-fail controls cover partially and fully covered imports. CodeQL contracts match dot directories and ordered exclusion/re-inclusion, retain direct/nested executable controls, and require the same tracker assertion to fail when its exclusion is removed. All code changes precede tracker writes."
+  "2026-11-17T15:55:27.056Z",codex-sol,"Round AY results: requested four-file node --test --test-concurrency=1 gate PASS 43/43 with zero failures, skips or cancellations on Node 22.23.4, 24.19.0 and 26.13.0. After the final lint-only regex correction, ci-tiers PASS 9/9 on all three versions. npm run typecheck, npm run build:test, npm run lint and git diff --check PASS; identity audit PASS 4/4. Both assigned findings were reproduced before repair. The one-branch-per-identity control now fails both merged and unsharded coverage; complementary per-identity hits pass both. Existing file links and new exact-command test records retain evidence. No findings refused. Release this claim before tag fetch and final changelog regeneration/check. Item remains in progress; final pushed-head CI and full-depth certification remain unverified."
 files[39]:
   - path: .github/workflows/ci-deep.yml
     scope: project
@@ -144,7 +146,7 @@ files[39]:
     scope: project
   - path: test/support/depth.ts
     scope: project
-tests[32]:
+tests[35]:
   - command: "npm run typecheck && npm run build:test && npm run lint"
     scope: project
     timeout_seconds: 240
@@ -388,6 +390,27 @@ tests[32]:
     provenance:
       author: codex-sol
       created_at: "2026-11-17T13:54:37.047Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: node --test --test-concurrency=1 test/ci-shards.test.ts test/coverage-gate.test.ts test/coverage-merge.test.ts test/ci-tiers.test.ts
+    scope: project
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-17T15:55:14.320Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: node --test test/ci-tiers.test.ts
+    scope: project
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-17T15:55:15.543Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: node --test test/identity-audit.test.ts
+    scope: project
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-17T15:55:16.389Z"
       source_kind: local_mutation
       source_ref: ci/quick-pr-tier-deep-local-tier
 docs[5]{path,scope}:

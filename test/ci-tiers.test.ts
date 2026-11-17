@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, matchesGlob } from "node:path";
+import { join } from "node:path";
 import test from "node:test";
 import { parseDocument } from "yaml";
 
@@ -20,6 +20,31 @@ function workflow(path: string): Workflow {
   assert.deepEqual(parsed.warnings, [], path);
   return parsed.toJS() as Workflow;
 }
+
+/** Apply the workflow's star patterns in order, with dot directories included. */
+function selectedByPaths(path: string, patterns: readonly string[]): boolean {
+  return patterns.reduce((selected, entry) => {
+    const pattern = entry.replace(/^!/, "");
+    // Fail explicitly if a workflow starts using syntax this small contract matcher lacks.
+    assert.doesNotMatch(pattern, /[?+[\]{}()\\]/, "unsupported workflow path pattern");
+    const expression = pattern.split(/(\*\*\/|\*\*|\*)/).map(part => {
+      if (part === "**/") return "(?:[^/]+/)*";
+      if (part === "**") return "[\\s\\S]*";
+      if (part === "*") return "[^/]*";
+      return part.replace(/[.$^|]/g, "\\$&");
+    }).join("");
+    return new RegExp(`^${expression}$`).test(path) ? !entry.startsWith("!") : selected;
+  }, false);
+}
+
+test("path filters include dot directories and apply exclusions and re-inclusions in order", () => {
+  for (const path of [".agents/pm/check.ts", ".agents/pm/nested/check.ts", ".agents/pm/.nested/check.ts"]) {
+    assert.equal(selectedByPaths(path, ["**"]), true);
+    assert.equal(selectedByPaths(path, ["**", "!.agents/pm/**"]), false);
+    assert.equal(selectedByPaths(path, ["**", "!.agents/pm/**", ".agents/pm/**/*.ts"]), true);
+    assert.equal(selectedByPaths(path, ["**", ".agents/pm/**/*.ts", "!.agents/pm/**"]), false);
+  }
+});
 
 const ci = workflow(".github/workflows/ci.yml");
 
@@ -94,8 +119,13 @@ test("CodeQL skips prose but includes executable tracker changes in every templa
     for (const [path, expected] of [["README.md", false], ["docs/example.json", false], [".agents/pm/tasks/example.toon", false],
       ...["js", "mjs", "cjs", "ts"].flatMap(extension => [[`.agents/pm/check.${extension}`, true], [`.agents/pm/nested/check.${extension}`, true]] as const),
       ["index.ts", true]] as const) {
-      const selected = patterns.reduce((value, pattern) => matchesGlob(path, pattern.replace(/^!/, "")) ? !pattern.startsWith("!") : value, false);
+      const selected = selectedByPaths(path, patterns);
       assert.equal(selected, expected, `${source}: ${event}: ${path}`);
+      if (path === ".agents/pm/tasks/example.toon") {
+        const withoutExclusion = patterns.filter(pattern => pattern !== "!.agents/pm/**");
+        assert.throws(() => assert.equal(selectedByPaths(path, withoutExclusion), expected),
+          { code: "ERR_ASSERTION" }, `${source}: ${event}: removing the tracker exclusion must fail the contract`);
+      }
     }
   }
 });

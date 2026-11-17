@@ -128,7 +128,7 @@ test("successful tooling-only shard contributes empty hits without weakening the
 });
 
 
-/** Query and fragment imports retain their counters under the source file identity. */
+/** Distinct module URLs must preserve the same branch coverage as an unsharded run. */
 test("coverage shards retain plain, query and fragment imports of the same source", t => {
   const root = mkdtempSync(join(tmpdir(), "coverage query-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -154,9 +154,29 @@ test('all module identities', () => {
   assert.equal(runCoverageGate(root, "ignore", { shard: "1/1", output: "query" }), 0);
   const artifact = JSON.parse(readFileSync(join(root, "query/hits.json"), "utf8")) as { raw: { url: string }[] };
   assert.equal(artifact.raw.length, 3, "all three module executions must survive the shard filter");
-  assert.deepEqual(artifact.raw.map(script => script.url), ["src/value.ts", "src/value.ts", "src/value.ts"]);
-  assert.equal(runCoverageGate(root, "ignore", { merge: ["query/hits.json"] }), 0,
-    "query-qualified executions supply the positive branch required for full coverage");
+  assert.deepEqual(artifact.raw.map(script => script.url).sort(),
+    ["src/value.ts", "src/value.ts?case=positive", "src/value.ts#case=positive"].sort());
+  const merged = mergeCoverageShards(root, ["query/hits.json"], ["src/value.ts"]);
+  assert.deepEqual(merged.files.map(file => ({ ...file, path: relative(root, file.path).replaceAll("\\", "/") })),
+    (JSON.parse(readFileSync(join(root, "query/hits.json"), "utf8")) as typeof merged).files,
+    "merging must preserve the native report for the same imports");
+  assert.equal(runCoverageGate(root, "ignore"), 1, "each module instance covers only one branch");
+  assert.equal(runCoverageGate(root, "ignore", { merge: ["query/hits.json"] }), 1,
+    "distinct module instances must not combine into a fully covered instance");
+
+  // A second test process covers the complementary branch of each exact URL.
+  writeFileSync(join(root, "test/complement.test.ts"), readFileSync(join(root, "test/value.test.ts"), "utf8")
+    .replace("classify(-1), 'negative'", "classify(1), 'positive'")
+    .replace("query(1), 'positive'", "query(-1), 'negative'")
+    .replace("fragment(1), 'positive'", "fragment(-1), 'negative'"));
+  const paths = ["first/hits.json", "second/hits.json"];
+  for (const [shard, output] of [["1/1", "whole"], ["1/2", "first"], ["2/2", "second"]]) {
+    assert.equal(runCoverageGate(root, "ignore", { shard, output }), 0);
+  }
+  assert.deepEqual(mergeCoverageShards(root, paths, ["src/value.ts"]),
+    mergeCoverageShards(root, ["whole/hits.json"], ["src/value.ts"]));
+  assert.equal(runCoverageGate(root, "ignore"), 0);
+  assert.equal(runCoverageGate(root, "ignore", { merge: paths }), 0);
 });
 
 
