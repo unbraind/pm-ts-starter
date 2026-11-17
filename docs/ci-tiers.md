@@ -1,7 +1,9 @@
 # Fleet CI v2
 
 Required checks remain `test (22)` and `test (26)`. PRs and dispatch use hosted
-Ubuntu runners, quick depth and a 30-minute job ceiling. Superseded PR runs
+Ubuntu runners, quick depth and an enforced 22-minute job ceiling (`quick-shard`,
+`coverage-shard` and `release-gate` stop at 22 minutes, matching the per-shard
+limit below). Superseded PR runs
 cancel. CodeQL is not required. Docs/tracker-only PRs still run the identity
 and absolute-home-path history audits, README package-link, SDK compiler documentation
 and compatibility-floor checks; they cannot bypass privacy checks.
@@ -96,7 +98,7 @@ runtime into separate matrix jobs avoids stacking the two previously measured
 
 ## Review round E
 
-PRRT_kwDOSZpwFM63udS7 is valid: generated deep Bun legs never called test:bun. Add that explicit behavioral gate and ordering regression. Both failing checks actually reached the 30-minute job limit; the logs stop before the overlapping caller-boundary test finishes. Retain all six competition phases using a small actual compiled SDK fixture rather than repeated copies of the full published SDK dependency graph. The targeted competition test passed; CI routing, deep workflow, typecheck, lint and strict YAML checks passed.
+PRRT_kwDOSZpwFM63udS7 is valid: generated deep Bun legs never called test:bun. Add that explicit behavioral gate and ordering regression. Both failing checks actually reached the 30-minute job limit enforced at that time (the historical ceiling before the current 22-minute quick limit); the logs stop before the overlapping caller-boundary test finishes. Retain all six competition phases using a small actual compiled SDK fixture rather than repeated copies of the full published SDK dependency graph. The targeted competition test passed; CI routing, deep workflow, typecheck, lint and strict YAML checks passed.
 
 The cheap tier excludes only inert tracker record formats; executable tracker changes keep product gates. `test/ci-routing.test.ts` executes each detector with inert and executable tracker paths. Product deadlines, full-depth cases and coverage thresholds are unchanged.
 

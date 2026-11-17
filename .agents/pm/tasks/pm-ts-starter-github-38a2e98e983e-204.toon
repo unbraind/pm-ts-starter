@@ -6,9 +6,11 @@ status: in_progress
 priority: 2
 tags[5]: ci,"gh:unbraind/pm-ts-starter#204","gh:unbraind/pm-ts-starter#217","github_author:unbraind",performance
 created_at: "2026-11-09T11:55:55Z"
-updated_at: "2026-11-17T05:42:49.367Z"
+updated_at: "2026-11-17T07:55:04.348Z"
+assignee: pi-glm
+claim_principal: pi-glm
 author: pm-github
-comments[47]{created_at,author,text}:
+comments[48]{created_at,author,text}:
   "2026-11-15T13:43:47.071Z",codex-sol,"Fleet CI v2; companion pm-cli-website-dyhg. Reuse the existing hung Bun gate item. Preserve required test (22) and test (26), generated-package acceptance, committed build-output checks, strict tracker health, privacy and release verifiers. Split quick hosted PR gates from exhaustive local deep gates; add bounded jobs and deterministic test depth. No release workflow or verifier changes."
   "2026-11-15T13:47:57.883Z",codex-sol,"Latest successful main run 43691008662: Node 22 npm/Bun gates 59m04s/58m43s; Node 26 75m10s/76m10s. gh run view --log returned empty; individual jobs API log supplied timings: seeded property 693.34s, discovery 636.63s, compiler matrix 505.66s, packed acceptance 269.96s. Quick retains deterministic prefixes and unchanged coverage thresholds; full remains deep. Generated projects inherit adapted workflows and the helper and now execute their own release gate under both installed graphs. Bun project paths are accepted; bunx is a separate local-bin smoke. The historical Bun handle leak is contained, not diagnosed as fixed."
   "2026-11-15T13:50:43.690Z",codex-sol,"Deep uses four Node/runtime matrix legs, each with a fresh installer graph and its own 120-minute ceiling. This preserves all four full gates without stacking the measured 75-minute npm and 76-minute Bun gates in one 120-minute job. No coverage/source threshold changes."
@@ -56,46 +58,87 @@ comments[47]{created_at,author,text}:
   "2026-11-17T05:34:28.386Z",codex-sol,"PRRT_kwDOSZpwFM64RpK6 fixed. A successful tooling-only shard now publishes empty files/raw arrays and merges normally. Real fixture equals the unsharded native union; missing-shard, partial-threshold and missing-source controls still fail. The new fixture fails against original HEAD with empty shard or missing output and passes with the fix. Gates passed: three coverage-merge tests (also via pm test index 25), npm run typecheck, npm run build:test, npm run lint, npm run changelog:check. No full-suite coverage claim."
   "2026-11-17T05:41:58.556Z",codex-sol,"Final-head CI release-gate job 133843390099 correctly rejected a new 57-token clone in test/coverage-merge.test.ts fixture package setup (2 duplicated lines, threshold 0%). Extract the shared manifest writer and rerun targeted gates plus npm run duplication. This is caused by the new regression fixture; no threshold change."
   "2026-11-17T05:42:47.986Z",codex-sol,"CI fixture clone corrected by sharing the manifest writer. Final targeted rerun passed: npm run duplication (0%, zero clone pairs), npm run typecheck, npm run build:test, npm run lint, node --test test/coverage-merge.test.ts via pm test index 25 (3/3), npm run changelog:check. No thresholds or coverage assertions changed. Fresh pushed-head full CI remains pending."
-files[39]{path,scope}:
-  .github/workflows/ci-deep.yml,project
-  .github/workflows/ci.yml,project
-  .github/workflows/codeql.yml,project
-  backend-project.ts,project
-  dist/backend-project.d.ts,project
-  dist/backend-project.d.ts.map,project
-  dist/backend-project.js,project
-  dist/backend-project.js.map,project
-  docs/ci-tiers.md,project
-  package.json,project
-  scripts/coverage-gate.ts,project
-  templates/backend/.github/workflows/ci-deep.yml,project
-  templates/backend/.github/workflows/ci.yml,project
-  templates/backend/.github/workflows/codeql.yml,project
-  test/backend.test.ts,project
-  test/ci-consumer-graphs.test.ts,project
-  test/ci-routing.test.ts,project
-  test/ci-shards.test.ts,project
-  test/ci-tiers.test.ts,project
-  test/coverage-merge.test.ts,project
-  test/dependency-fixtures.ts,project
-  test/dependency-property-worker.ts,project
-  test/depth.test.ts,project
-  test/rehearsal.test.ts,project
-  test/release-workflow.test.ts,project
-  test/sdk-api.test.ts,project
-  test/sdk-cache.test.ts,project
-  test/sdk-contracts-a.test.ts,project
-  test/sdk-contracts-b.test.ts,project
-  test/sdk-contracts-c.test.ts,project
-  test/sdk-contracts-d.test.ts,project
-  test/sdk-contracts-e.test.ts,project
-  test/sdk-contracts-support.ts,project
-  test/sdk-path-transport.test.ts,project
-  test/sdk-program-graph.test.ts,project
-  test/sdk-published-cache.test.ts,project
-  test/sdk-reference-refusal.test.ts,project
-  test/smoke.test.ts,project
-  test/support/depth.ts,project
+  "2026-11-17T07:55:02.840Z",pi-glm,"Review round AK (docs/ci-tiers.md overview, review thread PRRT_kwDOSZpwFM64T04U): verified the workflow enforces timeout-minutes 22 on quick-shard, coverage-shard and release-gate, so the overview's 30-minute ceiling misstated the enforced limit. The overview now states the enforced 22-minute ceiling and matches it to the per-shard limit; the historical round-E/F 30-minute measurements remain in their dated review-round sections, now explicitly marked as the earlier 30-minute ceiling. Gates: typecheck, lint and changelog:check all clean; docs-only change."
+files[39]:
+  - path: .github/workflows/ci-deep.yml
+    scope: project
+  - path: .github/workflows/ci.yml
+    scope: project
+  - path: .github/workflows/codeql.yml
+    scope: project
+  - path: backend-project.ts
+    scope: project
+  - path: dist/backend-project.d.ts
+    scope: project
+  - path: dist/backend-project.d.ts.map
+    scope: project
+  - path: dist/backend-project.js
+    scope: project
+  - path: dist/backend-project.js.map
+    scope: project
+  - path: docs/ci-tiers.md
+    scope: project
+    note: Overview states the enforced 22-minute quick ceiling
+  - path: package.json
+    scope: project
+  - path: scripts/coverage-gate.ts
+    scope: project
+  - path: templates/backend/.github/workflows/ci-deep.yml
+    scope: project
+  - path: templates/backend/.github/workflows/ci.yml
+    scope: project
+  - path: templates/backend/.github/workflows/codeql.yml
+    scope: project
+  - path: test/backend.test.ts
+    scope: project
+  - path: test/ci-consumer-graphs.test.ts
+    scope: project
+  - path: test/ci-routing.test.ts
+    scope: project
+  - path: test/ci-shards.test.ts
+    scope: project
+  - path: test/ci-tiers.test.ts
+    scope: project
+  - path: test/coverage-merge.test.ts
+    scope: project
+  - path: test/dependency-fixtures.ts
+    scope: project
+  - path: test/dependency-property-worker.ts
+    scope: project
+  - path: test/depth.test.ts
+    scope: project
+  - path: test/rehearsal.test.ts
+    scope: project
+  - path: test/release-workflow.test.ts
+    scope: project
+  - path: test/sdk-api.test.ts
+    scope: project
+  - path: test/sdk-cache.test.ts
+    scope: project
+  - path: test/sdk-contracts-a.test.ts
+    scope: project
+  - path: test/sdk-contracts-b.test.ts
+    scope: project
+  - path: test/sdk-contracts-c.test.ts
+    scope: project
+  - path: test/sdk-contracts-d.test.ts
+    scope: project
+  - path: test/sdk-contracts-e.test.ts
+    scope: project
+  - path: test/sdk-contracts-support.ts
+    scope: project
+  - path: test/sdk-path-transport.test.ts
+    scope: project
+  - path: test/sdk-program-graph.test.ts
+    scope: project
+  - path: test/sdk-published-cache.test.ts
+    scope: project
+  - path: test/sdk-reference-refusal.test.ts
+    scope: project
+  - path: test/smoke.test.ts
+    scope: project
+  - path: test/support/depth.ts
+    scope: project
 tests[25]:
   - command: "npm run typecheck && npm run build:test && npm run lint"
     scope: project
