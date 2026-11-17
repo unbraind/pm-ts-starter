@@ -142,12 +142,13 @@ as the original gate, before calculating percentages. Merging percentages or
 line-only branch keys is invalid: dynamically emitted branch ranges may differ
 between shards. A real two-file fixture covers a branch and a function exclusively
 in each shard and compares the merged totals and hits with an unsharded run.
-Missing/duplicate shards and differing Node versions fail closed. Thresholds,
-source scope, `npm run coverage`, `npm run release:check` and ci-deep stay unchanged.
+Missing/duplicate shards and differing Node majors fail closed.
+Minor and patch differences within the same major are accepted. Thresholds, source
+scope, `npm run coverage`, `npm run release:check` and ci-deep stay unchanged.
 
 The starter merge invokes Node's internal coverage merger in a subprocess with
-`--expose-internals`. This is a version-sensitive runtime API; matching Node
-versions and the fixture detect drift. The source-presence check runs on the union.
+`--expose-internals`. This is a version-sensitive runtime API. The Node-major
+check and the fixture detect drift. The source-presence check runs on the union.
 
 The non-coverage job runs every other original release command, plus the existing
 Bun/bunx smoke. Setup, download/merge and required aggregates have their own

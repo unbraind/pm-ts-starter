@@ -412,21 +412,25 @@ export function runCoverageGate(
 
   if (runtime.shard) {
     const native = JSON.parse(readFileSync(reportPath, "utf8")) as NativeRecord[];
+    const encodedSources = new Map(required.map(file => [
+      pathToFileURL(join(rootDir, file)).href,
+      file.split("/").map(encodeURIComponent).join("/"),
+    ]));
     const raw = readdirSync(join(reportRoot, "raw")).filter(name => name.endsWith(".json")).flatMap(name => {
       const data = JSON.parse(readFileSync(join(reportRoot, "raw", name), "utf8")) as { result: RawScript[] };
-      // Filter by source path, but preserve each full module identity when relocating the URL.
-      return data.result.filter(script => required.some(file => pathToFileURL(join(rootDir, file)).href === script.url.split(/[?#]/, 1)[0]))
-        .map(script => {
-          const source = script.url.split(/[?#]/, 1)[0]!;
-          return { ...script, url: relative(rootDir, fileURLToPath(source)).replaceAll("\\", "/") + script.url.slice(source.length) };
-        });
+      // Relocate the encoded path while retaining each module's original query and fragment.
+      return data.result.flatMap(script => {
+        const source = script.url.split(/[?#]/, 1)[0]!;
+        const encodedSource = encodedSources.get(source);
+        return encodedSource === undefined ? [] : [{ ...script, url: encodedSource + script.url.slice(source.length) }];
+      });
     });
     // A successful tooling-only shard contributes no required-source hits.
     // Completeness, source presence and thresholds are enforced on the union.
     if (!native.length || !runtime.output) throw new Error("coverage-gate: missing shard report or output");
     const outputDir = resolve(rootDir, runtime.output);
     mkdirSync(outputDir, { recursive: true });
-    const files = native.flatMap(record => record.summary.files).map(file => ({ ...file, path: relative(rootDir, file.path).replaceAll("\\", "/") }));
+    const files = native.flatMap(record => record.summary.files).map(file => ({ ...file, path: relative(rootDir, file.path).split(sep).join("/") }));
     writeFileSync(join(outputDir, "hits.json"), JSON.stringify({ shard: runtime.shard, node: process.versions.node, digest: coverageDigest(rootDir, required), files, raw }));
     rmSync(reportRoot, { recursive: true, force: true });
     return 0;
@@ -513,9 +517,10 @@ export function mergeCoverageShards(rootDir: string, paths: readonly string[], r
       if (shard.digest !== coverageDigest(rootDir, required)) throw new Error("coverage-gate: source mismatch");
       if (shard.node.split(".")[0] !== process.versions.node.split(".")[0]) throw new Error("coverage-gate: runtime mismatch");
       const result = shard.raw.map(script => {
-        const source = script.url.split(/[?#]/, 1)[0]!;
+        const encodedSource = script.url.split(/[?#]/, 1)[0]!;
+        const source = decodeURIComponent(encodedSource);
         if (!required.includes(source)) throw new Error("coverage-gate: unexpected source in shard");
-        return { ...script, url: pathToFileURL(join(rootDir, source)).href + script.url.slice(source.length) };
+        return { ...script, url: pathToFileURL(join(rootDir, source)).href + script.url.slice(encodedSource.length) };
       });
       writeFileSync(join(scratch, `coverage-${index}-1000000000000-0.json`), JSON.stringify({ result }));
     }

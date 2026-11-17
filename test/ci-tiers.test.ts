@@ -21,6 +21,11 @@ function workflow(path: string): Workflow {
   return parsed.toJS() as Workflow;
 }
 
+/** Quote literal text for interpolation into a regular expression. */
+function escapeRegexLiteral(part: string): string {
+  return part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 /** Apply the workflow's star patterns in order, with dot directories included. */
 function selectedByPaths(path: string, patterns: readonly string[]): boolean {
   return patterns.reduce((selected, entry) => {
@@ -31,7 +36,7 @@ function selectedByPaths(path: string, patterns: readonly string[]): boolean {
       if (part === "**/") return "(?:[^/]+/)*";
       if (part === "**") return "[\\s\\S]*";
       if (part === "*") return "[^/]*";
-      return part.replace(/[.$^|]/g, "\\$&");
+      return escapeRegexLiteral(part);
     }).join("");
     return new RegExp(`^${expression}$`).test(path) ? !entry.startsWith("!") : selected;
   }, false);
@@ -44,6 +49,22 @@ test("path filters include dot directories and apply exclusions and re-inclusion
     assert.equal(selectedByPaths(path, ["**", "!.agents/pm/**", ".agents/pm/**/*.ts"]), true);
     assert.equal(selectedByPaths(path, ["**", ".agents/pm/**/*.ts", "!.agents/pm/**"]), false);
   }
+});
+
+test("literal workflow path segments escape regex metacharacters and unsupported glob syntax fails", () => {
+  const literal = ".*+?^${}()|[]\\";
+  const expression = new RegExp(`^${escapeRegexLiteral(literal)}$`);
+  assert.match(literal, expression);
+  assert.doesNotMatch(`${literal}x`, expression);
+  for (const character of "?+[]{}()\\") {
+    assert.throws(() => selectedByPaths("file.ts", [`file${character}.ts`]), /unsupported workflow path pattern/);
+  }
+});
+
+test("coverage shard docs describe Node major compatibility", () => {
+  const docs = readFileSync(new URL("../docs/ci-tiers.md", import.meta.url), "utf8");
+  assert.match(docs, /Missing\/duplicate shards and differing Node majors fail closed\./);
+  assert.match(docs, /Minor and patch differences within the same major are accepted\./);
 });
 
 const ci = workflow(".github/workflows/ci.yml");

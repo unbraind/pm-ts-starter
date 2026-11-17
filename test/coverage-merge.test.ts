@@ -1,10 +1,10 @@
 /** Compare actual offset-based hit unions against an unsharded runtime report. */
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { isAbsolute, join, relative } from "node:path";
+import { isAbsolute, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
 import { runCoverageGate, mergeCoverageShards, runScriptEntry } from "../scripts/coverage-gate.ts";
 
 /** Give real coverage fixtures the same required source scope and strict thresholds. */
@@ -12,6 +12,16 @@ function writeCoverageConfig(root: string): void {
   writeFileSync(join(root, "package.json"), JSON.stringify({ type: "module", coverageGate: {
     sources: ["src"], tests: ["test/*.test.ts"], thresholds: { lines: 100, branches: 100, functions: 100 },
   } }));
+}
+
+/** Build an isolated package with the native coverage runner's expected layout. */
+function coverageFixture(t: TestContext, prefix: string): string {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), prefix)));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(join(root, "src"));
+  mkdirSync(join(root, "test"));
+  writeCoverageConfig(root);
+  return root;
 }
 
 test("sharded coverage equals unsharded including one-shard branches and functions", t => {
@@ -68,6 +78,8 @@ export function negative() { return "negative"; }
   change(artifact=>{artifact.digest="wrong"});assert.throws(()=>mergeCoverageShards(root,paths,["src/value.ts"]),/source mismatch/);
   change(artifact=>{artifact.node=process.versions.node.replace(/\d+$/, patch => String(Number(patch) + 1))});
   assert.deepEqual(mergeCoverageShards(root,paths,["src/value.ts"]),merged,"patch differences must preserve the native coverage union");
+  change(artifact=>{const [major, minor] = process.versions.node.split("."); artifact.node = `${major}.${Number(minor) + 1}.0`;});
+  assert.deepEqual(mergeCoverageShards(root,paths,["src/value.ts"]),merged,"minor differences must preserve the native coverage union");
   change(artifact=>{artifact.node=process.versions.node.startsWith("26.") ? "22.0.0" : "26.0.0"});assert.throws(()=>mergeCoverageShards(root,paths,["src/value.ts"]),/runtime mismatch/);
   change(artifact=>{artifact.raw[0].functions=null});assert.throws(()=>mergeCoverageShards(root,paths,["src/value.ts"]),/native merge failed/);
   change(artifact=>{artifact.raw=[]});
@@ -130,11 +142,7 @@ test("successful tooling-only shard contributes empty hits without weakening the
 
 /** Distinct module URLs must preserve the same branch coverage as an unsharded run. */
 test("coverage shards retain plain, query and fragment imports of the same source", t => {
-  const root = mkdtempSync(join(tmpdir(), "coverage query-"));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  mkdirSync(join(root, "src"));
-  mkdirSync(join(root, "test"));
-  writeCoverageConfig(root);
+  const root = coverageFixture(t, "coverage query-");
   writeFileSync(join(root, "src/value.ts"), `export function classify(value: number) {
   if (value > 0) return "positive";
   return "negative";
@@ -178,6 +186,52 @@ test('all module identities', () => {
   assert.equal(runCoverageGate(root, "ignore"), 0);
   assert.equal(runCoverageGate(root, "ignore", { merge: paths }), 0);
 });
+
+for (const [character, encoded, windowsSkip] of [
+  ["#", "%23", false],
+  ["?", "%3F", "Windows forbids question marks in filenames"],
+  ["\\", "%5C", "Windows treats backslashes as path separators"],
+] as const) {
+  test(`coverage shards preserve ${JSON.stringify(character)} in filenames`, {
+    skip: process.platform === "win32" && windowsSkip,
+  }, t => {
+    const root = coverageFixture(t, "coverage encoded path-");
+
+    const source = `src/value${character}case.ts`;
+    const suffix = character === "#" ? "?view=%23#fragment" : "";
+    const encodedUrl = `src/value${encoded}case.ts${suffix}`;
+    const rawUrls = [encodedUrl];
+    writeFileSync(join(root, source), "export const value = 42;\n");
+    let fixture = `import {value} from '../${encodedUrl}';`;
+    if (character === "\\") {
+      // Node's native glob treats a backslash as a separator. This second real
+      // source supplies an include pattern that also matches the backslash file.
+      rawUrls.push("src/value%3Fcase.ts");
+      writeFileSync(join(root, "src/value?case.ts"), "export const value = 21;\n");
+      // CommonJS can load the literal POSIX path even though ESM rejects %5C.
+      fixture = `import {createRequire} from 'node:module';
+import {value as question} from '../src/value%3Fcase.ts';
+const value = createRequire(import.meta.url)(${JSON.stringify(`../${source}`)}).value + question - 21;`;
+    }
+    writeFileSync(join(root, "test/value.test.ts"), `${fixture}
+import assert from 'node:assert/strict';
+assert.equal(value, 42);
+`);
+    assert.equal(runCoverageGate(root, "ignore", { shard: "1/1", output: "whole" }), 0);
+    const artifactPath = "whole/hits.json";
+    const artifact = JSON.parse(readFileSync(join(root, artifactPath), "utf8")) as {
+      raw: { url: string }[];
+      files: { path: string }[];
+    };
+    const required = readdirSync(join(root, "src"), { withFileTypes: true }).map(entry => `src/${entry.name}`);
+    assert.deepEqual(artifact.raw.map(script => script.url).sort(), rawUrls.sort());
+    assert.deepEqual(artifact.files.map(file => file.path).sort(), [...required].sort());
+    const merged = mergeCoverageShards(root, [artifactPath], required);
+    assert.deepEqual(merged.files.map(file => ({ ...file, path: relative(root, file.path).split(sep).join("/") })), artifact.files);
+    assert.equal(runCoverageGate(root, "ignore"), 0);
+    assert.equal(runCoverageGate(root, "ignore", { merge: [artifactPath] }), 0);
+  });
+}
 
 
 /** An explicit symlink root must retain both raw and native required-source hits. */
