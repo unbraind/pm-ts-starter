@@ -1,6 +1,6 @@
 {
   "name": "pm-ts-starter",
-  "version": "2026.11.12",
+  "version": "2026.11.17",
   "description": "TypeScript reference extension for pm-cli covering all capability types",
   "repository": {
     "type": "git",
@@ -57,11 +57,11 @@
     "@unbrained/pm-cli": ">=2026.10.17"
   },
   "devDependencies": {
-    "@babel/eslint-parser": "8.0.7",
+    "@babel/eslint-parser": "8.1.2",
     "@babel/plugin-syntax-typescript": "8.0.3",
     "@types/node": "26.6.6",
     "@unbrained/pm-cli": "2026.11.7",
-    "eslint": "10.14.0",
+    "eslint": "10.15.0",
     "jscpd": "5.4.3",
     "pm-changelog": "2026.11.6",
     "pm-ops": "2026.11.14",

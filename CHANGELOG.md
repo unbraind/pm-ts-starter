@@ -1,8 +1,13 @@
 # Changelog
 
-## Unreleased
+## 2026.11.17 - 2026-11-17
 
-No changes.
+### Dependencies
+
+- Bump eslint ([#220](https://github.com/unbraind/pm-ts-starter/pull/220))
+- Bump @babel/eslint-parser ([#218](https://github.com/unbraind/pm-ts-starter/pull/218))
+- Bump unbraind/pm-github/.github/workflows/pm-github-closeout.yml ([#214](https://github.com/unbraind/pm-ts-starter/pull/214))
+- Bump unbraind/pm-github/.github/workflows/pm-github-sync.yml ([#215](https://github.com/unbraind/pm-ts-starter/pull/215))
 
 ## 2026.11.12 - 2026-11-12
 
