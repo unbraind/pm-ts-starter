@@ -417,9 +417,10 @@ export function runCoverageGate(
         .map(script => ({ ...script, url: relative(rootDir, fileURLToPath(script.url)).replaceAll("\\", "/") }));
     });
     if (!native.length || !raw.length || !runtime.output) throw new Error("coverage-gate: empty shard or missing output");
-    mkdirSync(resolve(rootDir, runtime.output), { recursive: true });
+    const outputDir = resolve(rootDir, runtime.output);
+    mkdirSync(outputDir, { recursive: true });
     const files = native.flatMap(record => record.summary.files).map(file => ({ ...file, path: relative(rootDir, file.path).replaceAll("\\", "/") }));
-    writeFileSync(join(rootDir, runtime.output, "hits.json"), JSON.stringify({ shard: runtime.shard, node: process.versions.node, digest: coverageDigest(rootDir, required), files, raw }));
+    writeFileSync(join(outputDir, "hits.json"), JSON.stringify({ shard: runtime.shard, node: process.versions.node, digest: coverageDigest(rootDir, required), files, raw }));
     rmSync(reportRoot, { recursive: true, force: true });
     return 0;
   }
@@ -496,7 +497,7 @@ interface RawScript { url: string; [key: string]: unknown }
 export function mergeCoverageShards(rootDir: string, paths: readonly string[], required: readonly string[]): NativeSummary {
   const scratch = mkdtempSync(join(rootDir, "coverage", "merge-"));
   try {
-    const shards = paths.map(path => JSON.parse(readFileSync(join(rootDir, path), "utf8")) as { shard: string; node: string; digest: string; raw: RawScript[] });
+    const shards = paths.map(path => JSON.parse(readFileSync(resolve(rootDir, path), "utf8")) as { shard: string; node: string; digest: string; raw: RawScript[] });
     const total = Number(shards[0]?.shard.split("/")[1]);
     if (!Number.isInteger(total) || total < 1 || shards.length !== total) throw new Error("coverage-gate: missing shards");
     const ordinals = new Set(shards.map(shard => shard.shard));

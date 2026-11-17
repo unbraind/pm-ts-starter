@@ -73,7 +73,7 @@ test("refuse malformed, duplicate, oversized and empty examples without vacuous 
   assert.deepEqual(cloned, SDK_CONSUMER_EXAMPLES); assert.notEqual(cloned, SDK_CONSUMER_EXAMPLES);
 });
 
-test("wrong SDK identity, unavailable packages and compiler crashes have typed safe remedies", async t => {
+test("wrong SDK identity, unavailable packages and external wrappers have typed safe remedies", async t => {
   const root = scratch(t);
   for (const minimum of [null, { root: sdk, version: "latest" }, { root: 1, version: pinned }, { root: " ", version: pinned },
     { root, version: pinned }, { root: sdk, version: "1900.1.1" }]) {
@@ -81,10 +81,13 @@ test("wrong SDK identity, unavailable packages and compiler crashes have typed s
   }
   writeFileSync(join(root, "package.json"), JSON.stringify({ name: "foreign", version: pinned }));
   await assert.rejects(checkSdkContracts({ minimum: { ...target, root }, current: target }), refuses("sdk_unavailable"));
-  for (const body of ["process.exit(3)", "process.kill(process.pid, 'SIGTERM')", "process.stdout.write('x'.repeat(9000000))"]) {
-    const bad = join(root, "compiler.cjs"); writeFileSync(bad, body);
-    await assert.rejects(checkSdkContracts({ minimum: target, current: target, compiler: bad }), refuses("compiler_unavailable"));
-  }
+  const wrapper = join(root, "compiler.cjs");
+  writeFileSync(wrapper, 'throw new Error("external wrapper must not execute");');
+  await assert.rejects(checkSdkContracts({ minimum: target, current: target, compiler: wrapper }), error => {
+    assert.ok(refuses("compiler_unavailable")(error));
+    assert.match((error as Error).message, /Select a file inside node_modules\/typescript.*external shell\/JavaScript wrappers are rejected/);
+    return true;
+  });
   for (const entry of [root, join(root, "missing")]) await assert.rejects(checkSdkContracts({ minimum: target, current: target, compiler: entry }), refuses("compiler_unavailable"));
   assert.throws(() => resolveSdkContractCompiler(join(root, "consumer.cjs")), refuses("compiler_unavailable"));
   assert.equal(resolveSdkContractCompiler(), join(repo, "node_modules/typescript/bin/tsc"));

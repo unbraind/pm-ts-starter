@@ -21,9 +21,14 @@ export function positive() { return "positive"; }
 export function negative() { return "negative"; }
 `);
   for (const [name,value,expected] of [["a",1,"positive"],["b",-1,"negative"]] as const) writeFileSync(join(root,`test/${name}.test.ts`), `import test from 'node:test'; import assert from 'node:assert/strict'; import {classify} from '../src/value.ts'; test('${name}',()=>assert.equal(classify(${value}), '${expected}'));`);
-  for (const [shard,output] of [["1/1","whole"],["1/2","first"],["2/2","second"]]) assert.equal(runCoverageGate(root,"ignore",{shard,output}),0);
+  for (const [shard,output] of [["1/1","whole"],["1/2","first"],["2/2","second"],["1/1",join(root,"absolute-whole")]]) assert.equal(runCoverageGate(root,"ignore",{shard,output}),0);
   const paths=["first/hits.json","second/hits.json"];
   const merged=mergeCoverageShards(root,paths,["src/value.ts"]);
+  const absolutePaths = paths.map(path => join(root, path));
+  assert.deepEqual(mergeCoverageShards(root,absolutePaths,["src/value.ts"]),merged);
+  assert.deepEqual(JSON.parse(readFileSync(join(root,"absolute-whole","hits.json"),"utf8")).files,
+    JSON.parse(readFileSync(join(root,"whole","hits.json"),"utf8")).files);
+  assert.equal(runCoverageGate(root,"ignore",{merge:absolutePaths}),0);
   // This report came directly from Node's native reporter, without merge conversion.
   const whole=JSON.parse(readFileSync(join(root,"whole/hits.json"),"utf8")) as typeof merged;
   assert.ok(whole.files.length > 0);
@@ -40,7 +45,7 @@ export function negative() { return "negative"; }
   let status: number | undefined;
   process.exit=((code?:number)=>{status=code;}) as typeof process.exit;
   try {
-    for(const args of [["--shard","1/2","--output","cli"],["--merge",...paths]]) {
+    for(const args of [["--shard","1/2","--output","cli"],["--shard","1/2","--output",join(root,"absolute-cli")],["--merge",...paths],["--merge",...absolutePaths]]) {
       process.argv=[savedArgv[0]!,fileURLToPath(new URL("../scripts/coverage-gate.ts",import.meta.url)),...args];
       runScriptEntry(root);assert.equal(status,0);
     }
