@@ -1,7 +1,7 @@
 /** Execute the path classifier and keep CI tiers honest for new starter clones. */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, matchesGlob } from "node:path";
 import test from "node:test";
@@ -78,15 +78,24 @@ test("generated deep Bun legs execute behavior under Bun after the release gate"
   assert.equal(steps[behavior].if, "matrix.runtime == 'bun'");
 });
 
-test("CodeQL skips prose but includes executable tracker changes", () => {
-  const codeql = workflow(".github/workflows/codeql.yml");
-  for (const event of ["push", "pull_request"]) {
-    const patterns = codeql.on[event].paths!;
-    assert.ok(patterns);
+test("CodeQL skips prose but includes executable tracker changes in every template", () => {
+  const paths = [".github/workflows/codeql.yml"];
+  for (const directory of readdirSync(new URL("../templates/", import.meta.url), { withFileTypes: true })) {
+    if (directory.isDirectory()) {
+      const path = `templates/${directory.name}/.github/workflows/codeql.yml`;
+      // Only templates that ship CodeQL have an event filter contract.
+      if (existsSync(new URL("../" + path, import.meta.url))) paths.push(path);
+    }
+  }
+  assert.ok(paths.includes("templates/backend/.github/workflows/codeql.yml"));
+  for (const source of paths) for (const event of ["push", "pull_request"]) {
+    const patterns = workflow(source).on[event].paths!;
+    assert.ok(patterns, `${source}: ${event}`);
     for (const [path, expected] of [["README.md", false], ["docs/example.json", false], [".agents/pm/tasks/example.toon", false],
-      [".agents/pm/check.ts", true], [".agents/pm/nested/check.mjs", true], ["index.ts", true]] as const) {
+      ...["js", "mjs", "cjs", "ts"].flatMap(extension => [[`.agents/pm/check.${extension}`, true], [`.agents/pm/nested/check.${extension}`, true]] as const),
+      ["index.ts", true]] as const) {
       const selected = patterns.reduce((value, pattern) => matchesGlob(path, pattern.replace(/^!/, "")) ? !pattern.startsWith("!") : value, false);
-      assert.equal(selected, expected, path);
+      assert.equal(selected, expected, `${source}: ${event}: ${path}`);
     }
   }
 });
