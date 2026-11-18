@@ -69,6 +69,20 @@ test("coverage shard docs describe Node major compatibility", () => {
 
 const ci = workflow(".github/workflows/ci.yml");
 
+test("the CI tier table distinguishes shard builds from committed output checks", () => {
+  const docs = readFileSync(new URL("../docs/ci-tiers.md", import.meta.url), "utf8");
+  const check = "Build and verify committed output is current";
+  for (const job of ["quick-shard", "coverage-shard"]) {
+    const steps = ci.jobs[job].steps;
+    assert.ok(steps.some(step => step.run?.split("\n").some(command => command.trim() === "npm run build")));
+    assert.ok(!steps.some(step => step.name === check));
+  }
+  const release = ci.jobs["release-gate"];
+  assert.equal(release.steps.find(step => step.uses?.startsWith("actions/setup-node@"))?.with?.["node-version"], 26);
+  assert.match(release.steps.find(step => step.name === check)?.run ?? "", /git status .*'dist\/'/);
+  assert.match(docs, /^\| Build and committed dist consistency \| build only \| yes \| — \| yes \|$/m);
+});
+
 test("documentation and tracker changes retain health, privacy and input checks", () => {
   const steps = ci.jobs.test.steps;
   assert.ok(steps.some(step => step.run?.includes("pm health --strict-exit --require-merge-drivers")));

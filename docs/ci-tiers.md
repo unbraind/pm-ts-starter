@@ -14,7 +14,7 @@ Executable tracker JavaScript/TypeScript selects the code tier and remains eligi
 | npm ci, merge-driver preparation | yes | yes | yes | yes |
 | Pinned pm-github tracker extension | yes | yes | yes | yes |
 | Strict tracker health / merge drivers | — | yes | yes | yes |
-| Build and committed dist consistency | yes | yes | — | yes |
+| Build and committed dist consistency | build only | yes | — | yes |
 | Typecheck, lint, duplicate and docstring gates | — | yes | — | npm + Bun |
 | Build/test compilation and behavioral tests | quick | quick via coverage | — | full, npm + Bun |
 | Coverage, unchanged 100% lines/branches/functions | — | yes | — | npm + Bun |
