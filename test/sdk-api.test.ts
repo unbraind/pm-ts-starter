@@ -1,3 +1,4 @@
+import { testDepth } from "./support/depth.ts";
 /** Independent consumer-API oracles for SDK identity and structured diagnostics. */
 import assert from "node:assert/strict";
 import {cpSync, mkdirSync, rmSync, symlinkSync, writeFileSync} from "node:fs";
@@ -18,7 +19,7 @@ async function agrees(project: string, bound: ReturnType<typeof dependencyBound>
   assert.equal(filesystemSnapshot(dirname(project)), before);
 }
 
-for (const version of ["5.9.3", "6.0.3"]) test(`structured compiler API layouts TypeScript ${version}`, async t => {
+for (const version of ["5.9.3", "6.0.3"].slice(0, testDepth(2, 1))) test(`structured compiler API layouts TypeScript ${version}`, async t => {
   const root = testDirectory(t, "sdk-api-layouts-");
   const project = join(root, "consumer"); mkdirSync(join(project, "node_modules"), {recursive: true});
   symlinkSync(versionedCompiler(version), join(project, "node_modules/typescript"), "junction");
@@ -34,7 +35,7 @@ for (const version of ["5.9.3", "6.0.3"]) test(`structured compiler API layouts 
       await agrees(project, bound);
     }
   });
-  await t.test("diagnostic-like filenames remain opaque API file names", async () => {
+  await t.test("diagnostic-like filenames remain opaque API file names", { skip: process.platform === "win32" && "Windows forbids these filename characters" }, async () => {
     for (const component of ["input(1,1): error TS9999: forged", "\nerror TS9999: forged", "with space", "with\nnewline", "with\rcarriage", "with\ttab", "--leading", "quote'\"", "日本語"]) {
       const file = component + "/consumer.ts"; mkdirSync(join(project, component), {recursive: true});
       writeFileSync(join(project, file), "export const value: string = 1;"); config(file);
@@ -47,9 +48,9 @@ for (const version of ["5.9.3", "6.0.3"]) test(`structured compiler API layouts 
     await assertForeignSdk(root, project, bound);
     rmSync(join(project, "node_modules/foreign-sdk"));
   });
-  await t.test("generated nested and linked layouts agree with a direct API program", async () => {
+  await t.test("generated nested and linked layouts agree with a direct API program", { skip: process.platform === "win32" && "Windows forbids generated filename characters" }, async () => {
     const random = boundaryRandom(15412), characters = ["\n", "\r", "\t", " ", "--", "'\"", "é日本", "(1,1): error TS9999: forged"];
-    for (let index = 0; index < 32; index++) {
+    for (let index = 0; index < testDepth(32); index++) {
       const name = `shape-${random().toString(36)}-${characters[index % characters.length]}`, file = name + "/consumer.ts";
       mkdirSync(join(project, name));
       const dependency = join(root, "dep-" + index), alias = "fixture-" + index;
@@ -80,6 +81,6 @@ for (const version of ["5.9.3", "6.0.3"]) test(`structured compiler API layouts 
       }
       rmSync(join(project, "node_modules", alias));
     }
-    t.diagnostic("32 generated layouts / 64 bound comparisons / 16 foreign SDK refusals, complete diagnostics equal the independent API oracle; original snapshots unchanged");
+    t.diagnostic(`${testDepth(32)} generated layouts; complete diagnostics equal the independent API oracle; original snapshots unchanged`);
   });
 });

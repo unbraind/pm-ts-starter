@@ -20,6 +20,8 @@ export interface GeneratedBackendProject {
 }
 /** Locate the shipped TypeScript source in source and compiled package layouts. */
 export declare function readBackendSource(moduleUrl: string): string;
+/** Read a shipped generator asset from either source or compiled package layout. */
+export declare function readProjectAsset(path: string, moduleUrl: string): string;
 /** Build a standalone extension with strict TypeScript and executable backend contracts. */
 export declare function buildBackendProjectFiles(name: string): Record<string, string>;
 /** Create a fresh project exclusively; never merge with or overwrite an existing directory. */

@@ -1,0 +1,16 @@
+id: pm-ts-starter-native-coverage-backslash
+title: Measure standalone POSIX backslash filenames with native Node coverage
+description: "The Node native coverage include matcher interprets a literal POSIX backslash as a separator. On Node 22.23.4, 24.19.0 and 26.13.0, a shard running a CommonJS-loaded required source named src/value\\case.ts produced zero native per-file rows when that was the only required source. The Round BB fixture supplies a second real source with a matching question-mark include pattern to exercise artifact transport and merge."
+type: Task
+status: open
+priority: 3
+tags[3]: ci,coverage,follow-up
+created_at: "2026-11-17T18:06:04.980Z"
+updated_at: "2026-11-17T18:06:04.980Z"
+author: codex-sol
+acceptance_criteria: "On POSIX, a standalone required source with a literal backslash is reported by both the unsharded gate and the merged shards, and a nearby nonrequired path is excluded."
+parent: pm-ts-starter-github-38a2e98e983e-204
+files[2]{path,scope}:
+  scripts/coverage-gate.ts,project
+  test/coverage-merge.test.ts,project
+body: ""

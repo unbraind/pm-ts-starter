@@ -8,18 +8,18 @@ import {parentPort, workerData} from "node:worker_threads";
 import {checkSdkContracts} from "../sdk-contracts.ts";
 import {dependencyEntry, dependencyBound, boundaryRandom, filesystemSnapshot} from "./dependency-fixtures.ts";
 
-const {shard, compiler} = workerData as {shard: number; compiler: string};
+const {shard, compiler, graphs} = workerData as {shard: number; compiler: string; graphs: number};
 const root = mkdtempSync(join(tmpdir(), "sdk-property-"));
 const project = join(root, "consumer");
 mkdirSync(join(project, "node_modules"), {recursive: true});
 symlinkSync(dirname(dirname(compiler)), join(project, "node_modules/typescript"), "junction");
-writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions:{noEmit:true,types:[],module:"NodeNext"},files:["consumer.mts"]}));
+writeFileSync(join(project, "tsconfig.json"), JSON.stringify({compilerOptions:{noEmit:true,types:[],lib:["ES5"],module:"NodeNext"},files:["consumer.mts"]}));
 
 const bound = dependencyBound(project), random = boundaryRandom(15410 + shard);
 let edges = 0;
 try {
   const shapes = new Set<string>();
-  for (let graph = 0; graph < 50; graph++) {
+  for (let graph = 0; graph < graphs; graph++) {
     for (let node = 0; node < 6; node++) rmSync(join(project, "node_modules", `graph-alias-${node}`), {recursive: true, force: true});
     rmSync(join(project, "node_modules/@graph"), {recursive: true, force: true});
     rmSync(join(project, "packages"), {recursive: true, force: true});
@@ -59,9 +59,9 @@ try {
       const matrix = await checkSdkContracts({consumer:project,minimum:bound,current:bound});
       assert.deepEqual(matrix.rows.map(row => ({ok:row.ok,codes:row.codes,diagnostic_count:row.diagnostic_count})), [{ok:true,codes:[],diagnostic_count:0},{ok:true,codes:[],diagnostic_count:0}], `shard ${shard}, graph ${graph}`);
       assert.equal(filesystemSnapshot(project), original);
-      if ((graph + 1) % 10 === 0) process.stdout.write(`dependency property shard ${shard}: ${graph + 1}/50 verified\n`);
+      if ((graph + 1) % 10 === 0) process.stdout.write(`dependency property shard ${shard}: ${graph + 1}/${graphs} verified\n`);
     } finally {rmSync(baseline, {recursive:true,force:true});}
   }
   assert.equal(shapes.size, 3);
 } finally {rmSync(root, {recursive:true,force:true});}
-parentPort!.postMessage({graphs:50,edges});
+parentPort!.postMessage({graphs:graphs,edges});

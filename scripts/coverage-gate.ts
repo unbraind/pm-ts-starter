@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 /**
  * Coverage gate for the package test suite.
  *
@@ -35,9 +36,9 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 /**
  * Minimum acceptable percentage for each coverage dimension Node reports.
@@ -98,6 +99,9 @@ interface CommandInvocation {
 
 /** Injectable process and filesystem boundaries used by deterministic tests. */
 interface CoverageGateRuntime {
+  readonly shard?: string;
+  readonly output?: string;
+  readonly merge?: readonly string[];
   readonly runner?: CommandInvocation;
   readonly compiler?: CommandInvocation;
   readonly sourceCollector?: (rootDir: string, target: string, skipDirs: Set<string>) => string[];
@@ -249,6 +253,7 @@ export function runCoverageGate(
   stdio: "inherit" | "ignore" = "inherit",
   runtime: CoverageGateRuntime = {},
 ): number {
+  rootDir = realpathSync(rootDir);
   const manifest = JSON.parse(readFileSync(join(rootDir, "package.json"), "utf8")) as PackageManifest;
   const config = manifest.coverageGate;
 
@@ -351,7 +356,7 @@ export function runCoverageGate(
   const { NODE_TEST_CONTEXT: _dropCtx, NODE_TEST_WORKER_ID: _dropWid, ...cleanEnv } = process.env;
 
   const runner = runtime.runner ?? { executable: process.execPath, args: [] };
-  const result = spawnSync(
+  const result = runtime.merge ? { status: 0, error: undefined } : spawnSync(
     runner.executable,
     [
       ...runner.args,
@@ -359,14 +364,15 @@ export function runCoverageGate(
       // A property test owns up to two compiler workers; avoid overlapping files.
       "--test-concurrency=1",
       "--experimental-test-coverage",
+      ...(runtime.shard ? [`--test-shard=${runtime.shard}`] : []),
       // Scope the report to exactly the files the presence check requires.
       // Passing the enumerated paths rather than a directory glob keeps the two
       // in step by construction, and keeps test files and tooling out of the
       // percentages even when the source root is the repository root.
       ...required.map((file) => `--test-coverage-include=${file}`),
-      `--test-coverage-lines=${config.thresholds.lines}`,
-      `--test-coverage-branches=${config.thresholds.branches}`,
-      `--test-coverage-functions=${config.thresholds.functions}`,
+      `--test-coverage-lines=${runtime.shard ? 0 : config.thresholds.lines}`,
+      `--test-coverage-branches=${runtime.shard ? 0 : config.thresholds.branches}`,
+      `--test-coverage-functions=${runtime.shard ? 0 : config.thresholds.functions}`,
       "--test-reporter=spec",
       "--test-reporter-destination=stdout",
       // A file: URL, not a drive-letter path: the ESM loader resolves custom reporters and rejects bare Windows paths.
@@ -384,7 +390,7 @@ export function runCoverageGate(
       // percentage between a contributor's machine and CI. A threshold pinned
       // to one machine's number then fails on the other for reasons unrelated
       // to the change under review.
-      env: { ...cleanEnv, TZ: "UTC" },
+      env: { ...cleanEnv, TZ: "UTC", ...(runtime.shard ? { NODE_V8_COVERAGE: join(reportRoot, "raw") } : {}) },
     },
   );
 
@@ -402,6 +408,48 @@ export function runCoverageGate(
   if (result.status !== 0) {
     rmSync(reportRoot, { recursive: true, force: true });
     return result.status ?? 1;
+  }
+
+  if (runtime.shard) {
+    const native = JSON.parse(readFileSync(reportPath, "utf8")) as NativeRecord[];
+    const encodedSources = new Map(required.map(file => [
+      pathToFileURL(join(rootDir, file)).href,
+      file.split("/").map(encodeURIComponent).join("/"),
+    ]));
+    const raw = readdirSync(join(reportRoot, "raw")).filter(name => name.endsWith(".json")).flatMap(name => {
+      const data = JSON.parse(readFileSync(join(reportRoot, "raw", name), "utf8")) as { result: RawScript[] };
+      // Relocate the encoded path while retaining each module's original query and fragment.
+      return data.result.flatMap(script => {
+        const source = script.url.split(/[?#]/, 1)[0]!;
+        const encodedSource = encodedSources.get(source);
+        return encodedSource === undefined ? [] : [{ ...script, url: encodedSource + script.url.slice(source.length) }];
+      });
+    });
+    // A successful tooling-only shard contributes no required-source hits.
+    // Completeness, source presence and thresholds are enforced on the union.
+    if (!native.length || !runtime.output) throw new Error("coverage-gate: missing shard report or output");
+    const outputDir = resolve(rootDir, runtime.output);
+    mkdirSync(outputDir, { recursive: true });
+    const files = native.flatMap(record => record.summary.files).map(file => ({ ...file, path: relative(rootDir, file.path).split(sep).join("/") }));
+    writeFileSync(join(outputDir, "hits.json"), JSON.stringify({ shard: runtime.shard, node: process.versions.node, digest: coverageDigest(rootDir, required), files, raw }));
+    rmSync(reportRoot, { recursive: true, force: true });
+    return 0;
+  }
+  if (runtime.merge) {
+    try {
+      const summary = mergeCoverageShards(rootDir, runtime.merge, required);
+      writeFileSync(reportPath, JSON.stringify([{ summary }]));
+      writeFileSync(join(rootDir, "coverage", "merged.json"), JSON.stringify(summary, null, 2));
+      for (const [dimension, field] of [["lines", "coveredLinePercent"], ["branches", "coveredBranchPercent"], ["functions", "coveredFunctionPercent"]] as const) {
+        const actual = summary.totals[field];
+        console.log(`Merged coverage ${dimension}: ${actual}% (required ${config.thresholds[dimension]}%)`);
+        if (actual < config.thresholds[dimension]) throw new Error(`coverage-gate: merged ${dimension} below threshold`);
+      }
+    } catch (error) {
+      console.error(error);
+      rmSync(reportRoot, { recursive: true, force: true });
+      return 1;
+    }
   }
 
   /**
@@ -447,6 +495,56 @@ export function runCoverageGate(
 
 const repoRoot = resolve(import.meta.dirname, "..");
 
+/** Native records retain hit arrays as well as the original percentages. */
+interface NativeRecord { summary: NativeSummary }
+interface NativeSummary {
+  files: { path: string; [key: string]: unknown }[];
+  totals: { coveredLinePercent: number; coveredBranchPercent: number; coveredFunctionPercent: number };
+}
+/** Offset ranges preserve distinct branches and functions defined on the same line. */
+interface RawScript { url: string; [key: string]: unknown }
+
+/** Reuse this Node version's own offset-aware union and source mapping, before percentages. */
+export function mergeCoverageShards(rootDir: string, paths: readonly string[], required: readonly string[]): NativeSummary {
+  const scratch = mkdtempSync(join(rootDir, "coverage", "merge-"));
+  try {
+    const shards = paths.map(path => JSON.parse(readFileSync(resolve(rootDir, path), "utf8")) as { shard: string; node: string; digest: string; raw: RawScript[] });
+    const total = Number(shards[0]?.shard.split("/")[1]);
+    if (!Number.isInteger(total) || total < 1 || shards.length !== total) throw new Error("coverage-gate: missing shards");
+    const ordinals = new Set(shards.map(shard => shard.shard));
+    for (let i = 1; i <= total; i++) if (!ordinals.has(`${i}/${total}`)) throw new Error("coverage-gate: duplicate or missing shard");
+    for (const [index, shard] of shards.entries()) {
+      if (shard.digest !== coverageDigest(rootDir, required)) throw new Error("coverage-gate: source mismatch");
+      if (shard.node.split(".")[0] !== process.versions.node.split(".")[0]) throw new Error("coverage-gate: runtime mismatch");
+      const result = shard.raw.map(script => {
+        const encodedSource = script.url.split(/[?#]/, 1)[0]!;
+        const source = decodeURIComponent(encodedSource);
+        if (!required.includes(source)) throw new Error("coverage-gate: unexpected source in shard");
+        return { ...script, url: pathToFileURL(join(rootDir, source)).href + script.url.slice(encodedSource.length) };
+      });
+      writeFileSync(join(scratch, `coverage-${index}-1000000000000-0.json`), JSON.stringify({ result }));
+    }
+    // Native summaries contain a record for every source line and can exceed
+    // the child process's stdout buffer. Keep them with the merge scratch data.
+    const summaryPath = join(scratch, "summary.json");
+    const program = `
+      const {writeFileSync} = require('node:fs');
+      const {TestCoverage} = require('internal/test_runner/coverage');
+      const [scratch, cwd, required, summaryPath] = process.argv.slice(1);
+      const coverageIncludeGlobs = JSON.parse(required);
+      const coverage = TestCoverage.length === 3
+        ? new TestCoverage(scratch, undefined, {cwd, coverageIncludeGlobs, coverageExcludeGlobs: []})
+        : new TestCoverage(scratch, undefined, cwd, [], coverageIncludeGlobs, false, {});
+      writeFileSync(summaryPath, JSON.stringify(coverage.summary()));
+    `;
+    const result = spawnSync(process.execPath, ["--expose-internals", "-e", program, scratch, rootDir, JSON.stringify(required), summaryPath], { encoding: "utf8" });
+    if (result.status !== 0) throw new Error(`coverage-gate: native merge failed: ${result.stderr}`);
+    return JSON.parse(readFileSync(summaryPath, "utf8")) as NativeSummary;
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
 /**
  * Runs the coverage gate when the module is the process's main script, then
  * exits with the gate's code. When the module is imported (e.g. from the test
@@ -471,8 +569,22 @@ export function runScriptEntry(rootDir: string = repoRoot): void {
   // without running — a silent pass, which is the one outcome this gate exists
   // to prevent.
   if (process.argv[1] && realpathSync(resolve(process.argv[1])) === realpathSync(fileURLToPath(import.meta.url))) {
-    process.exit(runCoverageGate(rootDir));
+    const args = process.argv.slice(2);
+    const merge = args.indexOf("--merge"), shard = args.indexOf("--shard"), output = args.indexOf("--output");
+    for (const [flag, index] of [["--shard", shard], ["--output", output]] as const) {
+      if (index >= 0 && (!args[index + 1] || args[index + 1]!.startsWith("--"))) throw new Error(`coverage-gate: ${flag} requires a value`);
+    }
+    if (shard >= 0 && output < 0) throw new Error("coverage-gate: --shard requires --output with a value");
+    process.exit(runCoverageGate(rootDir, "inherit", {
+      ...(merge >= 0 ? { merge: args.slice(merge + 1) } : {}),
+      ...(shard >= 0 ? { shard: args[shard + 1], output: args[output + 1] } : {}),
+    }));
   }
 }
 
 runScriptEntry();
+
+/** Bind portable hits to the exact source bytes and thresholds of this checkout. */
+function coverageDigest(root: string, sources: readonly string[]): string {
+  return createHash("sha256").update(JSON.stringify(sources.map(file => [file, readFileSync(join(root,file),"utf8")])) + readFileSync(join(root,"package.json"),"utf8")).digest("hex");
+}

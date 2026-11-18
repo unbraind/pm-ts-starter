@@ -28,6 +28,11 @@ export function readBackendSource(moduleUrl: string): string {
   return readFileSync(new URL(moduleUrl.endsWith(".ts") ? "./backend.ts" : "../backend.ts", moduleUrl), "utf8");
 }
 
+/** Read a shipped generator asset from either source or compiled package layout. */
+export function readProjectAsset(path: string, moduleUrl: string): string {
+  return readFileSync(new URL((moduleUrl.endsWith(".ts") ? "./" : "../") + path, moduleUrl), "utf8");
+}
+
 /** Build a standalone extension with strict TypeScript and executable backend contracts. */
 export function buildBackendProjectFiles(name: string): Record<string, string> {
   const packageJson = {
@@ -35,12 +40,14 @@ export function buildBackendProjectFiles(name: string): Record<string, string> {
     exports: { ".": { types: "./dist/index.d.ts", import: "./dist/index.js" } },
     bin: { [name]: "dist/cli.js" }, files: ["dist", "manifest.json", "README.md"],
     engines: { node: ">=22.18.0" },
-    scripts: { build: "tsc", typecheck: "tsc --noEmit", test: "node --test test/*.test.ts", "test:bun": "bun test test/*.test.ts", prepack: "npm run build" },
+    scripts: { "release:check": "npm run typecheck && npm run build && npm test && npm install --package-lock-only --ignore-scripts --no-audit && npm audit --omit=dev && npm pack --dry-run", build: "tsc", typecheck: "tsc --noEmit", test: "node --test test/*.test.ts", "test:bun": "bun test test/*.test.ts", prepack: "npm run build" },
     peerDependencies: { "@unbrained/pm-cli": ">=2026.10.17" },
     devDependencies: { "@unbrained/pm-cli": "2026.10.17", "@types/node": "26.6.5", typescript: "7.0.2" },
     pm: { extensions: ["."] },
   };
   return {
+    ...Object.fromEntries([".github/workflows/ci.yml", ".github/workflows/ci-deep.yml", ".github/workflows/codeql.yml"].map(path => [path, readProjectAsset("templates/backend/" + path, import.meta.url)])),
+    "test/support/depth.ts": readProjectAsset("test/support/depth.ts", import.meta.url),
     "package.json": JSON.stringify(packageJson, null, 2) + "\n",
     "manifest.json": JSON.stringify({ name, version: "0.1.0", entry: "./dist/index.js", pm_min_version: "2026.10.17", capabilities: ["commands"] }, null, 2) + "\n",
     "tsconfig.json": JSON.stringify({ compilerOptions: { target: "ES2022", module: "NodeNext", moduleResolution: "NodeNext", strict: true, types: ["node"], declaration: true, outDir: "dist", rootDir: "src", skipLibCheck: true }, include: ["src/*.ts"] }, null, 2) + "\n",
@@ -158,7 +165,10 @@ export function generateBackendProject(target: string, name: string): GeneratedB
     mkdirSync(root);
     mkdirSync(join(root, "src"));
     mkdirSync(join(root, "test"));
-    for (const [path, contents] of Object.entries(files)) writeFileSync(join(root, path), contents, { flag: "wx" });
+    for (const [path, contents] of Object.entries(files)) {
+      mkdirSync(resolve(root, path, ".."), { recursive: true });
+      writeFileSync(join(root, path), contents, { flag: "wx" });
+    }
   } catch {
     return { ok: false, code: "target_unavailable", remedy: "Choose a new writable directory under an existing parent. Inspect any partially created project before retrying." };
   }

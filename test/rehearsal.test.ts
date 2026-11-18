@@ -1,3 +1,4 @@
+import { testTimeout } from "./support/depth.ts";
 /** Real tracker contracts for isolated migration and crash-window recovery. */
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
@@ -42,7 +43,7 @@ function refusal(code: RehearsalRefusal["code"]): (error: unknown) => boolean {
 /** Exercise actual simultaneous CLI processes without serializing their startup. */
 async function cliProcess(args: string[], cwd: string, env: NodeJS.ProcessEnv): Promise<{ status: number | null; stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, args, { cwd, env, timeout: 30000 });
+    const child = spawn(process.execPath, args, { cwd, env, timeout: testTimeout(30000) });
     let stdout = "", stderr = "";
     child.stdout.on("data", data => { stdout += data; });
     child.stderr.on("data", data => { stderr += data; });
@@ -302,7 +303,7 @@ test("crash matrix resumes every SDK commit and wrapper checkpoint boundary or p
     cpSync(baseline.source, options.source, { recursive: true });
     const original = bytes(options.source);
     const env = { ...process.env, PATH: "", GIT_CEILING_DIRECTORIES: options.root };
-    const crashed = spawnSync(process.execPath, [resolve(import.meta.dirname, "helpers/rehearsal-crash-runner.ts"), JSON.stringify({ ...options, plan: crashPlan }), boundary], { cwd: options.root, env, encoding: "utf8", timeout: 30000 });
+    const crashed = spawnSync(process.execPath, [resolve(import.meta.dirname, "helpers/rehearsal-crash-runner.ts"), JSON.stringify({ ...options, plan: crashPlan }), boundary], { cwd: options.root, env, encoding: "utf8", timeout: testTimeout(30000) });
     assert.equal(crashed.status, 73, crashed.stderr);
     expireScratchLeases(options.workDir);
     let workDir = options.workDir;
@@ -398,7 +399,7 @@ async function installedRehearsalFixture(t: TestContext) {
   mkdirSync(localPackage);
   for (const file of ["dist", "manifest.json", "package.json"]) cpSync(resolve(import.meta.dirname, "..", file), join(localPackage, file), { recursive: true });
   const cli = resolve(import.meta.dirname, "../node_modules/@unbrained/pm-cli/dist/cli.js");
-  const install = spawnSync(process.execPath, [cli, "--pm-path", host, "package", "install", localPackage, "--project"], { cwd: options.root, encoding: "utf8", timeout: 30000 });
+  const install = spawnSync(process.execPath, [cli, "--pm-path", host, "package", "install", localPackage, "--project"], { cwd: options.root, encoding: "utf8", timeout: testTimeout(30000) });
   assert.equal(install.status, 0, install.stderr);
   const noGit = join(options.root, "no-git"); mkdirSync(noGit);
   const env = { ...process.env, PATH: noGit, GIT_CEILING_DIRECTORIES: options.root };
@@ -410,16 +411,16 @@ async function installedRehearsalFixture(t: TestContext) {
 test("installed CLI emits TOON/JSON and typed field refusals with Git absent", async t => {
   const { options, env, file, args } = await installedRehearsalFixture(t);
   const before = bytes(options.source);
-  const first = spawnSync(process.execPath, [...args, "--json"], { cwd: options.root, env, encoding: "utf8", timeout: 30000 });
+  const first = spawnSync(process.execPath, [...args, "--json"], { cwd: options.root, env, encoding: "utf8", timeout: testTimeout(30000) });
   assert.equal(first.status, 0, first.stderr); assert.equal(JSON.parse(first.stdout).affected, 4);
-  const replay = spawnSync(process.execPath, args, { cwd: options.root, env, encoding: "utf8", timeout: 30000 });
+  const replay = spawnSync(process.execPath, args, { cwd: options.root, env, encoding: "utf8", timeout: testTimeout(30000) });
   assert.equal(replay.status, 0, replay.stderr); assert.match(replay.stdout, /resumed: true/);
   assert.equal(bytes(options.source), before);
   const item = join(options.source, "experiments", "fixture-active.toon");
   const originalItem = readFileSync(item, "utf8");
   writeFileSync(item, originalItem.replace(/legacy_count:.*$/m, "legacy_count: invalid"));
   const invalidArgs = args.map(value => value === options.workDir ? join(options.root, "invalid") : value);
-  const invalid = spawnSync(process.execPath, [...invalidArgs, "--json"], { cwd: options.root, env, encoding: "utf8", timeout: 30000 });
+  const invalid = spawnSync(process.execPath, [...invalidArgs, "--json"], { cwd: options.root, env, encoding: "utf8", timeout: testTimeout(30000) });
   assert.equal(invalid.status, 2); const error = JSON.parse(invalid.stderr);
   assert.equal(error.code, "invalid_data");
   assert.deepEqual(error.verification_errors, ["experiments/fixture-active.toon:legacy_count"]);
@@ -432,17 +433,17 @@ test("installed CLI emits TOON/JSON and typed field refusals with Git absent", a
     const target = join(options.source, file), original = readFileSync(target, "utf8");
     writeFileSync(target, replacement);
     const snapshot = bytes(options.source);
-    const result = spawnSync(process.execPath, [...invalidArgs.map(value => value === join(options.root, "invalid") ? join(options.root, `invalid-${file.replaceAll("/", "-")}`) : value), "--json"], { cwd: options.root, env, encoding: "utf8", timeout: 30000 });
+    const result = spawnSync(process.execPath, [...invalidArgs.map(value => value === join(options.root, "invalid") ? join(options.root, `invalid-${file.replaceAll("/", "-")}`) : value), "--json"], { cwd: options.root, env, encoding: "utf8", timeout: testTimeout(30000) });
     assert.equal(result.status, 2, result.stderr); assert.equal(JSON.parse(result.stderr).code, "invalid_data");
     assert.equal(bytes(options.source), snapshot);
     writeFileSync(target, original);
   }
   writeFileSync(file, " ".repeat(65537));
-  const huge = spawnSync(process.execPath, [...args, "--json"], { cwd: options.root, env, encoding: "utf8", timeout: 30000 });
+  const huge = spawnSync(process.execPath, [...args, "--json"], { cwd: options.root, env, encoding: "utf8", timeout: testTimeout(30000) });
   assert.equal(huge.status, 2); assert.equal(JSON.parse(huge.stderr).code, "invalid_plan");
   writeFileSync(file, JSON.stringify(plan));
   const alias = join(options.root, "plan-alias"); symlinkSync(file, alias);
-  const linked = spawnSync(process.execPath, [...args.map(value => value === file ? alias : value), "--json"], { cwd: options.root, env, encoding: "utf8", timeout: 30000 });
+  const linked = spawnSync(process.execPath, [...args.map(value => value === file ? alias : value), "--json"], { cwd: options.root, env, encoding: "utf8", timeout: testTimeout(30000) });
   assert.equal(linked.status, 2); assert.equal(JSON.parse(linked.stderr).code, "invalid_plan");
   const parallel = args.map(value => value === options.workDir ? join(options.root, "parallel") : value);
   const concurrent = await Promise.all(Array.from({ length: 2 }, () => cliProcess([...parallel, "--json"], options.root, env)));
@@ -462,7 +463,7 @@ async function assertStartupSourceRefusal(t: TestContext, mode: "omitted" | "act
   const before = bytes(options.source), sourceIndex = args.indexOf("--source");
   const invocation = mode === "omitted" ? args.filter((_, index) => index !== sourceIndex && index !== sourceIndex + 1) :
     args.map(value => value === options.source ? host : value);
-  const result = spawnSync(process.execPath, [...invocation, "--json"], { cwd: options.root, env, encoding: "utf8", timeout: 30000 });
+  const result = spawnSync(process.execPath, [...invocation, "--json"], { cwd: options.root, env, encoding: "utf8", timeout: testTimeout(30000) });
   assert.equal(result.status, 2, result.stderr);
   const error = JSON.parse(result.stderr);
   assert.equal(error.code, mode === "omitted" ? "invalid_plan" : "unsafe_storage");

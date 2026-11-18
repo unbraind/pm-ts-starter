@@ -1,3 +1,4 @@
+import { testDepth } from "./support/depth.ts";
 /** Generated filesystem names exercise lossless compiler path transport and canonical isolation. */
 import assert from "node:assert/strict";
 import {mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync} from "node:fs";
@@ -56,7 +57,7 @@ function plain(project: string): {ok: boolean; codes: string[]} {
 }
 
 for (const version of ["shared 5.9.3", "5.9.3", "6.0.3"]) {
-  test(`path transport property on stock TypeScript ${version}`, async t => {
+  test(`path transport property on stock TypeScript ${version}`, { skip: process.platform === "win32" && "Windows forbids generated filename characters" }, async t => {
     const root = mkdtempSync(join(tmpdir(), "sdk-path-transport-"));
     t.after(() => rmSync(root, {recursive: true, force: true}));
     const tool = version === "shared 5.9.3" ? dirname(dirname(testCompiler())) : versionedCompiler(version);
@@ -70,7 +71,7 @@ for (const version of ["shared 5.9.3", "5.9.3", "6.0.3"]) {
     symlinkSync(minimum.root, join(project, "node_modules/@unbrained/pm-cli"), "junction");
     writeFileSync(join(project, "consumer.ts"), 'import {onlyCurrent} from "@unbrained/pm-cli"; export {onlyCurrent};');
     assert.deepEqual(plain(project), {ok: false, codes: ["TS2305"]}, "selected minimum independently rejects the current-only API");
-    const random = boundaryRandom(0x154275), count = version === "shared 5.9.3" ? 32 : 8;
+    const random = boundaryRandom(0x154275), count = version === "shared 5.9.3" ? testDepth(32) : 8;
     const names = ["plain", ...Array.from({length: count}, (_, index) => `${index % 8 === 4 ? "--" : ""}shape-${index}-${unusual[index % unusual.length]}-${random().toString(36)}`)];
     for (const name of names) {
       const foreign = join(root, name);
@@ -96,7 +97,7 @@ for (const version of ["shared 5.9.3", "5.9.3", "6.0.3"]) {
   });
 }
 
-test("newline SDK directory review reproduction", async t => {
+test("newline SDK directory review reproduction", { skip: process.platform === "win32" && "Windows forbids newline filenames" }, async t => {
   const root = mkdtempSync(join(tmpdir(), "sdk-newline-review-")), project = consumerDirectory(root);
   t.after(() => rmSync(root, {recursive: true, force: true}));
   const bound = dependencyBound(join(root, "outside\nSDK"));
@@ -105,7 +106,7 @@ test("newline SDK directory review reproduction", async t => {
   await assert.rejects(checkSdkContracts({consumer: project, minimum: bound, current: bound}), error => error instanceof SdkContractRefusal && error.code === "unsupported_project_shape");
 });
 
-test("JSON diagnostic locations retain every unusual path component", async t => {
+test("JSON diagnostic locations retain every unusual path component", { skip: process.platform === "win32" && "Windows forbids these filename characters" }, async t => {
   const root = mkdtempSync(join(tmpdir(), "sdk-path-diagnostic-"));
   t.after(() => rmSync(root, {recursive: true, force: true}));
   const project = consumerDirectory(root);
