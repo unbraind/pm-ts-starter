@@ -2,12 +2,17 @@ id: pm-ts-starter-codeql-dot-contract
 title: Make the CodeQL tracker exclusion contract load-bearing
 description: "Separate follow-up found while reviewing checkout credentials. In test/ci-tiers.test.ts, Node path.matchesGlob skips leading-dot components for **. Removing !.agents/pm/** from either push or pull_request patterns still leaves the synthetic tracker item excluded in the reducer. Require ordered include/exclude/re-include assertions or a GitHub-compatible matcher, with a mutation regression removing the tracker exclusion, while preserving executable inclusion assertions. The published workflow currently has the exclusion; this is a contract gap."
 type: Task
-status: in_progress
+status: closed
 priority: 3
 tags[3]: ci,follow-up,"gh:unbraind/pm-ts-starter#217"
 created_at: "2026-11-16T11:56:02.328Z"
-updated_at: "2026-11-18T02:22:50.070Z"
+updated_at: "2026-11-18T02:46:40.237Z"
+closed_at: "2026-11-18T02:46:40.190Z"
+completed_at: "2026-11-18T02:46:40.190Z"
 author: codex-sol-root
+resolution: Ordered dot-directory path matching and an exclusion mutation test were added in 2c1415ba.
+expected_result: Removing !.agents/pm/** fails the CodeQL contract for both events.
+actual_result: Both mutation controls fail without the exclusion; ci-tiers 12/12 pass.
 comments[1]{created_at,author,text}:
   "2026-11-18T02:22:45.849Z",codex-sol,"Round BP PRRT_kwDOSZpwFM64vN5r: delivered by 2c1415ba (verified at 8274adf). In test/ci-tiers.test.ts, “path filters include dot directories and apply exclusions and re-inclusions in order” verifies dot-directory ordering, and “CodeQL skips prose but includes executable tracker changes in every template” verifies that removing !.agents/pm/** fails the tracker exclusion contract for push and pull_request, for both the root workflow and backend template. All 12 tests in the file passed."
 files[2]{path,scope}:
@@ -16,4 +21,5 @@ files[2]{path,scope}:
 tests[2]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
   node --test test/ci-tiers.test.ts,project,codex-sol,"2026-11-18T02:22:47.216Z",local_mutation,ci/quick-pr-tier-deep-local-tier
   "npm run changelog:check",project,codex-sol,"2026-11-18T02:22:48.884Z",local_mutation,ci/quick-pr-tier-deep-local-tier
+close_reason: Verified delivery in 2c1415ba (test 'CodeQL skips prose but includes executable tracker changes in every template' checks the !.agents/pm/** exclusion mutation for both push and pull_request); completion recorded in e893de3.
 body: ""

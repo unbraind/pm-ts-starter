@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-No changes.
+### Other
+
+- Make the CodeQL tracker exclusion contract load-bearing ([pm-ts-starter-codeql-dot-contract](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/tasks/pm-ts-starter-codeql-dot-contract.toon))
 
 ## 2026.11.17 - 2026-11-17
 
