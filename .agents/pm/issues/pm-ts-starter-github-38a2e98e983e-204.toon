@@ -1,12 +1,12 @@
 id: pm-ts-starter-github-38a2e98e983e-204
 title: Bun release gate hangs after its last test and CI jobs have no timeout (two runners held for 2+ hours)
 description: "GH issue #204: https://github.com/unbraind/pm-ts-starter/issues/204 · author @unbraind · created 2026-11-09T11:55:55Z · updated 2026-11-09T11:55:55Z"
-type: Task
-status: in_progress
+type: Issue
+status: open
 priority: 2
-tags[5]: ci,"gh:unbraind/pm-ts-starter#204","gh:unbraind/pm-ts-starter#217","github_author:unbraind",performance
+tags[2]: "gh:unbraind/pm-ts-starter#204","github_author:unbraind"
 created_at: "2026-11-09T11:55:55Z"
-updated_at: "2026-11-18T00:01:44.719Z"
+updated_at: "2026-11-18T13:00:39.426Z"
 author: pm-github
 comments[63]{created_at,author,text}:
   "2026-11-15T13:43:47.071Z",codex-sol,"Fleet CI v2; companion pm-cli-website-dyhg. Reuse the existing hung Bun gate item. Preserve required test (22) and test (26), generated-package acceptance, committed build-output checks, strict tracker health, privacy and release verifiers. Split quick hosted PR gates from exhaustive local deep gates; add bounded jobs and deterministic test depth. No release workflow or verifier changes."
