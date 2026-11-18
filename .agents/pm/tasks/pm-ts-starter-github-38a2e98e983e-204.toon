@@ -6,11 +6,9 @@ status: in_progress
 priority: 2
 tags[5]: ci,"gh:unbraind/pm-ts-starter#204","gh:unbraind/pm-ts-starter#217","github_author:unbraind",performance
 created_at: "2026-11-09T11:55:55Z"
-updated_at: "2026-11-17T23:58:54.160Z"
-assignee: codex-sol
-claim_principal: codex-sol
+updated_at: "2026-11-18T00:01:44.719Z"
 author: pm-github
-comments[62]{created_at,author,text}:
+comments[63]{created_at,author,text}:
   "2026-11-15T13:43:47.071Z",codex-sol,"Fleet CI v2; companion pm-cli-website-dyhg. Reuse the existing hung Bun gate item. Preserve required test (22) and test (26), generated-package acceptance, committed build-output checks, strict tracker health, privacy and release verifiers. Split quick hosted PR gates from exhaustive local deep gates; add bounded jobs and deterministic test depth. No release workflow or verifier changes."
   "2026-11-15T13:47:57.883Z",codex-sol,"Latest successful main run 43691008662: Node 22 npm/Bun gates 59m04s/58m43s; Node 26 75m10s/76m10s. gh run view --log returned empty; individual jobs API log supplied timings: seeded property 693.34s, discovery 636.63s, compiler matrix 505.66s, packed acceptance 269.96s. Quick retains deterministic prefixes and unchanged coverage thresholds; full remains deep. Generated projects inherit adapted workflows and the helper and now execute their own release gate under both installed graphs. Bun project paths are accepted; bunx is a separate local-bin smoke. The historical Bun handle leak is contained, not diagnosed as fixed."
   "2026-11-15T13:50:43.690Z",codex-sol,"Deep uses four Node/runtime matrix legs, each with a fresh installer graph and its own 120-minute ceiling. This preserves all four full gates without stacking the measured 75-minute npm and 76-minute Bun gates in one 120-minute job. No coverage/source threshold changes."
@@ -73,6 +71,7 @@ comments[62]{created_at,author,text}:
   "2026-11-17T20:52:10.088Z",codex-sol,"Round BH hosted coverage repair. Replaying the five shard artifacts from a952a7e isolated one uncovered branch at scripts/coverage-gate.ts:541. Removed the extra diagnostic fallback, preserving the existing error message and the scratch-file summary transport. All 49 CI tests passed again on Node 22, 24 and 26. An independent Node 26 run reported 100 percent lines, branches and functions for scripts/coverage-gate.ts. Typecheck, test compilation and lint passed."
   "2026-11-17T23:53:47.826Z",codex-sol,Round BL started from the refreshed PR branch. Verifying review claims and adding focused regression coverage before running repository gates.
   "2026-11-17T23:58:46.397Z",codex-sol,Round BL verified PRRT_kwDOSZpwFM64shAz. Quick shards run the build on Node 22. The separate Node 26 release gate compares the regenerated dist tree with tracked output. The table and a workflow-backed regression now distinguish these guarantees.
+  "2026-11-18T00:01:41.119Z",codex-sol,"PRRT_kwDOSZpwFM64shAz is fixed by 276e6cc. The workflow-backed fixture confirms build-only Node 22 shards and the Node 26 committed-dist comparison. The two CI contract suites passed 14 tests. Build-test compilation, typecheck, lint and changelog:check passed. The changelog generator produced identical bytes."
 files[39]:
   - path: .github/workflows/ci-deep.yml
     scope: project
