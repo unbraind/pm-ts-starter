@@ -1,0 +1,276 @@
+/** Compare actual offset-based hit unions against an unsharded runtime report. */
+import assert from "node:assert/strict";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { isAbsolute, join, relative, sep } from "node:path";
+import { fileURLToPath } from "node:url";
+import test, { type TestContext } from "node:test";
+import { runCoverageGate, mergeCoverageShards, runScriptEntry } from "../scripts/coverage-gate.ts";
+
+/** Give real coverage fixtures the same required source scope and strict thresholds. */
+function writeCoverageConfig(root: string): void {
+  writeFileSync(join(root, "package.json"), JSON.stringify({ type: "module", coverageGate: {
+    sources: ["src"], tests: ["test/*.test.ts"], thresholds: { lines: 100, branches: 100, functions: 100 },
+  } }));
+}
+
+/** Build an isolated package with the native coverage runner's expected layout. */
+function coverageFixture(t: TestContext, prefix: string): string {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), prefix)));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(join(root, "src"));
+  mkdirSync(join(root, "test"));
+  writeCoverageConfig(root);
+  return root;
+}
+
+test("sharded coverage equals unsharded including one-shard branches and functions", t => {
+  const root = mkdtempSync(join(tmpdir(), "coverage union-"));
+  t.after(() => rmSync(root, {recursive:true,force:true}));
+  mkdirSync(join(root,"test"));
+  mkdirSync(join(root,"src"));
+  writeCoverageConfig(root);
+  writeFileSync(join(root,"src/value.ts"), `export function classify(value: number) {
+  if (value > 0) return positive();
+  return negative();
+}
+export function positive() { return "positive"; }
+export function negative() { return "negative"; }
+`);
+  for (const [name,value,expected] of [["a",1,"positive"],["b",-1,"negative"]] as const) writeFileSync(join(root,`test/${name}.test.ts`), `import test from 'node:test'; import assert from 'node:assert/strict'; import {classify} from '../src/value.ts'; test('${name}',()=>assert.equal(classify(${value}), '${expected}'));`);
+  for (const [shard,output] of [["1/1","whole"],["1/2","first"],["2/2","second"],["1/1",join(root,"absolute-whole")]]) assert.equal(runCoverageGate(root,"ignore",{shard,output}),0);
+  const paths=["first/hits.json","second/hits.json"];
+  const merged=mergeCoverageShards(root,paths,["src/value.ts"]);
+  const absolutePaths = paths.map(path => join(root, path));
+  assert.deepEqual(mergeCoverageShards(root,absolutePaths,["src/value.ts"]),merged);
+  assert.deepEqual(JSON.parse(readFileSync(join(root,"absolute-whole","hits.json"),"utf8")).files,
+    JSON.parse(readFileSync(join(root,"whole","hits.json"),"utf8")).files);
+  assert.equal(runCoverageGate(root,"ignore",{merge:absolutePaths}),0);
+  // This report came directly from Node's native reporter, without merge conversion.
+  const whole=JSON.parse(readFileSync(join(root,"whole/hits.json"),"utf8")) as typeof merged;
+  assert.ok(whole.files.length > 0);
+  for (const path of paths) {
+    const shard=JSON.parse(readFileSync(join(root,path),"utf8"));
+    assert.deepEqual([...new Set(shard.raw.map((script: {url:string})=>script.url))],["src/value.ts"]);
+    assert.deepEqual(shard.files.map((file: {path:string})=>file.path),["src/value.ts"]);
+  }
+  const covered=(report: typeof merged) => report.files.map(file => ({...file, path:relative(root,isAbsolute(file.path) ? file.path : join(root,file.path)).replaceAll("\\","/"), lines:(file.lines as {line:number;count:number}[]).map(hit=>({...hit,count:Number(hit.count>0)})), branches:(file.branches as {line:number;count:number}[]).map(hit=>({...hit,count:Number(hit.count>0)})), functions:(file.functions as {name:string;line:number;count:number}[]).map(hit=>({...hit,count:Number(hit.count>0)}))}));
+  assert.deepEqual(covered(merged),covered(whole));
+  for(const path of paths) { const shard=JSON.parse(readFileSync(join(root,path),"utf8")); assert.ok(shard.files[0].functions.some((hit:{count:number})=>hit.count===0)); assert.ok(shard.files[0].branches.some((hit:{count:number})=>hit.count===0)); }
+  assert.equal(runCoverageGate(root,"ignore",{merge:paths}),0);
+  const savedArgv=process.argv, savedExit=process.exit;
+  let status: number | undefined;
+  process.exit=((code?:number)=>{status=code;}) as typeof process.exit;
+  try {
+    for(const args of [["--shard","1/2","--output","cli"],["--shard","1/2","--output",join(root,"absolute-cli")],["--merge",...paths],["--merge",...absolutePaths]]) {
+      process.argv=[savedArgv[0]!,fileURLToPath(new URL("../scripts/coverage-gate.ts",import.meta.url)),...args];
+      runScriptEntry(root);assert.equal(status,0);
+    }
+  } finally {process.argv=savedArgv;process.exit=savedExit;}
+  const secondSaved=readFileSync(join(root,paths[1]!),"utf8");
+  const sameHalf=JSON.parse(readFileSync(join(root,paths[0]!),"utf8"));sameHalf.shard="2/2";
+  writeFileSync(join(root,paths[1]!),JSON.stringify(sameHalf));
+  assert.equal(runCoverageGate(root,"ignore",{merge:paths}),1,"partial union must retain the original 100 percent threshold");
+  writeFileSync(join(root,paths[1]!),secondSaved);
+  assert.throws(()=>runCoverageGate(root,"ignore",{shard:"1/2"}),/missing shard report or output/);
+  const saved=readFileSync(join(root,paths[0]!),"utf8");
+  const change=(mutate:(artifact: {digest:string;node:string;raw:{url:string;functions?:unknown}[]})=>void) => {const artifact=JSON.parse(saved);mutate(artifact);writeFileSync(join(root,paths[0]!),JSON.stringify(artifact));};
+  change(artifact=>{artifact.digest="wrong"});assert.throws(()=>mergeCoverageShards(root,paths,["src/value.ts"]),/source mismatch/);
+  change(artifact=>{artifact.node=process.versions.node.replace(/\d+$/, patch => String(Number(patch) + 1))});
+  assert.deepEqual(mergeCoverageShards(root,paths,["src/value.ts"]),merged,"patch differences must preserve the native coverage union");
+  change(artifact=>{const [major, minor] = process.versions.node.split("."); artifact.node = `${major}.${Number(minor) + 1}.0`;});
+  assert.deepEqual(mergeCoverageShards(root,paths,["src/value.ts"]),merged,"minor differences must preserve the native coverage union");
+  change(artifact=>{artifact.node=process.versions.node.startsWith("26.") ? "22.0.0" : "26.0.0"});assert.throws(()=>mergeCoverageShards(root,paths,["src/value.ts"]),/runtime mismatch/);
+  change(artifact=>{artifact.raw[0].functions=null});assert.throws(()=>mergeCoverageShards(root,paths,["src/value.ts"]),/native merge failed/);
+  change(artifact=>{artifact.raw=[]});
+  assert.equal(runCoverageGate(root,"ignore",{merge:paths}),1,"empty contributions must not hide incomplete union coverage");
+  change(artifact=>{artifact.raw[0].url="../outside.ts"});assert.throws(()=>mergeCoverageShards(root,paths,["src/value.ts"]),/unexpected source/);
+  assert.equal(runCoverageGate(root,"ignore",{merge:paths}),1);
+  writeFileSync(join(root,paths[0]!),saved);
+  assert.equal(runCoverageGate(root,"ignore",{merge:[paths[0]!]}),1);
+  assert.throws(()=>mergeCoverageShards(root,[paths[0]!],["src/value.ts"]),/missing shards/);
+  assert.throws(()=>mergeCoverageShards(root,[paths[0]!,paths[0]!],["src/value.ts"]),/duplicate or missing/);
+});
+
+test("merged coverage matches the native report when the summary exceeds 1 MiB", t => {
+  const root = coverageFixture(t, "coverage large-");
+  const source = "src/large.ts";
+  writeFileSync(join(root, source), `let value = 0;\n${"value += 1;\n".repeat(50_000)}export {value};\n`);
+  writeFileSync(join(root, "test/large.test.ts"), `import test from 'node:test';
+import assert from 'node:assert/strict';
+import {value} from '../src/large.ts';
+test('covers all source lines', () => assert.equal(value, 50_000));`);
+  assert.equal(runCoverageGate(root, "ignore", { shard: "1/1", output: "whole" }), 0);
+  const whole = JSON.parse(readFileSync(join(root, "whole/hits.json"), "utf8")) as ReturnType<typeof mergeCoverageShards>;
+  assert.ok(Buffer.byteLength(JSON.stringify(whole.files)) > 1024 * 1024,
+    "the per-line records alone must exceed the default child stdout buffer");
+  const merged = mergeCoverageShards(root, ["whole/hits.json"], [source]);
+  assert.deepEqual(merged.files.map(file => ({ ...file, path: relative(root, file.path).split(sep).join("/") })), whole.files);
+  const {coveredLinePercent, coveredBranchPercent, coveredFunctionPercent} = merged.totals;
+  assert.deepEqual([coveredLinePercent, coveredBranchPercent, coveredFunctionPercent], [100, 100, 100]);
+});
+
+/** Malformed shard invocations must fail before they can run an unsharded gate. */
+test("coverage CLI requires explicit values for shard and output flags", () => {
+  const savedArgv = process.argv;
+  try {
+    for (const [args, message] of [
+      [["--shard"], /--shard requires a value/],
+      [["--shard", "1/2"], /--shard requires --output with a value/],
+      [["--shard", "1/2", "--output"], /--output requires a value/],
+      [["--output", "--shard", "1/2"], /--output requires a value/],
+      [["--shard", "--output", "out"], /--shard requires a value/],
+    ] as const) {
+      process.argv = [savedArgv[0]!, fileURLToPath(new URL("../scripts/coverage-gate.ts", import.meta.url)), ...args];
+      assert.throws(() => runScriptEntry(), message);
+    }
+  } finally { process.argv = savedArgv; }
+});
+
+/** Tooling-only shards are valid contributions; union source presence remains mandatory. */
+test("successful tooling-only shard contributes empty hits without weakening the union", t => {
+  const root = mkdtempSync(join(tmpdir(), "coverage tooling-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(join(root, "src"));
+  mkdirSync(join(root, "test"));
+  mkdirSync(join(root, "tooling"));
+  writeCoverageConfig(root);
+  writeFileSync(join(root, "src/value.ts"), "export function value() { return 42; }\n");
+  writeFileSync(join(root, "tooling/check.ts"), "export const ready = true;\n");
+  writeFileSync(join(root, "test/a.test.ts"), "import test from 'node:test'; import assert from 'node:assert/strict'; import {value} from '../src/value.ts'; test('source', () => assert.equal(value(), 42));\n");
+  writeFileSync(join(root, "test/b.test.ts"), "import test from 'node:test'; import assert from 'node:assert/strict'; import {ready} from '../tooling/check.ts'; test('tooling', () => assert.equal(ready, true));\n");
+  const paths = ["source/hits.json", "tooling-only/hits.json"];
+  for (const [shard, output] of [["1/1", "whole"], ["1/2", "source"], ["2/2", "tooling-only"]]) {
+    assert.equal(runCoverageGate(root, "ignore", { shard, output }), 0);
+  }
+  const tooling = JSON.parse(readFileSync(join(root, paths[1]!), "utf8"));
+  assert.deepEqual(tooling.files, []);
+  assert.deepEqual(tooling.raw, []);
+  assert.deepEqual(mergeCoverageShards(root, paths, ["src/value.ts"]),
+    mergeCoverageShards(root, ["whole/hits.json"], ["src/value.ts"]));
+  assert.equal(runCoverageGate(root, "ignore", { merge: paths }), 0);
+  assert.throws(() => mergeCoverageShards(root, [paths[0]!], ["src/value.ts"]), /missing shards/);
+  writeFileSync(join(root, "src/missing.ts"), "export const missing = true;\n");
+  for (const [shard, output] of [["1/2", "source"], ["2/2", "tooling-only"]]) {
+    assert.equal(runCoverageGate(root, "ignore", { shard, output }), 0);
+  }
+  assert.equal(runCoverageGate(root, "ignore", { merge: paths }), 1, "the union must still load every required source");
+});
+
+
+/** Distinct module URLs must preserve the same branch coverage as an unsharded run. */
+test("coverage shards retain plain, query and fragment imports of the same source", t => {
+  const root = coverageFixture(t, "coverage query-");
+  writeFileSync(join(root, "src/value.ts"), `export function classify(value: number) {
+  if (value > 0) return "positive";
+  return "negative";
+}
+`);
+  writeFileSync(join(root, "test/value.test.ts"), `import test from 'node:test';
+import assert from 'node:assert/strict';
+import {classify} from '../src/value.ts';
+const {classify: query} = await import('../src/value.ts?case=positive');
+const {classify: fragment} = await import('../src/value.ts#case=positive');
+test('all module identities', () => {
+  assert.equal(classify(-1), 'negative');
+  assert.equal(query(1), 'positive');
+  assert.equal(fragment(1), 'positive');
+});
+`);
+  assert.equal(runCoverageGate(root, "ignore", { shard: "1/1", output: "query" }), 0);
+  const artifact = JSON.parse(readFileSync(join(root, "query/hits.json"), "utf8")) as { raw: { url: string }[] };
+  assert.equal(artifact.raw.length, 3, "all three module executions must survive the shard filter");
+  assert.deepEqual(artifact.raw.map(script => script.url).sort(),
+    ["src/value.ts", "src/value.ts?case=positive", "src/value.ts#case=positive"].sort());
+  const merged = mergeCoverageShards(root, ["query/hits.json"], ["src/value.ts"]);
+  assert.deepEqual(merged.files.map(file => ({ ...file, path: relative(root, file.path).replaceAll("\\", "/") })),
+    (JSON.parse(readFileSync(join(root, "query/hits.json"), "utf8")) as typeof merged).files,
+    "merging must preserve the native report for the same imports");
+  assert.equal(runCoverageGate(root, "ignore"), 1, "each module instance covers only one branch");
+  assert.equal(runCoverageGate(root, "ignore", { merge: ["query/hits.json"] }), 1,
+    "distinct module instances must not combine into a fully covered instance");
+
+  // A second test process covers the complementary branch of each exact URL.
+  writeFileSync(join(root, "test/complement.test.ts"), readFileSync(join(root, "test/value.test.ts"), "utf8")
+    .replace("classify(-1), 'negative'", "classify(1), 'positive'")
+    .replace("query(1), 'positive'", "query(-1), 'negative'")
+    .replace("fragment(1), 'positive'", "fragment(-1), 'negative'"));
+  const paths = ["first/hits.json", "second/hits.json"];
+  for (const [shard, output] of [["1/1", "whole"], ["1/2", "first"], ["2/2", "second"]]) {
+    assert.equal(runCoverageGate(root, "ignore", { shard, output }), 0);
+  }
+  assert.deepEqual(mergeCoverageShards(root, paths, ["src/value.ts"]),
+    mergeCoverageShards(root, ["whole/hits.json"], ["src/value.ts"]));
+  assert.equal(runCoverageGate(root, "ignore"), 0);
+  assert.equal(runCoverageGate(root, "ignore", { merge: paths }), 0);
+});
+
+for (const [character, encoded, windowsSkip] of [
+  ["#", "%23", false],
+  ["?", "%3F", "Windows forbids question marks in filenames"],
+  ["\\", "%5C", "Windows treats backslashes as path separators"],
+] as const) {
+  test(`coverage shards preserve ${JSON.stringify(character)} in filenames`, {
+    skip: process.platform === "win32" && windowsSkip,
+  }, t => {
+    const root = coverageFixture(t, "coverage encoded path-");
+
+    const source = `src/value${character}case.ts`;
+    const suffix = character === "#" ? "?view=%23#fragment" : "";
+    const encodedUrl = `src/value${encoded}case.ts${suffix}`;
+    const rawUrls = [encodedUrl];
+    writeFileSync(join(root, source), "export const value = 42;\n");
+    let fixture = `import {value} from '../${encodedUrl}';`;
+    if (character === "\\") {
+      // Node's native glob treats a backslash as a separator. This second real
+      // source supplies an include pattern that also matches the backslash file.
+      rawUrls.push("src/value%3Fcase.ts");
+      writeFileSync(join(root, "src/value?case.ts"), "export const value = 21;\n");
+      // CommonJS can load the literal POSIX path even though ESM rejects %5C.
+      fixture = `import {createRequire} from 'node:module';
+import {value as question} from '../src/value%3Fcase.ts';
+const value = createRequire(import.meta.url)(${JSON.stringify(`../${source}`)}).value + question - 21;`;
+    }
+    writeFileSync(join(root, "test/value.test.ts"), `${fixture}
+import assert from 'node:assert/strict';
+assert.equal(value, 42);
+`);
+    assert.equal(runCoverageGate(root, "ignore", { shard: "1/1", output: "whole" }), 0);
+    const artifactPath = "whole/hits.json";
+    const artifact = JSON.parse(readFileSync(join(root, artifactPath), "utf8")) as {
+      raw: { url: string }[];
+      files: { path: string }[];
+    };
+    const required = readdirSync(join(root, "src"), { withFileTypes: true }).map(entry => `src/${entry.name}`);
+    assert.deepEqual(artifact.raw.map(script => script.url).sort(), rawUrls.sort());
+    assert.deepEqual(artifact.files.map(file => file.path).sort(), [...required].sort());
+    const merged = mergeCoverageShards(root, [artifactPath], required);
+    assert.deepEqual(merged.files.map(file => ({ ...file, path: relative(root, file.path).split(sep).join("/") })), artifact.files);
+    assert.equal(runCoverageGate(root, "ignore"), 0);
+    assert.equal(runCoverageGate(root, "ignore", { merge: [artifactPath] }), 0);
+  });
+}
+
+
+/** An explicit symlink root must retain both raw and native required-source hits. */
+test("coverage shard roots use canonical paths before filtering counters", t => {
+  const parent = mkdtempSync(join(tmpdir(), "coverage symlink-"));
+  t.after(() => rmSync(parent, { recursive: true, force: true }));
+  const root = join(parent, "real"), alias = join(parent, "alias");
+  mkdirSync(root);
+  mkdirSync(join(root, "src"));
+  mkdirSync(join(root, "test"));
+  writeCoverageConfig(root);
+  writeFileSync(join(root, "src/value.ts"), "export function value() { return 42; }\n");
+  writeFileSync(join(root, "test/value.test.ts"), "import test from 'node:test'; import assert from 'node:assert/strict'; import {value} from '../src/value.ts'; test('value', () => assert.equal(value(), 42));\n");
+  symlinkSync(root, alias, process.platform === "win32" ? "junction" : "dir");
+  assert.equal(runCoverageGate(alias, "ignore", { shard: "1/1", output: "linked" }), 0);
+  const artifact = JSON.parse(readFileSync(join(root, "linked/hits.json"), "utf8")) as {
+    raw: { url: string; functions: { ranges: { count: number }[] }[] }[];
+    files: { path: string }[];
+  };
+  assert.deepEqual(artifact.raw.map(script => script.url), ["src/value.ts"]);
+  assert.ok(artifact.raw[0]!.functions.some(fn => fn.ranges.some(range => range.count > 0)));
+  assert.deepEqual(artifact.files.map(file => file.path), ["src/value.ts"]);
+  assert.equal(runCoverageGate(alias, "ignore", { merge: ["linked/hits.json"] }), 0);
+});

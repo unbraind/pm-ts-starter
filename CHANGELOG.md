@@ -1,8 +1,19 @@
 # Changelog
 
-## Unreleased
+## 2026.11.19 - 2026-11-19
 
-No changes.
+### Other
+
+- Make the CodeQL tracker exclusion contract load-bearing ([pm-ts-starter-codeql-dot-contract](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/tasks/pm-ts-starter-codeql-dot-contract.toon))
+
+## 2026.11.17 - 2026-11-17
+
+### Dependencies
+
+- Bump eslint ([#220](https://github.com/unbraind/pm-ts-starter/pull/220))
+- Bump @babel/eslint-parser ([#218](https://github.com/unbraind/pm-ts-starter/pull/218))
+- Bump unbraind/pm-github/.github/workflows/pm-github-closeout.yml ([#214](https://github.com/unbraind/pm-ts-starter/pull/214))
+- Bump unbraind/pm-github/.github/workflows/pm-github-sync.yml ([#215](https://github.com/unbraind/pm-ts-starter/pull/215))
 
 ## 2026.11.12 - 2026-11-12
 

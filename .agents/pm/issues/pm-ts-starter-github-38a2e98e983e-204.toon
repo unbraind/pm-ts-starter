@@ -6,8 +6,453 @@ status: open
 priority: 2
 tags[2]: "gh:unbraind/pm-ts-starter#204","github_author:unbraind"
 created_at: "2026-11-09T11:55:55Z"
-updated_at: "2026-11-09T13:49:20.117Z"
+updated_at: "2026-11-18T13:00:39.426Z"
 author: pm-github
+comments[63]{created_at,author,text}:
+  "2026-11-15T13:43:47.071Z",codex-sol,"Fleet CI v2; companion pm-cli-website-dyhg. Reuse the existing hung Bun gate item. Preserve required test (22) and test (26), generated-package acceptance, committed build-output checks, strict tracker health, privacy and release verifiers. Split quick hosted PR gates from exhaustive local deep gates; add bounded jobs and deterministic test depth. No release workflow or verifier changes."
+  "2026-11-15T13:47:57.883Z",codex-sol,"Latest successful main run 43691008662: Node 22 npm/Bun gates 59m04s/58m43s; Node 26 75m10s/76m10s. gh run view --log returned empty; individual jobs API log supplied timings: seeded property 693.34s, discovery 636.63s, compiler matrix 505.66s, packed acceptance 269.96s. Quick retains deterministic prefixes and unchanged coverage thresholds; full remains deep. Generated projects inherit adapted workflows and the helper and now execute their own release gate under both installed graphs. Bun project paths are accepted; bunx is a separate local-bin smoke. The historical Bun handle leak is contained, not diagnosed as fixed."
+  "2026-11-15T13:50:43.690Z",codex-sol,"Deep uses four Node/runtime matrix legs, each with a fresh installer graph and its own 120-minute ceiling. This preserves all four full gates without stacking the measured 75-minute npm and 76-minute Bun gates in one 120-minute job. No coverage/source threshold changes."
+  "2026-11-15T13:51:15.430Z",codex-sol,"Pre-push checks: typecheck, test compilation, lint, build, duplicate gate (0%), docstrings and changelog pass. Strict health passes with inherited advisories. Strict YAML parser passes six source/generated workflows; actionlint is unavailable. Focused generator-asset, graph-failure and depth regressions pass (15 tests). Quick touched-file batch is running with a 20-minute bound; no full local run is planned. Coverage remains a required quick PR gate at the unchanged 100/100/100 thresholds."
+  "2026-11-15T13:57:34.874Z",codex-sol,Harness scale validation also rejects budgets above the portable signed 32-bit timer ceiling; positive fractional scales round upward. This prevents huge scale values from overflowing or becoming immediate timers. Depth and deep-graph invariants pass 3/3 after the guard.
+  "2026-11-15T13:59:24.938Z",codex-sol,"Final generated-package/deep-graph/depth batch: PM_TEST_DEPTH=quick PM_TEST_TIME_SCALE=3 node --test test/backend.test.ts test/ci-consumer-graphs.test.ts test/depth.test.ts passes 29/29, zero failures/skips/cancellations, 124.37 seconds linked-command wall. This executes both generated installer graphs and their own release gates. A later timer-overflow guard passes the separate 3-test depth/deep smoke. Broad quick touched-file batch is still bounded to 1200 seconds."
+  "2026-11-15T14:08:30.808Z",codex-sol,"Broad quick touched-file run stopped at its 1200-second harness budget: 235 passing tests, one obsolete generated-Bun audit failure, three cancelled suites. That run loaded the pre-fix generator: npm audit rejected the Bun graph because it had no npm lockfile (ENOLOCK). The committed generator now creates an audit lockfile; the fresh final generator/deep/depth batch passes 29/29 in 124.37 seconds. Remaining compiler suites are incomplete on this overloaded host; this is not a successful complete quick run. No full local depth or full quick coverage was attempted. PR CI run 43721246259 had both required checks queued at the snapshot; no completed created-to-completed wall time exists. CodeQL run 43721246139 was also queued. Final typecheck, test compilation, lint, integer-timer tests and bunx compiler smoke pass. Coverage, total quick duration and deep capacity remain unverified; no release files, variables, protection or review threads changed."
+  "2026-11-15T19:58:36.596Z",codex-sol-round-d,"Round D: verify PR 217 findings, preserve documentation validation and privacy checks, make generated private runners opt-in, scale harness timeout fixture lifetime, and diagnose both 30-minute required-check cancellations using individual job logs. Review all six CI defect classes."
+  "2026-11-15T20:09:12.701Z",codex-sol-round-d,"Round D: all four review findings are valid. Generated and root deep workflows default to hosted Ubuntu unless PM_LOCAL_DEEP=on; generated deep jobs now separate Node x npm/Bun gates and actions are pinned. Docs tier keeps identity/privacy plus README package links, compatibility-floor and focused SDK compiler documentation tests. Harness timeout lifetime scales at 1.5 and 20; invalid scale is checked before spawn. Self-review restored executable tracker CodeQL eligibility and skips native invalid filename corpora on win32. No covered implementation source changed this round; coverage is not repeated. Required checks on prior head cancelled at 30 minutes immediately before the unbounded overlapping-peer test; its peer now has an integer scaled hard-kill timeout and explicit result exit. Focused regression is running; final CI recovery remains unverified."
+  "2026-11-15T20:20:02.490Z",codex-sol-round-d,"Round D final local results on Node 24.19.0: typecheck/build:test/lint pass (23.41 s final); workflow/depth/metadata/compatibility/release/identity batch 28 passed (7.33 s), including strict root/generated YAML; focused compiler documentation 1 passed (4.94 s); backend deadline/invalid-scale/clean-network-env regressions 3 passed (10.57 s final). Full backend/consumer-graph/depth batch passed 29 (329.65 s) before the final added invalid-scale case, which passed separately. POSIX API/path corpora passed 17 with no skips (713.78 s). Overlapping caller contract passed all six phases and observer cleanup at scale 3 (465.40 s); initial scale-1 60-second peer watchdog failed under host load (283.86 s overall) and is retained as failed diagnostic evidence, not approval. Changelog regeneration/check and strict source tracker health passed (49.34 s linked command). The 30-minute prior hosted cancellations are traced to the previously unbounded peer test; its bound/explicit result exit improves failure containment, while hosted recovery and the general Bun handle issue remain unverified. All four finding thread IDs fixed: PRRT_kwDOSZpwFM63qKb7, PRRT_kwDOSZpwFM63qkY_, PRRT_kwDOSZpwFM63qKb8, PRRT_kwDOSZpwFM63qkZB. No source coverage change or local coverage run this round; full depth and replacement-head CI remain unverified. No item closure or thread action."
+  "2026-11-15T22:24:21.409Z",codex-sol,"Round E: verified assigned review findings and current checks. Fix valid portability, gate-order and timeout regressions; preserve product deadlines, privacy/identity and self-host gates. Run targeted quick tests and required tooling checks before an explicit-path commit. Review threads remain untouched."
+  "2026-11-15T22:37:46.091Z",codex-sol,"Round E evidence: PRRT_kwDOSZpwFM63udS7 is valid: generated deep Bun legs never called test:bun. Add that explicit behavioral gate and ordering regression. Both failing checks actually reached the 30-minute job limit; the logs stop before the overlapping caller-boundary test finishes. Retain all six competition phases using a small actual compiled SDK fixture rather than repeated copies of the full published SDK dependency graph; validate the targeted case."
+  "2026-11-15T22:45:13.561Z",codex-sol,"Round E direct targeted check: PM_TEST_DEPTH=quick PM_TEST_TIME_SCALE=3 node --test --test-name-pattern=\"each overlapping caller boundary\" test/sdk-contracts.test.ts; passed: 1 test, all six boundaries, 342352 ms. No package coverage sources were changed; no package coverage run was performed."
+  "2026-11-15T22:50:05.287Z",codex-sol,"Round E final verification: typecheck, lint (docstring gate where no lint script exists), touched regression tests, workflow/tooling tests, strict workflow YAML and changelog:check passed. Duplication gates passed where provided. Self-review retained docs/tracker privacy and identity checks, unscaled product deadlines, integer-rounded validated harness budgets, platform filename guards and generated-only quick thresholds. No package coverage sources were edited; no package coverage run. No review thread actions or merge. Shared-runner hold and unbrained commit identity will be checked before push. Hosted CI is intentionally not awaited. The targeted six-phase compiler competition check passed 1/1 in 342352 ms. Hosted timeout improvement remains to be measured after push."
+  "2026-11-16T00:22:55.542Z",codex-sol,"Round F: verify assigned review findings and failing Actions checks, audit related tier contracts, add regressions, run focused gates and push without waiting for CI. Review threads remain untouched."
+  "2026-11-16T00:35:36.582Z",codex-sol,"Round F: PRRT_kwDOSZpwFM63vZMz is valid. Run 43771856126 spent 29m56s in the Node 26 release gate and 29m59s in Node 22 tests; setup completed under 20s. Preserve all six tracker competitions with one minimal peer compiler matrix in quick; exhaustive repeated matrices and all four packed installer/bound lanes remain deep. PRRT_kwDOSZpwFM63vZM4 is valid; 25 deterministic samples now include all three extensions and nine syntax forms. Self-review restores local-by-default deep runners in root and shipped workflows. Tooling tests, typecheck, lint and strict YAML pass; touched compiler tests are running."
+  "2026-11-16T01:20:36.010Z",codex-sol,"All assertions in the broad SDK file completed successfully at quick depth, including 25 generated dependency graphs, 188 edges and 50 matching checker rows. A diagnostic inspector evaluation injected a dynamic-import rejection into that test process, making the process result invalid as a clean gate. Repeat the SDK file without instrumentation; the separate program-graph checks continue. This is a validation-process error, not a source finding."
+  "2026-11-16T01:23:14.844Z",codex-sol,"Use a clean focused rerun of all SDK cases affected by the changed overlap fixture, packed lane selection, minimal consumer helper and dependency worker, plus both real 25-case program matrices. The broad run already completed unchanged assertions; its process-level diagnostic rejection is recorded separately. Restore the unrelated explicit compiler regression configuration to minimize the final diff."
+  "2026-11-16T01:40:20.445Z",codex-sol,"Clean final quick-depth verification passed all 19 focused SDK/program tests in about 970 seconds, without instrumentation. This covers every changed SDK fixture/helper/worker case and both real TypeScript 5.9.3 and 6.0.3 matrices: 25 combinations each, all three extensions and nine syntax forms. The 17 PM-linked workflow/depth/release tests also passed. Final typecheck, lint, test compilation, strict YAML, changelog and author-email checks passed. No coverage source changed, so no local coverage was run. Both review findings are fixed; exhaustive packed lanes and repeated peer matrices remain deep. Hosted job timing and full coverage await orchestrator CI verification; keep the item open."
+  "2026-11-16T02:22:42.880Z",codex-sol,"Quick-fit follow-up: cancelled required checks reached the unchanged 30-minute ceiling without a test failure. Audit exhaustive boundary, compiler and consumer matrices; retain deterministic kind coverage in quick and complete enumeration in deep. Compare focused local quick timings, then measure PR job steps within the 30-minute post-push observation window. Product timing contracts and coverage thresholds remain unchanged."
+  "2026-11-16T02:29:37.514Z",codex-sol,"Finite quick selection now preserves 9 compiler dimension representatives (both runtime kinds and SDK bounds), all 16 hostile specifier kinds across alternating locations, 18 discovery kinds, each supplementary flag, one compiler per structural family and one packed npm/current SDK path. Deep retains every original combination. Typecheck, test compilation, lint and depth-helper tests pass. Frozen baseline and revised quick touched-file runs are in progress; shared-host timings are comparative, not hosted-runner guarantees."
+  "2026-11-16T02:31:57.013Z",codex-sol,"Validation before the early push: npm run typecheck; npm run build:test; npm run lint; npm run build; PM_TEST_DEPTH=quick node --test test/depth.test.ts all pass. The helper also passes through pm test --run --only-last --progress (4 tests). Frozen old-depth baseline and the linked revised touched-file command continue in parallel; measurements will follow. Coverage thresholds and all product deadlines are unchanged. Do not interpret pending focused tests or CI as approval."
+  "2026-11-16T03:02:05.668Z",codex-sol,"Bounded quick-fit evidence for code head fa7d363: the 15-minute target is NOT met. Both Linux checks remain running after more than 28 minutes; their test-step lower bounds and every completed setup step are in the Jobs API table below. GitHub returns 404 for unfinished job logs, so a new complete per-test CI ranking is unavailable. Unchanged next candidates from prior logs: post-compile isolation 103.822s, malformed API results 101.273s, import mutations 50.837-70.221s, SDK-bound declaration pairs 51.122s and location tripwires 47.373s. Local quick validation ended at the time budget: 20 passed, zero assertion failures, one cancelled SDK-contracts file. The 5.9.3 structural API and 9-case 6.0.3 graph families pass; the broad suite and coverage are not certified. Local before/after and exact commands are in docs/ci-quick-fit-measurements.md. Release the claim, retain in_progress, never close.\n\n# Quick-fit measurements: pm-ts-starter\n\nCode head: `fa7d36307fb34c30a45130689b32709d342339e1`. [CI run 43792754575](https://github.com/unbraind/pm-ts-starter/actions/runs/43792754575).\nJobs API snapshot: 2026-11-16T03:00:40+00:00. All local timing commands use `PM_TEST_DEPTH=quick`; unset/full depth is not run locally.\n\n| Job | Result at snapshot | Created to completion | Queue | Started to completion |\n| --- | --- | --- | --- | --- |\n| test (26) | in_progress | unfinished | 2s | >= 1712s running |\n| test (22) | in_progress | unfinished | 2s | >= 1712s running |\n\nStep times are completed wall times from `started_at` to `completed_at`; running values are lower bounds, not completed durations.\n\n| Step | test (26) | test (22) |\n| --- | --- | --- |\n| Set up job | 2s success | 2s success |\n| Checkout | 1s success | 2s success |\n| Detect code changes | 1s success | 0s success |\n| Setup Node.js | 6s success | 3s success |\n| Setup Bun | 2s success | 2s success |\n| Install dependencies | 4s success | 6s success |\n| Install project pm-github extension | 1s success | 2s success |\n| Verify tracked pm project health | 1s success | skipped |\n| Check documentation and tracker changes | skipped | skipped |\n| Build and verify committed output is current | 1s success | 0s success |\n| Engines floor tests | skipped | >= 1694s running |\n| Quick npm release gate | >= 1692s running | pending |\n| Bunx smoke | pending | pending |\n| Verify Bun can install the package graph | pending | pending |\n| Post Setup Bun | pending | pending |\n| Post Setup Node.js | pending | pending |\n| Post Checkout | pending | pending |"
+  "2026-11-16T04:00:19.039Z",pi-glm,"Round G sharding plan, from the cancelled-run measurements: the quick suite never completes one hosted job (test 22: 389 tests in 1799 s then cancelled; test 26: 431 tests in 1797 s then cancelled, both inside the coverage run; static gates take ~10 s). Per-test totals from the logs: the quick Node 22 suite is ~2100-2400 s serial and is dominated by test/sdk-contracts.test.ts (~1381 s alone), which no file-based shard can fit under 12 min. Restructure: (1) split sdk-contracts.test.ts into a shared support module plus five part files sized from measured test durations (parts ~235-350 s each, published-bounds tests grouped to avoid repeated registry installs); (2) Node 22: non-required quick-shard matrix (5 shards, node --test --test-shard=k/5 --test-concurrency=1, PM_TEST_DEPTH=quick, same build/setup), required test (22) becomes an always()-aggregate that requires every shard success on code PRs and the docs gates otherwise; (3) Node 26: non-coverage release-gate steps in one job (they measure ~10 s), coverage run sharded 5 ways via a new --shard mode of scripts/coverage-gate.ts that writes per-shard JSON reports, plus a --merge gate that merges per-file line, branch and function hit counts (sum; covered iff any shard hit) and enforces the unchanged 100 percent thresholds plus the source-presence check on the union; fixture test proves sharded-then-merged equals unsharded on a real fixture project; required test (26) aggregates static, shards and merge. npm run coverage and npm run release:check stay intact for local/deep use. Round-robin shard assignment simulated on measured per-file times: worst shard ~460 s tests + setup, under the 12-minute projection. Risks: the eight tail files never completed any logged run (estimated 200-400 s total), so per-shard projections there are estimates; first CI run of this head will measure them."
+  "2026-11-16T04:23:33.294Z",codex-sol,"Resuming the interrupted round G under the requested handoff. Reviewed the pending tracker changes. Implementing separate Node 22 shards, Node 26 coverage shards and exact hit union, plus non-coverage gates with required success aggregates. CI will provide timing and merged coverage evidence; thresholds and deep gates stay unchanged."
+  "2026-11-16T04:37:55.412Z",codex-sol,"Implementation ready for hosted measurement: five Node 22 quick shards, five Node 26 coverage shards, a parallel non-coverage release gate, exact coverage merge and required test (22/26) aggregates. SDK split comparison: 42 test names before and after, no missing or added names; repaired missing helper/type imports from the interrupted split. Five focused split-file tests passed. Workflow, routing, native coverage-gate and merge fixtures passed 38/38 via pm test. Typecheck, build:test, lint, zero-duplication gate, docstrings and changelog check passed. Focused coverage of the modified gate is 100% lines/branches/functions; this is not full-suite coverage. Artifacts bind raw offsets and line/branch/function hits to source bytes and runtime version; missing/duplicate/mismatched shards fail closed. Thresholds and deep/local commands unchanged. Native merger uses a version-sensitive internal Node API, guarded by the real unsharded-equivalence fixture. Full-suite timing and merged coverage remain pending hosted CI."
+  "2026-11-16T04:42:27.383Z",codex-sol,"Updated active file and test-command links after the split: removed the deleted monolithic entrypoint from linked files and replaced stored SDK contract commands with the five-part glob, preserving their timeouts. Historical evidence remains unchanged. AST comparison also confirms that all 42 complete test-call bodies are byte-identical before and after the split."
+  "2026-11-16T04:44:42.958Z",codex-sol,"Additional supported-runtime validation caught a Node 22-only merger API shape: TestCoverage takes seven positional arguments there and an options object on Node 24/26. The native subprocess now selects the matching constructor shape. The unchanged equivalence fixture passes on Node 22.23.4 and Node 26.13.0; Node 26 focused gate coverage remains 100% lines/branches/functions. npm run build:test and npm run lint pass after the repair. Both repos strict check-only tracker health commands exit zero with pre-existing advisory stale-item/provenance warnings. Keeping the original bounded observation cutoff despite this corrective push."
+  "2026-11-16T05:00:04.506Z",codex-sol,"Hosted quick shards 4 and 5 exposed a generated CommonJS oracle damaged by the interrupted split: export was inserted inside template strings as well as actual top-level declarations. Restored both generated program strings. AST comparison confirms all 33 shared helper function bodies/initializers match the original bytes; all original 42 test-call bodies also remain identical. Added one new regression checking the generated .cjs syntax. The formerly failing differential compiler matrix passes on Node 22: all 18 verdicts agree (10 drift, 8 clean). The new syntax regression, build:test and lint pass. Full sharded coverage remains pending; prior failed-run artifacts cannot certify its union."
+  "2026-11-16T05:17:53.675Z",codex-sol,"Bounded hosted evidence for source head ee898736e4834f3717b10d1a2302a30b1da64cea, run 43807434445. All five quick and all five instrumented coverage shards passed. Exact V8 union measured 3135/3139 lines (99.87257088244664%), 927/932 branches (99.46351931330472%) and 168/168 functions (100%). The unchanged 100/100/100 gate correctly failed. This is a measured failure, not full coverage certification.\n\nJobs API snapshot collected before the observation cutoff; only completed durations are reported:\n\n| Job | Result | Created to completion | Execution |\n| --- | --- | --- | --- |\n| changes | success | 5s | 3s |\n| coverage-merge | failure | 29s | 16s |\n| coverage-shard (26, 1) | success | 470s | 467s |\n| coverage-shard (26, 2) | success | 430s | 428s |\n| coverage-shard (26, 3) | success | 236s | 234s |\n| coverage-shard (26, 4) | success | 409s | 407s |\n| coverage-shard (26, 5) | success | 329s | 327s |\n| quick-shard (22, 1) | success | 483s | 481s |\n| quick-shard (22, 2) | success | 403s | 392s |\n| quick-shard (22, 3) | success | 297s | 295s |\n| quick-shard (22, 4) | success | 379s | 377s |\n| quick-shard (22, 5) | success | 418s | 416s |\n| release-gate | success | 32s | 30s |\n| test (22) | queued | unfinished | unfinished |\n| test (26) | queued | unfinished | unfinished |\n\nhttps://github.com/unbraind/pm-ts-starter/actions/runs/43807434445\n\nMissing hits were index.ts lines 342-344 and 638 and branches at 323, 341, 623 and 637. Direct Node shard jobs lacked npm's local-bin PATH, causing PM CLI witnesses to skip. Both shard matrices now expose node_modules/.bin through GITHUB_PATH. Strengthened the context default witness to call the authored command without host-injected defaults, retaining its original harness assertion. The non-JSON failure witness now checks the authored command for silent and explicit stderr and absent/explicit roots. Five focused Node 26 witnesses pass with zero skips; their coverage hits every formerly missing line and branch. build:test, lint and workflow contracts pass. Full-suite merged coverage after this final repair remains pending; thresholds and source inventory are unchanged. CI observation stopped after the bounded window; the final push is not followed by another wait cycle."
+  "2026-11-16T07:22:42.582Z",codex-sol,"Review round K: verify the requested coverage portability and independent-oracle findings, binding inventory, or property cap contract as applicable; add focused regressions and run the required package gates. Keep this item in progress and release the claim after recording results. No review-thread mutations or merges."
+  "2026-11-16T07:29:44.737Z",codex-sol,"Round K: verified and fixed PRRT_kwDOSZpwFM63y9OJ (serialize nested raw/native source paths with forward slashes), PRRT_kwDOSZpwFM63y9OP (compare merged per-file coverage directly with native files in whole/hits.json after path and hit normalization), and PRRT_kwDOSZpwFM63y9OS (use fileURLToPath for CLI fixture argv). The fixture now uses src/value.ts and a source root containing spaces. The same merge fixture also passed from a copied checkout containing spaces. Required gates passed through pm test: npm run typecheck; npm run build:test; npm run lint; node --test --test-concurrency=2 test/coverage-gate.test.ts test/coverage-merge.test.ts test/ci-shards.test.ts test/ci-routing.test.ts test/release-workflow.test.ts (37 passed); node --test test/ci-tiers.test.ts test/ci-consumer-graphs.test.ts (7 passed); git diff --check. Zero failed/skipped. Project test-result tracking is disabled; this comment retains results. Linux verified locally; Windows execution remains a CI responsibility. No thread mutations. Releasing in progress for orchestrator verification."
+  "2026-11-16T11:54:15.002Z",codex-sol-root,"Orchestrator is handling PRRT_kwDOSZpwFM631sKc now while the delegated worker finishes the separate VCS verification. Leave this package to the orchestrator for this round. Initial pull and PR head c09934f match. Inspect every shipped workflow checkout, disable credential persistence where later steps do not require authenticated Git, and extend the template contract before validation."
+  "2026-11-16T11:55:04.062Z",codex-sol-root,"Confirmed PRRT_kwDOSZpwFM631sKc: generated CI and deep jobs only validate code and need no authenticated Git after checkout. The new all-template checkout contract failed before the fix because ci-deep.yml had no persist-credentials setting. Added false to ci.yml and ci-deep.yml; the only other shipped workflow, codeql.yml, already sets false."
+  "2026-11-16T11:56:09.024Z",codex-sol-root,"Separate verified contract gap is tracked in pm-ts-starter-codeql-dot-contract: removing the CodeQL tracker exclusion still produces false for the tracker fixture under Node matchesGlob. This round changes checkout credentials only; the existing CodeQL workflow exclusion remains present."
+  "2026-11-16T11:56:42.963Z",codex-sol-root,"Orchestrator completed the checkout finding. Linked row 21 passed typecheck, lint, build, build:test, the tier/consumer-graph/shard/routing/release contracts, generated-project template assertions in the consumer graph ownership test, changelog:check and diff whitespace checks. The contract was red before the workflow change. All three shipped workflows now explicitly disable checkout credential persistence. No further edits are needed from the delegated worker; orchestrator will push after verification."
+  "2026-11-16T12:00:00.374Z",codex-sol,"Delegated verification found the initially clean supplied head advanced to b9552ba while the separate VCS archive gates ran. The intervening orchestrator commit already implements PRRT_kwDOSZpwFM631sKc and records a red-before-green template contract. All three shipped workflow checkouts now explicitly set persist-credentials false; later steps require no authenticated Git. Preserve that implementation and the existing CodeQL contract follow-up. Reuse linked gate 21 for independent verification; no duplicate source edits, pushes or thread actions."
+  "2026-11-16T12:01:17.260Z",codex-sol,"Independent linked gate 21 passed with exit 0 in 42.6 seconds on the orchestrator implementation: npm run typecheck; npm run lint; npm run build; npm run build:test; PM_TEST_DEPTH=quick node --test --test-concurrency=2 test/ci-tiers.test.ts test/ci-consumer-graphs.test.ts test/ci-shards.test.ts test/ci-routing.test.ts test/release-workflow.test.ts; PM_TEST_DEPTH=quick node --test --test-name-pattern=\"consumer graph ownership\" test/backend.test.ts; npm run changelog:check; git diff --check. Test-result tracking is disabled, so this comment retains the receipt. Strict YAML and all shipped template checkout assertions are green. No source changes were needed beyond b9552ba. Preserve separate follow-up pm-ts-starter-codeql-dot-contract. Release in_progress for orchestrator verification; commit tracker receipts only, with no push or review-thread action."
+  "2026-11-16T19:06:17.983Z",codex-sol,"Review round O: pulled fast-forward only and verified supplied PR head. Checking each requested thread against source before changes; will run targeted gates and commit tracker evidence with fixes. No workflow dispatches or review-thread mutations."
+  "2026-11-16T19:08:41.269Z",codex-sol,"All six findings verified and fixed: PRRT_kwDOSZpwFM64EiH7 template now opts into local runners only at on, root off override retained; PRRT_kwDOSZpwFM64EiIM merges same-major patch differences and refuses another major; PRRT_kwDOSZpwFM64EiIO malformed shard/output flags fail clearly; PRRT_kwDOSZpwFM64EiIW quick supplementary options alternate clean and failing verdicts; PRRT_kwDOSZpwFM64EiIc checks foreign Git sentinel bytes; PRRT_kwDOSZpwFM64EiIr assigns published cache after both installs and cleans failed roots, with a synthetic second-install failure/retry regression."
+  "2026-11-16T19:13:02.058Z",codex-sol,"Round O validation passed: npm run typecheck; npm run build:test; npm run lint; linked full coverage-gate/coverage-merge, CI tiers/consumer graphs/shards/routing and release-workflow tests; targeted SDK supplementary verdicts, project refusal sentinel and published-cache retry regression at quick depth and timeout scale 3; npm run changelog:check; git diff --check. Final patch-only version fixture and explicit Node 22-versus-26 refusal were rechecked with the type/lint gates and both coverage-merge tests passed. Initial invalid PM context selection ran no tests; corrected tracker/source linked execution passed. All six supplied findings accepted; no review-thread mutations or workflow dispatches."
+  "2026-11-17T02:29:24.021Z",codex-sol,"AB findings verified: shard mkdir resolves absolute output while writing uses join(rootDir, output), and merge inputs also use join. Resolve both consistently and extend the real union fixture with absolute paths. Compiler bodies are rejected by containment before any worker executes; replace the misleading worker loop with one external-wrapper rejection and explicit remedy assertion."
+  "2026-11-17T02:31:27.008Z",codex-sol,"Review AB fixed PRRT_kwDOSZpwFM64Krni and PRRT_kwDOSZpwFM64Krnr. Shard output is resolved once and reused for mkdir and hits.json; merge input paths resolve against rootDir. Real union and CLI fixtures now cover absolute output and absolute merge inputs beside relative cases. Removed unreachable worker-crash bodies and assert one typed external-wrapper rejection with the explicit containment remedy. Linked coverage-gate, real merge and wrapper regressions pass; real merge fixture passes on Node 22 and 26 (2/2 each). Typecheck, build:test, lint, changelog:check and diff whitespace checks pass. Full-suite certification remains with CI."
+  "2026-11-17T05:33:03.238Z",codex-sol,"PRRT_kwDOSZpwFM64RpK6 verified: shard production and merge both reject empty required-source hits, although a successful tooling-only shard is legitimate. Allow empty contributions while retaining exact shard completeness, source digest, runtime identity, union thresholds and union source presence. Add a real tooling-only shard fixture."
+  "2026-11-17T05:34:28.386Z",codex-sol,"PRRT_kwDOSZpwFM64RpK6 fixed. A successful tooling-only shard now publishes empty files/raw arrays and merges normally. Real fixture equals the unsharded native union; missing-shard, partial-threshold and missing-source controls still fail. The new fixture fails against original HEAD with empty shard or missing output and passes with the fix. Gates passed: three coverage-merge tests (also via pm test index 25), npm run typecheck, npm run build:test, npm run lint, npm run changelog:check. No full-suite coverage claim."
+  "2026-11-17T05:41:58.556Z",codex-sol,"Final-head CI release-gate job 133843390099 correctly rejected a new 57-token clone in test/coverage-merge.test.ts fixture package setup (2 duplicated lines, threshold 0%). Extract the shared manifest writer and rerun targeted gates plus npm run duplication. This is caused by the new regression fixture; no threshold change."
+  "2026-11-17T05:42:47.986Z",codex-sol,"CI fixture clone corrected by sharing the manifest writer. Final targeted rerun passed: npm run duplication (0%, zero clone pairs), npm run typecheck, npm run build:test, npm run lint, node --test test/coverage-merge.test.ts via pm test index 25 (3/3), npm run changelog:check. No thresholds or coverage assertions changed. Fresh pushed-head full CI remains pending."
+  "2026-11-17T07:55:02.840Z",pi-glm,"Review round AK (docs/ci-tiers.md overview, review thread PRRT_kwDOSZpwFM64T04U): verified the workflow enforces timeout-minutes 22 on quick-shard, coverage-shard and release-gate, so the overview's 30-minute ceiling misstated the enforced limit. The overview now states the enforced 22-minute ceiling and matches it to the per-shard limit; the historical round-E/F 30-minute measurements remain in their dated review-round sections, now explicitly marked as the earlier 30-minute ceiling. Gates: typecheck, lint and changelog:check all clean; docs-only change."
+  "2026-11-17T09:53:20.583Z",codex-sol,"Review round AQ: verified the shard raw-counter filter compares query-bearing script URLs to query-free required-source URLs, dropping those executions. Add a real source imported with plain and query-qualified URLs, normalize query and fragment before filtering and fileURLToPath, then run coverage-gate reference tests, typecheck, lint and final changelog checks."
+  "2026-11-17T09:54:57.029Z",codex-sol,"AQ regression first failed on the original filter because only 1 of 3 raw module records survived. Query and fragment suffixes are now stripped before required-source comparison and fileURLToPath. The same fixture now retains all 3 records as src/value.ts and its merged lines, branches and functions each meet 100%; the query-qualified call supplies a branch absent from the plain import. Coverage-gate reference tests and requested static gates are running."
+  "2026-11-17T09:55:25.667Z",codex-sol,"AQ final results: node --test --test-concurrency=1 test/ci-shards.test.ts test/coverage-gate.test.ts test/coverage-merge.test.ts passed 33/33 with no skips; grep across test/ confirms these cover every test file referencing the touched source/test/tracker paths. npm run typecheck, npm run lint and npm run build:test passed. The new real plain/query/fragment fixture fails before the fix (1 raw record instead of 3), passes after it, and merges to 100% lines/branches/functions with thresholds unchanged. No findings refused. Releasing the claim before final tag fetch and changelog generation; keep this item in progress for orchestrator verification."
+  "2026-11-17T10:52:50.598Z",codex-sol,"Round AS: verified current code before editing. Explicit coverage roots are not canonicalized, dropping raw shard counters through symlinks. Aggregate fixtures omit RELEASE and CHANGES failures. Add regression coverage and run the requested gates."
+  "2026-11-17T10:58:53.154Z",codex-sol,"Round AS verified and fixed PRRT_kwDOSZpwFM64YtoJ and PRRT_kwDOSZpwFM64YtoU. The symlink-root fixture failed before the root canonicalization (raw counters were empty) and now retains portable required-source paths and nonzero hits through shard collection and merge. The aggregate fixture covers CHANGES failures for both runtime rows and code/non-code runs, plus RELEASE failures for the required Node 26 code row; failure, cancelled and skipped all reject, and successful code/non-code controls pass. Requested three-file gate passed 34/34 on Node 22.23.4, 24.19.0 and 26.13.0; build, typecheck, lint and duplication passed. No findings refused. Changelog generation/check follows final tracker writes; CI is not yet verified."
+  "2026-11-17T13:53:45.502Z",codex-sol,"Round AV: reproduced PRRT_kwDOSZpwFM64baoN using a failing template contract. The backend template is the only shipped CodeQL workflow; use ordered paths to re-include direct and nested executable tracker scripts for push and pull_request, matching root behavior."
+  "2026-11-17T13:57:11.449Z",codex-sol,"Round AV verified results: node --test --test-concurrency=2 test/backend.test.ts test/ci-tiers.test.ts PASS (35/35/0/0/0 tests/pass/fail/cancelled/skipped); npm run typecheck PASS; npm run lint PASS; npm run duplication PASS; PRRT_kwDOSZpwFM64baoN covered in root and every shipped CodeQL template for both events and all four executable extensions, including direct and nested paths.. Changelog regeneration/check follows these final tracker writes. Item remains in progress for orchestrator review."
+  "2026-11-17T15:54:45.812Z",codex-sol,"Round AY: verified PRRT_kwDOSZpwFM64f_t6 and PRRT_kwDOSZpwFM64f_uE with failing regression controls before implementation. Coverage artifacts now retain each complete query/fragment module identity while relocating only the source path; required-source filtering uses the query-free path. Native-report equality and matching unsharded/merged pass-fail controls cover partially and fully covered imports. CodeQL contracts match dot directories and ordered exclusion/re-inclusion, retain direct/nested executable controls, and require the same tracker assertion to fail when its exclusion is removed. All code changes precede tracker writes."
+  "2026-11-17T15:55:27.056Z",codex-sol,"Round AY results: requested four-file node --test --test-concurrency=1 gate PASS 43/43 with zero failures, skips or cancellations on Node 22.23.4, 24.19.0 and 26.13.0. After the final lint-only regex correction, ci-tiers PASS 9/9 on all three versions. npm run typecheck, npm run build:test, npm run lint and git diff --check PASS; identity audit PASS 4/4. Both assigned findings were reproduced before repair. The one-branch-per-identity control now fails both merged and unsharded coverage; complementary per-identity hits pass both. Existing file links and new exact-command test records retain evidence. No findings refused. Release this claim before tag fetch and final changelog regeneration/check. Item remains in progress; final pushed-head CI and full-depth certification remain unverified."
+  "2026-11-17T18:06:07.419Z",codex-sol,"Round BB verified all four findings on 2c1415b. PRRT_kwDOSZpwFM64hhO_ and PRRT_kwDOSZpwFM64kvAT: keep relative raw V8 paths URL-encoded and decode only the path at merge while retaining the original query and fragment. Real hash and question-mark filenames round-trip alongside the existing three separate module identities. PRR_kwDOSZpwFM8AAAABYkWZqg: encode literal POSIX backslashes in raw URLs and normalize only native separators in per-file paths. The CommonJS fixture verifies both representations and native merge parity. The independent standalone native include matcher limitation is tracked in pm-ts-starter-native-coverage-backslash. PRRT_kwDOSZpwFM64kvAI: docs and regression fixtures record minor and patch acceptance within a Node major, and rejection of different majors or missing or duplicate shards. PRRT_kwDOSZpwFM64hizz: escape every regex metacharacter including backslash while keeping explicit unsupported-syntax rejection, with a direct regression for both. The five new regression cases failed with the original behavior. The existing linked four-file command passed 48/48 with zero skips on Node 22.23.4, 24.19.0 and 26.13.0. Typecheck, test compilation, lint, duplication (0%) and diff check passed. The post-push CodeQL result still needs verification."
+  "2026-11-17T20:35:14.306Z",codex-sol,"Round BH. PRRT_kwDOSZpwFM64mdek -> 534fcb8 (read the native merge summary from a scratch file; the 50000-line regression exceeded 1 MiB and failed on the incoming head). PRRT_kwDOSZpwFM64mdeq -> 534fcb8 (remove each copied compiler baseline in finally; the regression observed the old retained directory and checks unchanged successful and TS2322 verdicts). All 49 CI tests passed on each of Node 22, 24 and 26. The cleanup regression, typecheck, test compilation and lint passed."
+  "2026-11-17T20:52:10.088Z",codex-sol,"Round BH hosted coverage repair. Replaying the five shard artifacts from a952a7e isolated one uncovered branch at scripts/coverage-gate.ts:541. Removed the extra diagnostic fallback, preserving the existing error message and the scratch-file summary transport. All 49 CI tests passed again on Node 22, 24 and 26. An independent Node 26 run reported 100 percent lines, branches and functions for scripts/coverage-gate.ts. Typecheck, test compilation and lint passed."
+  "2026-11-17T23:53:47.826Z",codex-sol,Round BL started from the refreshed PR branch. Verifying review claims and adding focused regression coverage before running repository gates.
+  "2026-11-17T23:58:46.397Z",codex-sol,Round BL verified PRRT_kwDOSZpwFM64shAz. Quick shards run the build on Node 22. The separate Node 26 release gate compares the regenerated dist tree with tracked output. The table and a workflow-backed regression now distinguish these guarantees.
+  "2026-11-18T00:01:41.119Z",codex-sol,"PRRT_kwDOSZpwFM64shAz is fixed by 276e6cc. The workflow-backed fixture confirms build-only Node 22 shards and the Node 26 committed-dist comparison. The two CI contract suites passed 14 tests. Build-test compilation, typecheck, lint and changelog:check passed. The changelog generator produced identical bytes."
+files[39]:
+  - path: .github/workflows/ci-deep.yml
+    scope: project
+  - path: .github/workflows/ci.yml
+    scope: project
+  - path: .github/workflows/codeql.yml
+    scope: project
+  - path: backend-project.ts
+    scope: project
+  - path: dist/backend-project.d.ts
+    scope: project
+  - path: dist/backend-project.d.ts.map
+    scope: project
+  - path: dist/backend-project.js
+    scope: project
+  - path: dist/backend-project.js.map
+    scope: project
+  - path: docs/ci-tiers.md
+    scope: project
+    note: Overview states the enforced 22-minute quick ceiling
+  - path: package.json
+    scope: project
+  - path: scripts/coverage-gate.ts
+    scope: project
+  - path: templates/backend/.github/workflows/ci-deep.yml
+    scope: project
+  - path: templates/backend/.github/workflows/ci.yml
+    scope: project
+  - path: templates/backend/.github/workflows/codeql.yml
+    scope: project
+  - path: test/backend.test.ts
+    scope: project
+  - path: test/ci-consumer-graphs.test.ts
+    scope: project
+  - path: test/ci-routing.test.ts
+    scope: project
+  - path: test/ci-shards.test.ts
+    scope: project
+  - path: test/ci-tiers.test.ts
+    scope: project
+  - path: test/coverage-merge.test.ts
+    scope: project
+  - path: test/dependency-fixtures.ts
+    scope: project
+  - path: test/dependency-property-worker.ts
+    scope: project
+  - path: test/depth.test.ts
+    scope: project
+  - path: test/rehearsal.test.ts
+    scope: project
+  - path: test/release-workflow.test.ts
+    scope: project
+  - path: test/sdk-api.test.ts
+    scope: project
+  - path: test/sdk-cache.test.ts
+    scope: project
+  - path: test/sdk-contracts-a.test.ts
+    scope: project
+  - path: test/sdk-contracts-b.test.ts
+    scope: project
+  - path: test/sdk-contracts-c.test.ts
+    scope: project
+  - path: test/sdk-contracts-d.test.ts
+    scope: project
+  - path: test/sdk-contracts-e.test.ts
+    scope: project
+  - path: test/sdk-contracts-support.ts
+    scope: project
+  - path: test/sdk-path-transport.test.ts
+    scope: project
+  - path: test/sdk-program-graph.test.ts
+    scope: project
+  - path: test/sdk-published-cache.test.ts
+    scope: project
+  - path: test/sdk-reference-refusal.test.ts
+    scope: project
+  - path: test/smoke.test.ts
+    scope: project
+  - path: test/support/depth.ts
+    scope: project
+tests[39]:
+  - command: "npm run typecheck && npm run build:test && npm run lint"
+    scope: project
+    timeout_seconds: 240
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-15T13:46:25.056Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: PM_TEST_DEPTH=quick PM_TEST_TIME_SCALE=3 node --test test/backend.test.ts test/ci-consumer-graphs.test.ts test/depth.test.ts
+    scope: project
+    timeout_seconds: 600
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-15T13:54:53.171Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: PM_TEST_DEPTH=quick node --test test/ci-tiers.test.ts test/ci-consumer-graphs.test.ts test/depth.test.ts test/package-metadata.test.ts test/compatibility-floor.test.ts test/release-workflow.test.ts test/identity-audit.test.ts
+    scope: project
+    timeout_seconds: 300
+    provenance:
+      author: codex-sol-round-d
+      created_at: "2026-11-15T20:05:02.783Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: PM_TEST_DEPTH=quick node --test --test-concurrency=2 test/sdk-api.test.ts test/sdk-path-transport.test.ts
+    scope: project
+    timeout_seconds: 1200
+    provenance:
+      author: codex-sol-round-d
+      created_at: "2026-11-15T20:07:06.767Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: "PM_TEST_DEPTH=quick node --test --test-name-pattern=\"generated project commands|invalid scale|generated consumers select\" test/backend.test.ts"
+    scope: project
+    timeout_seconds: 120
+    provenance:
+      author: codex-sol-round-d
+      created_at: "2026-11-15T20:07:08.682Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: "node --test --test-name-pattern=\"compiler entry contract\" test/sdk-compiler-entry.test.ts"
+    scope: project
+    timeout_seconds: 120
+    provenance:
+      author: codex-sol-round-d
+      created_at: "2026-11-15T20:07:32.203Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: "npm run changelog:check && ./node_modules/.bin/pm --pm-path .agents/pm health --strict-exit --require-merge-drivers && git diff --check"
+    scope: project
+    timeout_seconds: 240
+    provenance:
+      author: codex-sol-round-d
+      created_at: "2026-11-15T20:10:34.369Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: "npm run typecheck && npm run lint --if-present && npm run build:test && PM_TEST_DEPTH=quick PM_TEST_TIME_SCALE=3 node --test --test-concurrency=2 test/ci-routing.test.ts test/ci-tiers.test.ts test/ci-consumer-graphs.test.ts test/depth.test.ts test/release-workflow.test.ts && node --input-type=module -e 'import {readFileSync,readdirSync,existsSync} from \"node:fs\"; import assert from \"node:assert/strict\"; import {parseDocument} from \"yaml\"; for(const dir of [\".github/workflows\",\"templates/backend/.github/workflows\"]) if(existsSync(dir)) for(const file of readdirSync(dir).filter(f=>/\\.ya?ml$/.test(f))) {const d=parseDocument(readFileSync(dir+\"/\"+file,\"utf8\"),{uniqueKeys:true,strict:true});assert.deepEqual(d.errors,[],file);assert.deepEqual(d.warnings,[],file);} console.log(\"Strict workflow YAML passed\");'"
+    scope: project
+    timeout_seconds: 1200
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-15T22:35:55.465Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: node --test test/depth.test.ts test/ci-*.test.ts test/release-workflow.test.ts
+    scope: project
+    timeout_seconds: 600
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-16T00:34:47.054Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: PM_TEST_DEPTH=quick node --test test/depth.test.ts
+    scope: project
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-16T02:30:17.470Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: PM_TEST_DEPTH=quick node --test test/ci-tiers.test.ts test/ci-routing.test.ts test/ci-consumer-graphs.test.ts test/ci-shards.test.ts test/coverage-gate.test.ts test/coverage-merge.test.ts
+    scope: project
+    timeout_seconds: 180
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-16T04:35:48.009Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: PM_TEST_DEPTH=quick node --test --test-reporter=spec --test-concurrency=2 test/depth.test.ts test/sdk-contracts-*.test.ts test/sdk-api.test.ts test/sdk-program-graph.test.ts
+    scope: project
+    timeout_seconds: 2400
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-16T04:42:21.188Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: node --test --test-concurrency=2 --test-name-pattern='each overlapping caller|packed npm and Bun|new compiler options|sandbox dependency artifacts|canonical sandbox roots|direct SDK callers|round 9 npm location|round 9 registry allowlist|round 9 scoped registry|round 10 dependency-shape|round 10 property|round 10 review alias-fixture|round 10 internal module|dependency-root inventories|missing or non-directory|program graph and module-mode' test/sdk-contracts-*.test.ts test/sdk-program-graph.test.ts
+    scope: project
+    timeout_seconds: 1800
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-16T04:42:22.211Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: node --test --test-concurrency=1 test/sdk-contracts-*.test.ts test/sdk-program-graph.test.ts
+    scope: project
+    timeout_seconds: 7200
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-16T04:42:23.181Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: "PM_TEST_DEPTH=quick PM_TEST_TIME_SCALE=3 node --test --test-name-pattern=\"each overlapping caller boundary\" test/sdk-contracts-*.test.ts"
+    scope: project
+    timeout_seconds: 1200
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-16T04:42:24.319Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: PM_TEST_DEPTH=quick PM_TEST_TIME_SCALE=3 node --test --test-concurrency=2 test/backend.test.ts test/ci-consumer-graphs.test.ts test/depth.test.ts test/rehearsal.test.ts test/sdk-api.test.ts test/sdk-cache.test.ts test/sdk-contracts-*.test.ts test/sdk-path-transport.test.ts test/sdk-program-graph.test.ts test/sdk-reference-refusal.test.ts
+    scope: project
+    timeout_seconds: 1200
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-16T04:42:25.761Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: "PM_TEST_DEPTH=quick node --test --test-name-pattern=\"instrumented compiler oracle stays\" test/sdk-contracts-c.test.ts"
+    scope: project
+    timeout_seconds: 120
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-16T04:59:57.143Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: PM_TEST_DEPTH=quick node --test test/ci-shards.test.ts test/ci-tiers.test.ts test/ci-routing.test.ts
+    scope: project
+    timeout_seconds: 120
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-16T05:17:50.160Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: "npm run typecheck && npm run build:test && npm run lint && node --test --test-concurrency=2 test/coverage-gate.test.ts test/coverage-merge.test.ts test/ci-shards.test.ts test/ci-routing.test.ts test/release-workflow.test.ts && git diff --check"
+    scope: project
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-16T07:26:28.346Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: node --test test/ci-tiers.test.ts test/ci-consumer-graphs.test.ts
+    scope: project
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-16T07:28:32.316Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: "npm run typecheck && npm run lint && npm run build && npm run build:test && PM_TEST_DEPTH=quick node --test --test-concurrency=2 test/ci-tiers.test.ts test/ci-consumer-graphs.test.ts test/ci-shards.test.ts test/ci-routing.test.ts test/release-workflow.test.ts && PM_TEST_DEPTH=quick node --test --test-name-pattern=\"consumer graph ownership\" test/backend.test.ts && npm run changelog:check && git diff --check"
+    scope: project
+    timeout_seconds: 600
+    provenance:
+      author: codex-sol-root
+      created_at: "2026-11-16T11:55:12.468Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: "npm run lint && node --test --test-concurrency=1 test/coverage-gate.test.ts test/coverage-merge.test.ts test/ci-tiers.test.ts test/ci-consumer-graphs.test.ts test/ci-shards.test.ts test/ci-routing.test.ts test/release-workflow.test.ts && PM_TEST_DEPTH=quick PM_TEST_TIME_SCALE=3 node --test --test-concurrency=1 --test-name-pattern='all supplementary|project inputs refuse|published SDK cache' test/sdk-contracts-a.test.ts test/sdk-contracts-c.test.ts test/sdk-published-cache.test.ts && npm run changelog:check && git diff --check"
+    scope: project
+    timeout_seconds: 1800
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-16T19:08:49.301Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: "npm run typecheck && npm run build:test && npm run lint && node --test test/coverage-merge.test.ts"
+    scope: project
+    timeout_seconds: 600
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-16T19:13:00.475Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: "node --test test/coverage-gate.test.ts test/coverage-merge.test.ts && node --test --test-name-pattern=\"wrong SDK identity\" test/sdk-contracts-c.test.ts"
+    scope: project
+    timeout_seconds: 300
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-17T02:30:13.659Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: node --test test/coverage-merge.test.ts
+    scope: project
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-17T05:33:49.420Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: node --test --test-concurrency=1 test/ci-shards.test.ts test/coverage-gate.test.ts test/coverage-merge.test.ts
+    scope: project
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-17T09:54:55.631Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: npm run typecheck
+    scope: project
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-17T09:54:55.631Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: npm run lint
+    scope: project
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-17T09:54:55.631Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: "npm run build:test"
+    scope: project
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-17T09:54:55.631Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: "npm run changelog:check"
+    scope: project
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-17T09:54:55.631Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: node --test --test-concurrency=2 test/backend.test.ts test/ci-tiers.test.ts
+    scope: project
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-17T13:54:16.084Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: npm run duplication
+    scope: project
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-17T13:54:37.047Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: node --test --test-concurrency=1 test/ci-shards.test.ts test/coverage-gate.test.ts test/coverage-merge.test.ts test/ci-tiers.test.ts
+    scope: project
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-17T15:55:14.320Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: node --test test/ci-tiers.test.ts
+    scope: project
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-17T15:55:15.543Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: node --test test/identity-audit.test.ts
+    scope: project
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-17T15:55:16.389Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: node --test --test-concurrency=1 test/sdk-contracts-a.test.ts test/sdk-contracts-b.test.ts test/sdk-contracts-c.test.ts test/sdk-contracts-d.test.ts test/sdk-contracts-e.test.ts
+    scope: project
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-17T20:34:28.118Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: node --test --test-name-pattern='plain compiler oracle removes' test/sdk-contracts-e.test.ts
+    scope: project
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-17T20:34:32.853Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: node --test --test-concurrency=1 --experimental-test-coverage --test-coverage-include=scripts/coverage-gate.ts --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 test/ci-shards.test.ts test/coverage-gate.test.ts test/coverage-merge.test.ts test/ci-tiers.test.ts
+    scope: project
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-17T20:50:39.206Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: node --test test/ci-tiers.test.ts test/ci-shards.test.ts
+    scope: project
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-17T23:58:53.923Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+docs[5]{path,scope}:
+  .github/workflows/ci.yml,project
+  CHANGELOG.md,project
+  docs/ci-quick-fit-measurements.md,project
+  docs/ci-tiers.md,project
+  templates/backend/.github/workflows/codeql.yml,project
 github_close_reason: ""
 github_closed_at: ""
 github_created_at: "2026-11-09T11:55:55Z"

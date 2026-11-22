@@ -1183,6 +1183,10 @@ test("context-demo defaults to json format when --format is omitted", async (t) 
 
   const result = await harness.runCommand({ command: "ts-starter context-demo", options: {}, args: [], pmRoot: dir });
   assert.ok(result.result, "context-demo with default json format must return a truthy result");
+  const command = blueprint.commands?.find(entry => entry.name === "ts-starter context-demo");
+  assert.ok(command?.run);
+  const direct = await command.run({command:command.name,options:{},args:[],global:{},pm_root:dir});
+  assert.ok(direct, "the authored command also defaults without host-injected options");
 });
 
 /** Exercise a silent failing CLI in a disposable command fixture. */
@@ -1210,13 +1214,23 @@ test("pmJson failure with empty stderr uses the period fallback in the message",
 });
 
 test("context-demo non-json failure with empty stderr yields undefined why", async (t) => {
-
-  await withSilentFailingPm(t, async () => {
-    await assert.rejects(
-      () => harness.runCommand({ command: "ts-starter context-demo", options: { format: "markdown" }, args: [], pmRoot: "/tmp" }),
-      (err: unknown) => isPmCliExpectedError(err) && /context demo failed/.test((err as Error).message),
-    );
-  });
+  const directory = mkdtempSync(join(tmpdir(), "pm-context-failure-"));
+  t.after(() => rmSync(directory, {recursive:true,force:true}));
+  const command = blueprint.commands?.find(entry => entry.name === "ts-starter context-demo");
+  assert.ok(command?.run);
+  const run = command.run;
+  for (const stderr of ["", "fixture failure"]) for (const root of [undefined, "."]) {
+    const script = "#!/bin/sh\n" + (stderr ? "echo 'fixture failure' >&2\n" : "") + "exit 1\n";
+    await withFakePmOnPath(directory, script, async () => {
+      // Call the authored command so host option normalization cannot reroute this witness to JSON.
+      await assert.rejects(async () => run({command:command.name,options:{format:"markdown"},args:[],global:{},pm_root:root as unknown as string}), (error: unknown) => {
+        assert.ok(isPmCliExpectedError(error));
+        assert.ok(error instanceof Error && /context demo failed/.test(error.message));
+        assert.equal((error as Error & {context:{why?:string}}).context.why,stderr || undefined);
+        return true;
+      });
+    });
+  }
 });
 
 test("onWrite hook handles a context with missing op and path", async () => {
