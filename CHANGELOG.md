@@ -31,6 +31,14 @@ No changes.
 
 - Use public SDK TOON codecs in generated backend projects ([pm-ts-starter-sdk-toon-codec](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/chores/pm-ts-starter-sdk-toon-codec.toon))
 
+### Dependencies
+
+- Bump the pm-toolchain group with 3 updates ([#206](https://github.com/unbraind/pm-ts-starter/pull/206))
+- Bump the pm-toolchain group with 3 updates ([#203](https://github.com/unbraind/pm-ts-starter/pull/203))
+- Bump unbraind/pm-github/.github/workflows/pm-github-closeout.yml ([#201](https://github.com/unbraind/pm-ts-starter/pull/201))
+- Bump unbraind/pm-github/.github/workflows/pm-github-sync.yml ([#200](https://github.com/unbraind/pm-ts-starter/pull/200))
+- Bump the codeql-action group with 2 updates ([#199](https://github.com/unbraind/pm-ts-starter/pull/199))
+
 ## 2026.11.7 - 2026-11-07
 
 ### Closed
