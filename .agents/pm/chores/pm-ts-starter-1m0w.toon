@@ -4,9 +4,9 @@ description: "Review follow-up: published tag v2026.11.10 includes dependency PR
 type: Chore
 status: in_progress
 priority: 3
-tags[3]: changelog,"gh:unbraind/pm-ts-starter#211",maintenance
+tags[3]: changelog,"gh:unbraind/pm-ts-starter#230",maintenance
 created_at: "2026-11-16T15:23:01.087Z"
-updated_at: "2026-11-23T22:35:07.504Z"
+updated_at: "2026-11-23T22:44:20.840Z"
 author: codex-sol
 estimated_minutes: 30
 acceptance_criteria: Regeneration preserves the published dependency PR entries alongside tracker notes and the unchanged changelog check passes; implementation receives its own source review.
