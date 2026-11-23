@@ -6,21 +6,25 @@ status: in_progress
 priority: 3
 tags[3]: changelog,"gh:unbraind/pm-ts-starter#211",maintenance
 created_at: "2026-11-16T15:23:01.087Z"
-updated_at: "2026-11-23T10:08:03.706Z"
+updated_at: "2026-11-23T16:17:42.624Z"
 author: codex-sol
 estimated_minutes: 30
 acceptance_criteria: Regeneration preserves the published dependency PR entries alongside tracker notes and the unchanged changelog check passes; implementation receives its own source review.
-comments[5]{created_at,author,text}:
+comments[7]{created_at,author,text}:
   "2026-11-16T15:23:05.793Z",codex-sol,"Verified the unresolved dependency-note review against published tag v2026.11.10: dependency PRs 206, 203, 201, 200, 199 are present there. The configured changelog:full omits --dependency-updates; the pinned generator enriches item-covered windows only with that option. A persistent fix requires package-script or generator changes, outside the authorized tracker/changelog scope. Reused this follow-up; no review reply or resolution was sent."
   "2026-11-23T09:52:04.047Z",codex-agent,"Closure follow-up: changelog dependency updates. Verify against current main and the existing PR head before recording the result."
   "2026-11-23T09:53:10.198Z",codex-agent,The closure verifier allows tracker files and CHANGELOG.md only. This follow-up explicitly calls for package.json flags so the verifier will still report the manifest as out of scope.
   "2026-11-23T09:57:09.786Z",codex-agent,"Package changelog generation, verification and release notes use --dependency-updates, including checks that delegate to the full generator. With the same tracker and fetched tags, running the original manifest omitted the published dependency bullets for #199, #200, #201, #203, #206. The flag restored all of them. Changelog byte check and release notes rendering passed."
   "2026-11-23T10:07:59.461Z",codex-agent,"Linked Node tests passed 43/43 with no skips, and the changelog check passed. Final verification will use the committed branch. CI checks for the closure follow-up are tracked at https://github.com/unbraind/pm-ts-starter/pull/211/checks."
+  "2026-11-23T16:12:55.218Z",codex-agent,The dependency-note switch belongs in fix/changelog-keep-dependency-updates. Restore this closure branch's package scripts to main and regenerate with the unflagged invocation. The flag PR will restore the dependency notes separately.
+  "2026-11-23T16:17:39.103Z",codex-agent,"The registered focused Node tests and changelog check passed. Identity, public-content and history prefix checks are part of the final-head gate. The full release gate runs in package CI."
 files[2]{path,scope}:
   CHANGELOG.md,project
   package.json,project
-tests[1]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
+tests[2]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
   node --test --test-concurrency=2 test/identity-audit.test.ts test/package-metadata.test.ts test/verify-release-changelog-date.test.ts test/prepare-merge-driver.test.ts,project,codex-agent,"2026-11-23T09:53:08.162Z",local_mutation,codex/closure-1122/chore/in-progress-sweep-2026-11-14
-docs[1]{path,scope}:
+  "npm run changelog:check",project,codex-agent,"2026-11-23T16:13:10.436Z",local_mutation,codex/closure-1122/chore/in-progress-sweep-2026-11-14
+docs[2]{path,scope}:
+  CHANGELOG.md,project
   README.md,project
 body: ""
