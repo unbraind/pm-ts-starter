@@ -124,7 +124,7 @@ test("each overlapping caller boundary preserves peer success and foreign state 
     phases.push(phase);
     writeFileSync(join(tracker, "foreign-peer.json"), JSON.stringify({ phase, owner: "peer", success: true }));
     const peer = spawnSync(process.execPath, ["--input-type=module", "-e", `import {checkSdkContracts} from ${JSON.stringify(pathToFileURL(join(repo, "sdk-contracts.ts")).href)};
-import {PmClient} from ${JSON.stringify(pathToFileURL(join(sdk, "dist/sdk/index.js")).href)};
+import {PmClient} from ${JSON.stringify(import.meta.resolve("@unbrained/pm-cli/sdk/core"))};
 await new PmClient({pmRoot: ${JSON.stringify(tracker)}, noExtensions: true, author: 'peer'}).update(${JSON.stringify(peerItem.item.id)}, {description: ${JSON.stringify(phase + "-" + phases.length)}});
 const compile = ${process.env.PM_TEST_DEPTH !== "quick" || phases.length === 1};
 const result = compile ? await checkSdkContracts(${JSON.stringify(matrix)}) : {ok: true};

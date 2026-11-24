@@ -1,0 +1,26 @@
+id: pm-ts-starter-sdk-1122
+title: Adopt pm-cli 2026.11.24 host-aligned SDK behaviour
+description: "Companion: pm-cli-website-spus. Acceptance: pin the current first-party toolchain, rebuild committed output, verify starter contracts against the current host and supported floor, retain dependency notes, and record scoped local and CI gates."
+type: Chore
+status: in_progress
+priority: 2
+tags: []
+created_at: "2026-11-24T15:50:13.830Z"
+updated_at: "2026-11-24T16:54:32.556Z"
+author: codex-agent
+comments[4]{created_at,author,text}:
+  "2026-11-24T15:50:27.991Z",codex-agent,"The stale toolchain PR #224 fails at changelog:check with tracker_changed before the aggregate test check can pass. The diff adds an unreleased dependency bullet and reorders generated historical content. Main already requires --dependency-updates on all four entry points in test/release-workflow.test.ts. Verify that contract and regenerate after tracker changes."
+  "2026-11-24T16:25:21.868Z",codex-agent,"First TAP failure on the new dev pin: each overlapping caller boundary preserves peer success and foreign state on one plain tracker. The fixture embedded dist/sdk/index.js for a child process. The installed package now maps its public sdk/core subpath to its bundled runtime. Resolve that export with import.meta.resolve before launching the child and keep the exact peer success and tracker preservation assertions."
+  "2026-11-24T16:38:23.752Z",codex-agent,"The broad two-worker quick-depth run reached 255 passing top-level cases and one private-path failure before the test-time cutoff. The old child borrowed dist/sdk/index.js. The installed SDK now uses bundled paths behind public exports, so the child resolves sdk/core. The old fixture is the failure witness. Final two-worker scoped run passed 33/33 across the affected compiler contract plus release, identity, privacy, floor, metadata and caller tests. The linked contract check passed 17/17 and the linked concurrent peer case passed 1/1. Build, typecheck, test compilation, lint, duplication, docstrings, tracker health and changelog date passed. A clean rebuild matches all 20 committed dist files. All 67 published dependency bullets were retained. The existing flag regression independently fails for each of four removed flags in scratch. The separate stale pm-github caller SHA mismatch is tracked by pm-ts-starter-pmgh-caller-update."
+  "2026-11-24T16:54:31.307Z",codex-agent,"Release PR #231 moved main to 2026.11.24 during the local gates. GitHub marked this SDK PR conflicting on the changelog heading and did not start CI. Carried forward the published version and matching release receipt, then regenerated the changelog with the current flags. Build, typecheck, lint, byte-identical dist and 21/21 identity, privacy, floor, metadata and release contract tests passed on the synchronized version."
+files[4]{path,scope}:
+  package-lock.json,project
+  package.json,project
+  test/release-workflow.test.ts,project
+  test/sdk-contracts-c.test.ts,project
+tests[2]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
+  node --test --test-concurrency=2 test/release-workflow.test.ts test/compatibility-floor.test.ts test/package-metadata.test.ts,project,codex-agent,"2026-11-24T15:51:24.938Z",local_mutation,deps/adopt-pm-cli-host-alignment-1122
+  node --test --test-concurrency=2 --test-name-pattern=each.overlapping.caller.boundary test/sdk-contracts-c.test.ts,project,codex-agent,"2026-11-24T16:25:18.085Z",local_mutation,deps/adopt-pm-cli-host-alignment-1122
+docs[1]{path,scope}:
+  CHANGELOG.md,project
+body: ""
