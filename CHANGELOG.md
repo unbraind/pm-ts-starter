@@ -1,9 +1,5 @@
 # Changelog
 
-## Unreleased
-
-No changes.
-
 ## 2026.11.19 - 2026-11-20
 
 ### Other
@@ -105,9 +101,9 @@ No changes.
 
 ### Added
 
+- Compile consumer examples against minimum and current SDK contracts ([pm-ts-starter-sdk-contract-drift](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/features/pm-ts-starter-sdk-contract-drift.toon))
 - Rehearse extension item schema migrations without changing source trackers ([pm-ts-starter-schema-rehearsal](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/features/pm-ts-starter-schema-rehearsal.toon))
 - Generate deployable typed backend conformance extensions ([pm-ts-starter-conformance](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/features/pm-ts-starter-conformance.toon))
-- Compile consumer examples against minimum and current SDK contracts ([pm-ts-starter-sdk-contract-drift](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/features/pm-ts-starter-sdk-contract-drift.toon))
 
 ### Dependencies
 
@@ -311,8 +307,8 @@ No changes.
 
 ### Fixed
 
-- A failed provenance publish silently falls back to an unattested one ([pm-ts-starter-d3ry](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-d3ry.toon))
 - The publish-attestation gate misses a publish routed through an unquoted shell variable ([pm-ts-starter-1ey8](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-1ey8.toon))
+- A failed provenance publish silently falls back to an unattested one ([pm-ts-starter-d3ry](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-d3ry.toon))
 
 ### Closed
 
