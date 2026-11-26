@@ -2,7 +2,9 @@
 
 ## 2026.11.24 - 2026-11-25
 
-No changes.
+### Closed
+
+- Closed: Release timeout reports stale workflow approval after automatic approval succeeded ([pm-ts-starter-github-38a2e98e983e-191](https://github.com/unbraind/pm-ts-starter/blob/main/.agents/pm/issues/pm-ts-starter-github-38a2e98e983e-191.toon))
 
 ## 2026.11.19 - 2026-11-20
 
