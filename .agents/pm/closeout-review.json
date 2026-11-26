@@ -1,0 +1,365 @@
+{
+  "needs_review": [
+    {
+      "item": "pm-ts-starter-1m0w",
+      "action": "needs_review",
+      "candidates": [
+        65
+      ],
+      "missing_evidence": [
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "GitHub GET /repos/unbraind/pm-ts-starter/pulls/65 failed; verify token read access and retry: HTTP 422"
+        },
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "Commit delivery evidence unavailable or incomplete."
+        }
+      ]
+    },
+    {
+      "item": "pm-ts-starter-github-38a2e98e983e-191",
+      "action": "needs_review",
+      "candidates": [
+        65
+      ],
+      "missing_evidence": [
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "GitHub GET /repos/unbraind/pm-ts-starter/pulls/65 failed; verify token read access and retry: HTTP 422"
+        },
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "Commit delivery evidence unavailable or incomplete."
+        }
+      ]
+    },
+    {
+      "item": "pm-ts-starter-health-legacy-1027",
+      "action": "needs_review",
+      "candidates": [
+        65
+      ],
+      "missing_evidence": [
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "GitHub GET /repos/unbraind/pm-ts-starter/pulls/65 failed; verify token read access and retry: HTTP 422"
+        },
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "Commit delivery evidence unavailable or incomplete."
+        }
+      ]
+    },
+    {
+      "item": "pm-ts-starter-hi1l",
+      "action": "needs_review",
+      "candidates": [
+        65
+      ],
+      "missing_evidence": [
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "GitHub GET /repos/unbraind/pm-ts-starter/pulls/65 failed; verify token read access and retry: HTTP 422"
+        },
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "Commit delivery evidence unavailable or incomplete."
+        }
+      ]
+    },
+    {
+      "item": "pm-ts-starter-identity-legacy",
+      "action": "needs_review",
+      "candidates": [
+        65
+      ],
+      "missing_evidence": [
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "GitHub GET /repos/unbraind/pm-ts-starter/pulls/65 failed; verify token read access and retry: HTTP 422"
+        },
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "Commit delivery evidence unavailable or incomplete."
+        }
+      ]
+    },
+    {
+      "item": "pm-ts-starter-identity-unbrained",
+      "action": "needs_review",
+      "candidates": [
+        65
+      ],
+      "missing_evidence": [
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "GitHub GET /repos/unbraind/pm-ts-starter/pulls/65 failed; verify token read access and retry: HTTP 422"
+        },
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "Commit delivery evidence unavailable or incomplete."
+        }
+      ]
+    },
+    {
+      "item": "pm-ts-starter-n4ee",
+      "action": "needs_review",
+      "candidates": [
+        65
+      ],
+      "missing_evidence": [
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "GitHub GET /repos/unbraind/pm-ts-starter/pulls/65 failed; verify token read access and retry: HTTP 422"
+        },
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "Commit delivery evidence unavailable or incomplete."
+        }
+      ]
+    },
+    {
+      "item": "pm-ts-starter-native-coverage-backslash",
+      "action": "needs_review",
+      "candidates": [
+        65
+      ],
+      "missing_evidence": [
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "GitHub GET /repos/unbraind/pm-ts-starter/pulls/65 failed; verify token read access and retry: HTTP 422"
+        },
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "Commit delivery evidence unavailable or incomplete."
+        }
+      ]
+    },
+    {
+      "item": "pm-ts-starter-native-refusal-codes",
+      "action": "needs_review",
+      "candidates": [
+        65
+      ],
+      "missing_evidence": [
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "GitHub GET /repos/unbraind/pm-ts-starter/pulls/65 failed; verify token read access and retry: HTTP 422"
+        },
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "Commit delivery evidence unavailable or incomplete."
+        }
+      ]
+    },
+    {
+      "item": "pm-ts-starter-native-typescript-api",
+      "action": "needs_review",
+      "candidates": [
+        65
+      ],
+      "missing_evidence": [
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "GitHub GET /repos/unbraind/pm-ts-starter/pulls/65 failed; verify token read access and retry: HTTP 422"
+        },
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "Commit delivery evidence unavailable or incomplete."
+        }
+      ]
+    },
+    {
+      "item": "pm-ts-starter-ooy4",
+      "action": "needs_review",
+      "candidates": [
+        65
+      ],
+      "missing_evidence": [
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "GitHub GET /repos/unbraind/pm-ts-starter/pulls/65 failed; verify token read access and retry: HTTP 422"
+        },
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "Commit delivery evidence unavailable or incomplete."
+        }
+      ]
+    },
+    {
+      "item": "pm-ts-starter-pmgh-caller-update",
+      "action": "needs_review",
+      "candidates": [
+        65
+      ],
+      "missing_evidence": [
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "GitHub GET /repos/unbraind/pm-ts-starter/pulls/65 failed; verify token read access and retry: HTTP 422"
+        },
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "Commit delivery evidence unavailable or incomplete."
+        }
+      ]
+    },
+    {
+      "item": "pm-ts-starter-pmgh-pin-1115",
+      "action": "needs_review",
+      "candidates": [
+        65
+      ],
+      "missing_evidence": [
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "GitHub GET /repos/unbraind/pm-ts-starter/pulls/65 failed; verify token read access and retry: HTTP 422"
+        },
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "Commit delivery evidence unavailable or incomplete."
+        }
+      ]
+    },
+    {
+      "item": "pm-ts-starter-project-references",
+      "action": "needs_review",
+      "candidates": [
+        65
+      ],
+      "missing_evidence": [
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "GitHub GET /repos/unbraind/pm-ts-starter/pulls/65 failed; verify token read access and retry: HTTP 422"
+        },
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "Commit delivery evidence unavailable or incomplete."
+        }
+      ]
+    },
+    {
+      "item": "pm-ts-starter-relative-package-identity",
+      "action": "needs_review",
+      "candidates": [
+        65
+      ],
+      "missing_evidence": [
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "GitHub GET /repos/unbraind/pm-ts-starter/pulls/65 failed; verify token read access and retry: HTTP 422"
+        },
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "Commit delivery evidence unavailable or incomplete."
+        }
+      ]
+    },
+    {
+      "item": "pm-ts-starter-release-caller-rollout",
+      "action": "needs_review",
+      "candidates": [
+        65
+      ],
+      "missing_evidence": [
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "GitHub GET /repos/unbraind/pm-ts-starter/pulls/65 failed; verify token read access and retry: HTTP 422"
+        },
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "Commit delivery evidence unavailable or incomplete."
+        }
+      ]
+    },
+    {
+      "item": "pm-ts-starter-sdk-1122",
+      "action": "needs_review",
+      "candidates": [
+        65
+      ],
+      "missing_evidence": [
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "GitHub GET /repos/unbraind/pm-ts-starter/pulls/65 failed; verify token read access and retry: HTTP 422"
+        },
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "Commit delivery evidence unavailable or incomplete."
+        }
+      ]
+    },
+    {
+      "item": "pm-ts-starter-t5xx",
+      "action": "needs_review",
+      "candidates": [
+        65
+      ],
+      "missing_evidence": [
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "GitHub GET /repos/unbraind/pm-ts-starter/pulls/65 failed; verify token read access and retry: HTTP 422"
+        },
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "Commit delivery evidence unavailable or incomplete."
+        }
+      ]
+    },
+    {
+      "item": "pm-ts-starter-tqmv",
+      "action": "needs_review",
+      "candidates": [
+        65
+      ],
+      "missing_evidence": [
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "GitHub GET /repos/unbraind/pm-ts-starter/pulls/65 failed; verify token read access and retry: HTTP 422"
+        },
+        {
+          "pr": 65,
+          "code": "head_evidence_unavailable",
+          "reason": "Commit delivery evidence unavailable or incomplete."
+        }
+      ]
+    }
+  ]
+}
