@@ -1,9 +1,9 @@
 {
   "schema": 1,
   "repository": "unbraind/pm-ts-starter",
-  "baseSha": "b7b9dd6621d6628bf0666fa4db04e99959b4183e",
-  "version": "2026.11.24",
-  "runId": 45620847164,
+  "baseSha": "c869f2c42ed4b911870ace249ca337d8f72a1842",
+  "version": "2026.11.27",
+  "runId": 46001112982,
   "runAttempt": 1,
   "configDigest": "19f861084767fcd1b42ece3bc60c873d40cadd652aba909211d2aaf4f1e1ede6"
 }
